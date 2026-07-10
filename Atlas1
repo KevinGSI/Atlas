@@ -1,0 +1,6 @@
+git clone atlas-core-0.7.0.gitbundle atlas
+cd atlas
+
+git remote add origin https://github.com/YOUR_USERNAME/atlas.git
+git push -u origin main
+git push origin --tags
