@@ -1,8 +1,10 @@
-# Atlas Core 0.33.1 — Live PostgreSQL Verification Correction Status
+# Atlas Core 0.33.2 — Live PostgreSQL Identity Fixture Correction Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.33.0`
+- Everything verified through Atlas Core `0.33.1`
+- Corrected the live awareness receipt fixture to create its referenced user
+- Created the live workspace with that user as its actual owner
 - Corrected the live awareness fixture to create its foreign-key source intelligence job
 - Added live PostgreSQL assertions for canonical event correlation and affected-object links
 - Added live rollback proof for uncovered canonical mutations

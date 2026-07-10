@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.33.1` corrects the live PostgreSQL fixture, verifies canonical-ledger persistence and commit enforcement against PostgreSQL, and preserves readable failure output in GitHub summaries.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.33.2` completes the live PostgreSQL fixture's identity prerequisites so awareness receipts reference a real user and workspace membership.
 
 ## Implemented
 
