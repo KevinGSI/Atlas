@@ -1,8 +1,13 @@
-# Atlas Core 0.28.0 — Secure Connector Webhook Status
+# Atlas Core 0.29.0 — Pilot Deployment Verification Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.27.2`
+- Everything verified through Atlas Core `0.28.0`
+- Fail-closed HTTPS staging smoke-test harness
+- Connected homepage, readiness, registration, authentication, workspace, and awareness checks
+- Synthetic identity and workspace creation with no reusable test credentials
+- Sanitized machine-readable report excluding tokens and passwords
+- Manually triggered GitHub staging workflow
 - Workspace-scoped signed connector webhooks for email, calls, and documents
 - Exact-body HMAC-SHA256 signatures with constant-time verification
 - Timestamp freshness enforcement and five-minute replay window
@@ -76,7 +81,7 @@
 
 ## Verification completed here
 
-- 147 canonical tests passed locally across the complete non-live Atlas Core surface
+- 150 canonical tests passed locally across the complete non-live Atlas Core surface
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection
 - Live AI command environment and failure behavior verified locally
@@ -125,6 +130,7 @@
 - OpenAI API authentication and model entitlement; `OPENAI_API_KEY` is not present in this workspace
 - Execution result of the GitHub OpenAI workflow; it will exist only after this commit is pushed and the workflow is manually run
 - Real vendor webhook delivery; no mailbox, telephony, or document vendor credentials were supplied here
+- Execution against a public staging deployment; `STAGING_BASE_URL` has not been supplied and Atlas has not yet been deployed
 - A production KMS/HSM-backed vault, multi-instance scheduler locks, rate-limit behavior, or large-firm migration volumes
 - Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
 

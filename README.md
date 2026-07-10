@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.28.0` adds workspace-scoped HMAC-signed webhooks for external email, telephony, and document connectors to deliver events securely without attorney login tokens.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.29.0` adds a fail-closed staging smoke test and manual GitHub workflow for verifying the complete connected pilot path against a real HTTPS deployment.
 
 ## Implemented
 
@@ -133,6 +133,11 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Workspace-and-connector scoped secrets preventing cross-firm submissions
 - Constant-time signature comparison, request-size limits, and signed connector identity
 - Public connector routes that bypass user login only after successful signature verification
+- HTTPS-only staging verification outside localhost
+- Live readiness and connected-homepage checks
+- Synthetic registration, authentication, workspace creation, and awareness-feed verification
+- Sanitized reports that never contain access tokens or generated passwords
+- Manual GitHub Actions workflow using the `STAGING_BASE_URL` secret
 
 ## Local development
 
@@ -167,6 +172,8 @@ pnpm test:ai
 ```
 
 The command prints a machine-readable scenario report and exits unsuccessfully if quality falls below the threshold, output is malformed, or the provider proposes a prohibited consequential action.
+
+After deploying Atlas, store its HTTPS origin as the GitHub Secret `STAGING_BASE_URL`, then manually run **Atlas staging smoke test**. The test creates one clearly named synthetic user and workspace and returns only check names, version, duration, and pass/fail status.
 
 Open `http://localhost:3000/` to use the connected phase-one client. Enter an existing Atlas account and workspace ID. This client reads live API data; it does not substitute fictional awareness cards.
 
