@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.32.0` establishes the continuously aware digital-twin backbone: every material timeline event enters a canonical object-linked ledger with replayable delivery and graph-impact reanalysis.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.33.0` enforces the continuously aware digital-twin contract at transaction commit: canonical object and graph mutations without complete event coverage fail and roll back.
 
 ## Implemented
 

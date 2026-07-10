@@ -71,7 +71,9 @@ export class PostgresRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const result = await work(new PostgresRepository(client, this.pool));
+      const transactionRepository=new PostgresRepository(client,this.pool);const result = await work(transactionRepository);
+      const uncovered=await client.query(`WITH mutated AS (SELECT id FROM atlas_object WHERE xmin=txid_current()::text::xid UNION SELECT from_object_id FROM atlas_relationship WHERE xmin=txid_current()::text::xid UNION SELECT to_object_id FROM atlas_relationship WHERE xmin=txid_current()::text::xid), covered AS (SELECT object_id FROM atlas_canonical_event_object WHERE xmin=txid_current()::text::xid) SELECT id FROM mutated EXCEPT SELECT object_id FROM covered`);
+      if(uncovered.rows.length)throw new AtlasError('CANONICAL_EVENT_REQUIRED','Material canonical mutations require event coverage',500,{objectIds:uncovered.rows.map((row)=>row.id)});
       await client.query('COMMIT');
       return result;
     } catch (error) {

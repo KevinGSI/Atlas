@@ -52,15 +52,15 @@ export class AtlasIngestionService {
       if(input.matterId)await repository.getObject(workspaceId,input.matterId);
       const email={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'operation',type:'incoming_email',title:input.subject?.trim()||'(no subject)',state:{from:sender,to:recipients,cc:input.cc??[],bodyText:input.bodyText??null,receivedAt:input.receivedAt??now,status:'received'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
       await repository.createObject(email);
-      const event={id:createId('evt'),workspaceId,parentObjectId:email.id,type:'communication.received',actorId,source:`connector:${connector}`,confidence:1,visibility:'workspace',relatedObjectIds:input.matterId?[input.matterId]:[],data:{externalId,attachmentCount:attachments.length},occurredAt:input.receivedAt??now,createdAt:now};
-      await repository.createEvent(event);
       const documents=[];
       for(const item of attachments){
         const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:'incoming_attachment',title:required(item.filename,'filename'),state:{storageRef:item.storageRef,sha256:item.sha256,mediaType:item.mediaType,size:item.size,extractionStatus:'pending'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
         await repository.createObject(document); documents.push(document);
         await repository.createRelationship({id:createId('rel'),workspaceId,fromObjectId:email.id,toObjectId:document.id,type:'has_attachment',attributes:{},createdAt:now});
-        await repository.createIntelligenceJob({id:createId('inj'),workspaceId,triggerType:'attachment.received',objectId:document.id,eventId:event.id,status:'pending',attempts:0,payload:{document,emailId:email.id,matterId:input.matterId??null},result:null,provider:null,errorCode:null,availableAt:now,lockedAt:null,createdAt:now,completedAt:null});
       }
+      const event={id:createId('evt'),workspaceId,parentObjectId:email.id,type:'communication.received',actorId,source:`connector:${connector}`,confidence:1,visibility:'workspace',relatedObjectIds:[...(input.matterId?[input.matterId]:[]),...documents.map((item)=>item.id)],data:{externalId,attachmentCount:attachments.length},occurredAt:input.receivedAt??now,createdAt:now};
+      await repository.createEvent(event);
+      for(const document of documents)await repository.createIntelligenceJob({id:createId('inj'),workspaceId,triggerType:'attachment.received',objectId:document.id,eventId:event.id,status:'pending',attempts:0,payload:{document,emailId:email.id,matterId:input.matterId??null},result:null,provider:null,errorCode:null,availableAt:now,lockedAt:null,createdAt:now,completedAt:null});
       await repository.createIntelligenceJob({id:createId('inj'),workspaceId,triggerType:'email.received',objectId:email.id,eventId:event.id,status:'pending',attempts:0,payload:{email,attachmentIds:documents.map((x)=>x.id)},result:null,provider:null,errorCode:null,availableAt:now,lockedAt:null,createdAt:now,completedAt:null});
       const ingestion=await repository.createIngestionRecord({id:createId('ing'),workspaceId,connector,externalId,kind:'email',status:'cataloged',rootObjectId:email.id,metadata:{attachmentCount:documents.length},errorCode:null,receivedAt:input.receivedAt??now,createdAt:now});
       return {ingestion,duplicate:false,root:email,attachments:documents};

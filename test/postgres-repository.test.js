@@ -29,8 +29,10 @@ test('PostgreSQL transactions commit and release dedicated clients', async () =>
     return 'committed';
   });
   assert.equal(value, 'committed');
-  assert.deepEqual(calls, ['BEGIN', 'COMMIT', 'RELEASE']);
+  assert.equal(calls[0],'BEGIN');assert.match(calls[1],/atlas_canonical_event_object/);assert.deepEqual(calls.slice(2),['COMMIT','RELEASE']);
 });
+
+test('PostgreSQL transactions roll back canonical mutations missing event coverage',async()=>{const calls=[];const client={async query(sql){calls.push(sql);if(sql.startsWith('WITH mutated'))return {rows:[{id:'obj_orphan'}]};return {rows:[]};},release(){calls.push('RELEASE');}};const repository=new PostgresRepository({async connect(){return client;}});await assert.rejects(()=>repository.transaction(async()=> 'mutated'),(error)=>error.code==='CANONICAL_EVENT_REQUIRED'&&error.details.objectIds[0]==='obj_orphan');assert.equal(calls.includes('COMMIT'),false);assert.deepEqual(calls.slice(-2),['ROLLBACK','RELEASE']);});
 
 test('PostgreSQL transactions roll back and release on failure', async () => {
   const calls = [];

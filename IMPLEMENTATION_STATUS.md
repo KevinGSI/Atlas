@@ -1,8 +1,14 @@
-# Atlas Core 0.32.0 — Continuously Aware Digital Twin Foundation Status
+# Atlas Core 0.33.0 — Canonical Awareness Enforcement Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.31.0`
+- Everything verified through Atlas Core `0.32.0`
+- Commit-time enforcement requiring event coverage for every canonical object mutation
+- Commit-time enforcement requiring both endpoints of new graph relationships to be affected
+- Equivalent enforcement in the in-memory and PostgreSQL repositories
+- Automatic rollback with stable `CANONICAL_EVENT_REQUIRED` failures for orphaned mutations
+- Email attachment batches covered atomically by one event linking every created document
+- Accepted AI matter-match relationships now publish canonical relationship events
 - Universal append-only canonical event ledger mirroring every material timeline event
 - Enforced workspace-safe links from events to primary and affected canonical objects
 - Correlation and causation fields for tracing chains of firm activity

@@ -156,6 +156,7 @@ export class AtlasService {
       if(observation.kind==='matter_match'){
         const matterId=required(observation.data.matterId,'matterId');await repository.getObject(workspaceId,matterId);if(!observation.sourceObjectId)throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Matter match requires a source object',400);
         result=await repository.createRelationship({id:createId('rel'),workspaceId,fromObjectId:observation.sourceObjectId,toObjectId:matterId,type:'intelligence_matched_to',attributes:{observationId,confidence:observation.confidence},createdAt:now});
+        await repository.createEvent(this.buildEvent(workspaceId,{parentObjectId:observation.sourceObjectId,relatedObjectIds:[matterId],type:'intelligence.relationship.accepted',actorId,source:'atlas.intelligence.review',confidence:observation.confidence,data:{observationId,relationshipId:result.id}}));
       }else if(['fact','deadline','duty','conflict','risk','recommendation','entity'].includes(observation.kind)){
         const entity=observation.kind==='entity';const dimension=entity?(observation.data.entityType==='organization'?'organization':'person'):'operation';
         result=await repository.createObject({id:createId('obj'),workspaceId,parentObjectId:observation.data.matterId??null,dimension,type:observation.kind,title:observation.data.title??observation.data.description??`${observation.kind} observation`,state:{...observation.data,sourceObservationId:observation.id,confidence:observation.confidence},version:1,createdAt:now,updatedAt:now,deletedAt:null});
