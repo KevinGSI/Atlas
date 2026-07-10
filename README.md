@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.11.0` adds the authenticated, permission-scoped Atlas AI orchestration and tool-execution foundation.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.12.0` adds an interchangeable AI-provider registry and the first OpenAI Responses API adapter behind Atlas’s neutral model contract.
 
 ## Implemented
 
@@ -41,6 +41,10 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Read-only tools for workspace search, recent matters, object retrieval, matter health, and daily priorities
 - Workspace-pinned tool execution and deduplicated source-object references
 - Explicit `503 AI_NOT_CONFIGURED` behavior until a real model adapter is supplied
+- Provider registry with normalized capabilities and duplicate/missing-provider safeguards
+- Provider-neutral state, usage, errors, messages, tool calls, and responses
+- OpenAI Responses API translation isolated in one adapter with no OpenAI dependency in core orchestration
+- Interchangeable injected-provider registration for future hosted or local models
 
 ## Local development
 
@@ -113,9 +117,13 @@ Login failures are tracked by a normalized email hash. The defaults lock a princ
 
 ## Atlas AI orchestration
 
-The assistant endpoint authenticates the user, checks `workspace:read`, and pins every model-requested tool to that authorized workspace. The model cannot supply or change the workspace ID. Version `0.11.0` exposes only read-only tools and returns source-object references with the final answer.
+The assistant endpoint authenticates the user, checks `workspace:read`, and pins every model-requested tool to that authorized workspace. The model cannot supply or change the workspace ID. The current orchestration layer exposes only read-only tools and returns source-object references with the final answer.
 
-The runtime accepts an injected `aiModel` implementing `complete({ messages, tools, context })`. No provider or API key is bundled. Without one, the endpoint returns `503 AI_NOT_CONFIGURED` rather than generating a scripted response or claiming AI work occurred.
+The runtime accepts providers implementing `complete({ messages, tools, context, state })` and `capabilities()`. Atlas selects one with `AI_PROVIDER`; `AI_MODEL` identifies the provider model. Without a selected provider, the endpoint returns `503 AI_NOT_CONFIGURED` rather than generating a scripted response or claiming AI work occurred.
+
+For the initial OpenAI adapter, set `AI_PROVIDER=openai`, `AI_MODEL` to an explicitly selected model ID, and `OPENAI_API_KEY`. `OPENAI_BASE_URL` defaults to `https://api.openai.com/v1`. The adapter uses the Responses API, keeps remote storage disabled, preserves provider response state locally for tool rounds, and normalizes token usage and provider errors before returning control to Atlas.
+
+Other providers are registered through the same `AiProviderRegistry`; legal tools and workflows do not import or reference the OpenAI adapter.
 
 ## Object mutation and audit
 

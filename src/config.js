@@ -14,6 +14,11 @@ export function loadConfig(env = process.env) {
   const corsOrigins = (env.CORS_ORIGINS ?? '')
     .split(',').map((value) => value.trim()).filter(Boolean);
   if (production && corsOrigins.includes('*')) throw new Error('Wildcard CORS is not allowed in production');
+  const aiProvider = env.AI_PROVIDER || null;
+  const aiModel = env.AI_MODEL || null;
+  const openAiApiKey = env.OPENAI_API_KEY || null;
+  if (aiProvider && !aiModel) throw new Error('AI_MODEL is required when AI_PROVIDER is configured');
+  if (aiProvider === 'openai' && !openAiApiKey) throw new Error('OPENAI_API_KEY is required when AI_PROVIDER=openai');
   return {
     nodeEnv,
     production,
@@ -27,6 +32,10 @@ export function loadConfig(env = process.env) {
     loginFailureThreshold: positiveInteger(env.LOGIN_FAILURE_THRESHOLD, 5, 'LOGIN_FAILURE_THRESHOLD'),
     loginFailureWindowSeconds: positiveInteger(env.LOGIN_FAILURE_WINDOW_SECONDS, 900, 'LOGIN_FAILURE_WINDOW_SECONDS'),
     loginLockSeconds: positiveInteger(env.LOGIN_LOCK_SECONDS, 900, 'LOGIN_LOCK_SECONDS'),
+    aiProvider,
+    aiModel,
+    openAiApiKey,
+    openAiBaseUrl: env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
     databasePoolSize: positiveInteger(env.DATABASE_POOL_SIZE, 10, 'DATABASE_POOL_SIZE'),
     maxBodyBytes: positiveInteger(env.MAX_BODY_BYTES, 1_048_576, 'MAX_BODY_BYTES'),
     shutdownTimeoutMs: positiveInteger(env.SHUTDOWN_TIMEOUT_MS, 10_000, 'SHUTDOWN_TIMEOUT_MS'),

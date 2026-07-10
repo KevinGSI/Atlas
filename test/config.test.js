@@ -12,6 +12,17 @@ test('production defaults to a cloud-compatible listener', () => {
   assert.equal(config.loginFailureThreshold, 5);
   assert.equal(config.loginFailureWindowSeconds, 900);
   assert.equal(config.loginLockSeconds, 900);
+  assert.equal(config.aiProvider, null);
+  assert.equal(config.openAiBaseUrl, 'https://api.openai.com/v1');
+});
+
+test('AI provider configuration is explicit and provider-specific credentials stay isolated', () => {
+  assert.throws(() => loadConfig({ AI_PROVIDER: 'openai' }), /AI_MODEL is required/);
+  assert.throws(() => loadConfig({ AI_PROVIDER: 'openai', AI_MODEL: 'model-a' }), /OPENAI_API_KEY is required/);
+  const config = loadConfig({ AI_PROVIDER: 'openai', AI_MODEL: 'model-a', OPENAI_API_KEY: 'test-key' });
+  assert.equal(config.aiProvider, 'openai');
+  assert.equal(config.aiModel, 'model-a');
+  assert.equal(config.openAiApiKey, 'test-key');
 });
 
 test('production refuses to start without PostgreSQL', () => {

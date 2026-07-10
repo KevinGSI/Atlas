@@ -1,46 +1,47 @@
-# Atlas Core 0.11.0 — Implementation Status
+# Atlas Core 0.12.0 — Implementation Status
 
 ## Verified as implemented
 
-- Everything verified in Atlas Core `0.1.0` through `0.10.0`
-- Authenticated, `workspace:read`-authorized assistant endpoint
-- Provider-neutral model adapter contract
-- Workspace-pinned tool execution that ignores model-supplied scope
-- Read-only `search_objects`, `list_recent_matters`, `get_object`, `get_matter_health`, and `list_daily_priorities` tools
-- Tool schemas supplied to the model
-- Source-object references deduplicated across tool calls
-- Explainable daily priority derivation from health and deadlines
-- Prompt-size, tool-round, and total-tool-call limits
-- Unknown-tool rejection and invalid-provider-response handling
-- Honest `503 AI_NOT_CONFIGURED` response without scripted fallback
+- Everything verified in Atlas Core `0.1.0` through `0.11.0`
+- Interchangeable `AiProviderRegistry`
+- Provider capability reporting and duplicate/missing-provider safeguards
+- Normalized provider messages, tools, tool calls, response state, token usage, model identity, and errors
+- OpenAI Responses API adapter isolated from Atlas orchestration and legal tools
+- Function-tool schema translation
+- Multi-round preservation of provider output and `function_call_output` submission by call ID
+- Text-output and JSON tool-argument parsing
+- `store: false` on OpenAI requests
+- Normalized unavailable, authentication, rate-limit, provider, invalid-JSON, and invalid-tool-argument errors
+- Explicit `AI_PROVIDER`, `AI_MODEL`, `OPENAI_API_KEY`, and optional `OPENAI_BASE_URL` configuration
+- Injected non-OpenAI/local provider registration through the same contract
 
 ## Verification completed here
 
-- 73 canonical tests covering domain, HTTP, authentication, authorization, persistence, concurrency, audit, deployment, sessions, recovery, abuse controls, AI tools, and rollback
-- Cross-workspace isolation test proving search cannot return another workspace’s objects
-- Multi-turn tool execution and source-reference test
-- Daily priority and overdue-deadline derivation test
-- Unknown-tool, oversized-prompt, infinite-loop, invalid-provider, and unconfigured-provider boundaries
-- Authenticated end-to-end assistant HTTP flow
+- 78 canonical tests covering domain, HTTP, authentication, authorization, persistence, concurrency, audit, deployment, sessions, recovery, abuse controls, AI tools, providers, and rollback
+- Provider-registry conformance, capability, duplicate, and missing-provider tests
+- Two-round OpenAI function-call and function-output translation test
+- Provider-state, text, model, and token-usage normalization tests
+- Transport, authentication, rate-limit, malformed JSON, and malformed tool-argument tests
+- Interchangeable injected local-provider test
+- No real external model request was made
 
 ## Explicitly not verified in this environment
 
-- Calls to a real AI model provider
+- Authentication or responses from a live OpenAI account
+- Calls to any other live model provider
 - Model quality, legal accuracy, citation faithfulness, or prompt-injection resilience
-- AI execution against a live PostgreSQL server
-- Concurrent AI requests across multiple application instances
-- Database persistence across process and PostgreSQL restarts
+- Provider execution against a live PostgreSQL server
+- Concurrent provider calls across multiple application instances
 
 ## Security and product limitations still remaining
 
-- No real model adapter, streaming response transport, conversation persistence, or usage metering
+- No streaming response transport, conversation persistence, cost policy, or usage budget enforcement
+- No alternate production adapter has yet been implemented, though the registry and conformance boundary exist
 - No write-capable AI tools, approval workflow, or AI-specific immutable audit ledger
 - No document-content retrieval, embeddings, vector search, or legal citation verifier
-- No distributed IP/network-level rate limiter
-- No email verification or MFA
 - No encrypted evidence/file storage or matter-specific ethical walls
 - No external penetration test
 
 ## Data-safety boundary
 
-Version `0.11.0` creates a real, permission-scoped orchestration boundary but does not connect a model. A production model adapter, prompt-injection defenses, legal-quality evaluations, source-grounding checks, AI audit records, live PostgreSQL execution, encrypted content storage, and external security testing remain required before confidential legal data is sent to any model.
+Version `0.12.0` can be configured to call OpenAI while keeping Atlas provider-neutral, but no live provider was exercised. Provider data-retention review, contractual privacy controls, prompt-injection defenses, legal-quality evaluations, AI audit records, usage limits, live PostgreSQL execution, encrypted content storage, and external security testing remain required before confidential legal data is sent to any model.

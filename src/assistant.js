@@ -85,11 +85,21 @@ export class AtlasAssistant {
     if (text.length > this.maxPromptCharacters) throw new AtlasError('AI_PROMPT_TOO_LARGE', 'AI prompt is too large', 413);
     const messages = [{ role: 'user', content: text }];
     const sources = new Map();
+    const usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    let state;
+    let provider;
+    let model;
     let executed = 0;
     for (let round = 0; round <= this.maxToolRounds; round += 1) {
-      const response = await this.model.complete({ messages, tools: this.tools.definitions(), context: { workspaceId, userId } });
+      const response = await this.model.complete({ messages, tools: this.tools.definitions(), context: { workspaceId, userId }, state });
+      state = response?.state;
+      provider = response?.provider ?? provider;
+      model = response?.model ?? model;
+      usage.inputTokens += response?.usage?.inputTokens ?? 0;
+      usage.outputTokens += response?.usage?.outputTokens ?? 0;
+      usage.totalTokens += response?.usage?.totalTokens ?? 0;
       if (typeof response?.text === 'string' && response.text.trim() && !response.toolCalls?.length) {
-        return { answer: response.text.trim(), sources: [...sources.values()], toolCalls: executed };
+        return { answer: response.text.trim(), sources: [...sources.values()], toolCalls: executed, usage, ...(provider ? { provider } : {}), ...(model ? { model } : {}) };
       }
       if (!Array.isArray(response?.toolCalls) || !response.toolCalls.length) {
         throw new AtlasError('AI_INVALID_RESPONSE', 'Atlas AI provider returned an invalid response', 502);

@@ -34,7 +34,7 @@ test('assistant executes read-only tools and returns deduplicated source referen
       assert.equal(input.context.workspaceId, workspace.id);
       if (turn === 1) return { toolCalls: [{ id: 'call_1', name: 'search_objects', arguments: { query: 'motion to compel' } }] };
       assert.equal(input.messages.at(-1).role, 'tool');
-      return { text: 'One motion to compel was found.' };
+      return { text: 'One motion to compel was found.', provider: 'test-provider', model: 'test-model', usage: { inputTokens: 4, outputTokens: 3, totalTokens: 7 } };
     }
   };
   const answer = await new AtlasAssistant(model, tools).query({ workspaceId: workspace.id, userId: 'usr_1', prompt: 'Find motions to compel' });
@@ -42,6 +42,9 @@ test('assistant executes read-only tools and returns deduplicated source referen
   assert.equal(answer.toolCalls, 1);
   assert.equal(answer.sources.length, 1);
   assert.equal(answer.sources[0].title, 'Motion to Compel Discovery');
+  assert.equal(answer.provider, 'test-provider');
+  assert.equal(answer.model, 'test-model');
+  assert.deepEqual(answer.usage, { inputTokens: 4, outputTokens: 3, totalTokens: 7 });
 });
 
 test('daily priorities are derived from matter health and deadlines with sources', async () => {
