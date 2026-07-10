@@ -31,7 +31,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.16.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.17.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -240,9 +240,12 @@ test('authenticated assistant endpoint is workspace-scoped and source-aware', as
   const repository = new InMemoryRepository();
   const service = new AtlasService(repository);
   const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));
+  let turn = 0;
   const model = { async complete(input) {
     assert.equal(input.context.userId.startsWith('usr_'), true);
-    return { text: 'Your highest-priority matter is ready for review.' };
+    turn += 1;
+    return turn === 1 ? { toolCalls: [{ id: 'task_1', name: 'propose_create_task', arguments: { title: 'Review priority matter' } }] }
+      : { text: 'Your highest-priority matter is ready for review.' };
   } };
   const assistant = new AtlasAssistant(model, new AtlasToolRegistry(service), { repository });
   const handler = createAtlasHandler(service, {
@@ -257,6 +260,13 @@ test('authenticated assistant endpoint is workspace-scoped and source-aware', as
   assert.equal(response.status, 200);
   assert.equal(response.body.data.answer, 'Your highest-priority matter is ready for review.');
   assert.match(response.body.data.conversationId, /^aic_/);
+  assert.equal(response.body.data.actionProposals[0].status, 'pending');
+  const actions = await json(handler, `/v1/workspaces/${workspace.id}/assistant/actions?status=pending`, { headers });
+  assert.equal(actions.body.data.length, 1);
+  const approved = await json(handler, `/v1/workspaces/${workspace.id}/assistant/actions/${actions.body.data[0].id}/decision`, { method: 'POST', headers, body: JSON.stringify({ version: 1, decision: 'approve' }) });
+  assert.equal(approved.status, 200);
+  assert.equal(approved.body.data.proposal.status, 'approved');
+  assert.equal(approved.body.data.result.type, 'task');
   const history = await json(handler, `/v1/workspaces/${workspace.id}/assistant/runs`, { headers });
   assert.equal(history.status, 200);
   assert.equal(history.body.data.length, 1);

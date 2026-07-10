@@ -115,3 +115,31 @@ test('assistant persists private conversations and continues with prior messages
   assert.deepEqual(messages.map((m) => m.role), ['user', 'assistant', 'user', 'assistant']);
   await assert.rejects(() => assistant.listMessages(workspace.id, 'usr_other', first.conversationId), (error) => error.code === 'AI_CONVERSATION_NOT_FOUND');
 });
+
+test('AI task proposals require a separate human decision before creating platform objects', async () => {
+  const { service, tools, workspace, matter } = await fixture();
+  let turn = 0;
+  const model = { async complete() { turn += 1; return turn === 1
+    ? { toolCalls: [{ id: 'proposal_1', name: 'propose_create_task', arguments: { title: 'Prepare witness outline', matterId: matter.id, dueDate: '2026-07-12' } }] }
+    : { text: 'I prepared a task proposal for your approval.' }; } };
+  const assistant = new AtlasAssistant(model, tools, { repository: service.repository });
+  const response = await assistant.query({ workspaceId: workspace.id, userId: 'usr_approver', prompt: 'Create a witness preparation task' });
+  assert.equal(response.actionProposals.length, 1);
+  assert.equal(response.actionProposals[0].status, 'pending');
+  assert.equal((await service.listObjects(workspace.id, { dimension: 'operation' })).length, 0);
+
+  const approved = await service.decideAiActionProposal(workspace.id, response.actionProposals[0].id, { version: 1, decision: 'approve' }, 'usr_approver');
+  assert.equal(approved.proposal.status, 'approved');
+  assert.equal(approved.result.type, 'task');
+  assert.equal(approved.result.parentObjectId, matter.id);
+  assert.equal(approved.result.state.createdFromAiProposalId, response.actionProposals[0].id);
+  await assert.rejects(() => service.decideAiActionProposal(workspace.id, response.actionProposals[0].id, { version: 1, decision: 'approve' }, 'usr_approver'), (error) => error.code === 'AI_ACTION_ALREADY_DECIDED');
+});
+
+test('rejected AI task proposals never create tasks', async () => {
+  const { service, workspace } = await fixture();
+  const proposal = await service.repository.createAiActionProposal({ id: 'aap_reject', workspaceId: workspace.id, runId: 'air_test', proposedBy: 'usr_1', actionType: 'create_task', input: { title: 'Do not create', matterId: null }, status: 'pending', version: 1, decidedBy: null, resultObjectId: null, createdAt: '2026-07-10T12:00:00.000Z', decidedAt: null });
+  const rejected = await service.decideAiActionProposal(workspace.id, proposal.id, { version: 1, decision: 'reject' }, 'usr_2');
+  assert.equal(rejected.status, 'rejected');
+  assert.equal((await service.listObjects(workspace.id, { dimension: 'operation' })).length, 0);
+});

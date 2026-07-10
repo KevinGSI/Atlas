@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.16.0` adds controlled key rotation and a transactional migration for AI content created before encryption was enabled.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.17.0` adds human-approved AI action proposals, beginning with task creation.
 
 ## Implemented
 
@@ -60,6 +60,10 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Multi-key environment configuration for retaining historical decryption keys during rotation
 - Dry-run-first, resumable migration of legacy plaintext AI content
 - Exclusive-lock and all-or-nothing migration safeguards for append-only AI tables
+- AI-generated task proposals that cannot mutate platform data directly
+- Pending, approved, and rejected proposal lifecycle with optimistic concurrency
+- Authenticated action review and decision endpoints
+- Transactional approved-task creation with actor, source run, result object, and timeline linkage
 
 ## Local development
 

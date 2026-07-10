@@ -163,3 +163,15 @@ test('PostgreSQL AI run ledger persists complete accountability fields and scope
   assert.match(calls[1].sql, /workspace_id = \$1.*LIMIT \$2/);
   assert.deepEqual(calls[1].values, ['wsp_1', 25]);
 });
+
+test('PostgreSQL AI action decisions are workspace-scoped, versioned, and pending-only', async () => {
+  const calls = [];
+  const row = { id: 'aap_1', workspace_id: 'wsp_1', run_id: 'air_1', proposed_by: 'usr_1', action_type: 'create_task', input: { title: 'Review' }, status: 'approved', version: 2, decided_by: 'usr_2', result_object_id: 'obj_1', created_at: '2026-07-10T00:00:00.000Z', decided_at: '2026-07-10T01:00:00.000Z' };
+  const executor = { async query(sql, values) { calls.push({ sql, values }); return { rows: [row] }; } };
+  const repository = new PostgresRepository(executor);
+  const result = await repository.decideAiActionProposal('wsp_1', 'aap_1', 1, 'approved', 'usr_2', 'obj_1', '2026-07-10T01:00:00.000Z');
+  assert.equal(result.status, 'approved');
+  assert.match(calls[0].sql, /workspace_id=\$1/);
+  assert.match(calls[0].sql, /version=\$3/);
+  assert.match(calls[0].sql, /status='pending'/);
+});

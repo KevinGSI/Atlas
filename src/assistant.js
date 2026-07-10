@@ -23,6 +23,7 @@ export class AtlasToolRegistry {
       { name: 'get_object', description: 'Retrieve one object from the authorized workspace by object ID.', inputSchema: { type: 'object', properties: { objectId: { type: 'string' } }, required: ['objectId'] } },
       { name: 'get_matter_health', description: 'Get explainable health for one matter in the authorized workspace.', inputSchema: { type: 'object', properties: { matterId: { type: 'string' } }, required: ['matterId'] } },
       { name: 'list_daily_priorities', description: 'Derive priority matters from health, deadlines, and incomplete matter state.', inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } } }
+      ,{ name: 'propose_create_task', description: 'Propose a task for human approval. This never creates the task directly.', inputSchema: { type: 'object', properties: { title: { type: 'string' }, matterId: { type: 'string' }, dueDate: { type: 'string' }, description: { type: 'string' } }, required: ['title'] } }
     ];
   }
 
@@ -66,6 +67,13 @@ export class AtlasToolRegistry {
         const selectedIds = new Set(selected.map((item) => item.matterId));
         return { data: selected, sources: matters.filter((matter) => selectedIds.has(matter.id)).map(source) };
       }
+      case 'propose_create_task': {
+        const input = { title: required(args.title, 'title').trim(), matterId: args.matterId ?? null, dueDate: args.dueDate ?? null, description: args.description ?? null };
+        if (!input.title || input.title.length > 240) throw new AtlasError('AI_TOOL_ARGUMENT_INVALID', 'task title must contain 1 to 240 characters', 400);
+        const sources = [];
+        if (input.matterId) sources.push(source(await this.service.getObject(workspaceId, input.matterId)));
+        return { data: { proposed: true, actionType: 'create_task', input }, sources, actionProposal: { actionType: 'create_task', input } };
+      }
       default: throw new AtlasError('AI_TOOL_NOT_ALLOWED', 'Requested AI tool is not allowed', 400, { tool: name });
     }
   }
@@ -94,6 +102,7 @@ export class AtlasAssistant {
     let provider;
     let model;
     let executed = 0;
+    const actionProposals = [];
     for (let round = 0; round <= this.maxToolRounds; round += 1) {
       const response = await this.model.complete({ messages, tools: this.tools.definitions(), context: { workspaceId, userId }, state });
       state = response?.state;
@@ -103,7 +112,7 @@ export class AtlasAssistant {
       usage.outputTokens += response?.usage?.outputTokens ?? 0;
       usage.totalTokens += response?.usage?.totalTokens ?? 0;
       if (typeof response?.text === 'string' && response.text.trim() && !response.toolCalls?.length) {
-        return { answer: response.text.trim(), sources: [...sources.values()], toolCalls: executed, usage, ...(provider ? { provider } : {}), ...(model ? { model } : {}) };
+        return { answer: response.text.trim(), sources: [...sources.values()], actionProposals, toolCalls: executed, usage, ...(provider ? { provider } : {}), ...(model ? { model } : {}) };
       }
       if (!Array.isArray(response?.toolCalls) || !response.toolCalls.length) {
         throw new AtlasError('AI_INVALID_RESPONSE', 'Atlas AI provider returned an invalid response', 502);
@@ -113,6 +122,7 @@ export class AtlasAssistant {
       for (const call of response.toolCalls) {
         if (executed >= this.maxToolCalls) throw new AtlasError('AI_TOOL_LIMIT_EXCEEDED', 'Atlas AI exceeded the tool-call limit', 502);
         const result = await this.tools.execute(call.name, workspaceId, call.arguments ?? {});
+        if (result.actionProposal) actionProposals.push(result.actionProposal);
         executed += 1;
         for (const item of result.sources) sources.set(item.objectId, item);
         messages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: result.data });
@@ -142,6 +152,11 @@ export class AtlasAssistant {
         sources: result.sources, toolCalls: result.toolCalls, usage: result.usage,
         errorCode: null, createdAt: this.clock()
       });
+      if (this.repository) result.actionProposals = await Promise.all(result.actionProposals.map((proposal) => this.repository.createAiActionProposal({
+        id: createId('aap'), workspaceId: input.workspaceId, runId, proposedBy: input.userId,
+        actionType: proposal.actionType, input: proposal.input, status: 'pending', version: 1,
+        decidedBy: null, resultObjectId: null, createdAt: this.clock(), decidedAt: null
+      })));
       if (this.repository) {
         const assistantMessageId = createId('aim');
         await this.repository.createAiMessage({ id: assistantMessageId, conversationId, workspaceId: input.workspaceId, actorId: input.userId, runId, role: 'assistant', content: this.contentCipher.encrypt(result.answer, `message:${assistantMessageId}:content`), sources: result.sources, createdAt: this.clock() });

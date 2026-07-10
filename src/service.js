@@ -108,6 +108,32 @@ export class AtlasService {
 
   async listAudits(workspaceId, objectId) { return this.repository.listAudits(workspaceId, objectId); }
 
+  async listAiActionProposals(workspaceId, status) {
+    if (status && !['pending', 'approved', 'rejected'].includes(status)) throw new AtlasError('VALIDATION_ERROR', 'Unsupported AI action status', 400);
+    return this.repository.listAiActionProposals(workspaceId, status);
+  }
+
+  async decideAiActionProposal(workspaceId, proposalId, input, actorId) {
+    const version = this.validateVersion(input.version);
+    const decision = required(input.decision, 'decision');
+    if (!['approve', 'reject'].includes(decision)) throw new AtlasError('VALIDATION_ERROR', 'decision must be approve or reject', 400);
+    return this.repository.transaction(async (repository) => {
+      const proposal = await repository.getAiActionProposal(workspaceId, proposalId);
+      if (decision === 'reject') return repository.decideAiActionProposal(workspaceId, proposalId, version, 'rejected', actorId, null, this.clock());
+      if (proposal.actionType !== 'create_task') throw new AtlasError('AI_ACTION_TYPE_UNSUPPORTED', 'AI action type is not supported', 400);
+      const now = this.clock();
+      const task = await repository.createObject({
+        id: createId('obj'), workspaceId, parentObjectId: proposal.input.matterId,
+        dimension: 'operation', type: 'task', title: proposal.input.title,
+        state: { description: proposal.input.description, dueDate: proposal.input.dueDate, status: 'open', createdFromAiProposalId: proposal.id },
+        createdAt: now, updatedAt: now, deletedAt: null, version: 1
+      });
+      await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: task.id, type: 'object.created', actorId, source: 'atlas.ai.approval', data: { objectType: 'task', proposalId } }));
+      const decided = await repository.decideAiActionProposal(workspaceId, proposalId, version, 'approved', actorId, task.id, now);
+      return { proposal: decided, result: task };
+    });
+  }
+
   async createRelationship(workspaceId, input) {
     const fromObjectId = required(input.fromObjectId, 'fromObjectId');
     const toObjectId = required(input.toObjectId, 'toObjectId');
