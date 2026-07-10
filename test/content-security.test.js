@@ -21,7 +21,11 @@ test('authenticated encryption rejects tampering and record-context substitution
   const cipher = new AesGcmContentCipher({ keys: { current: key }, activeKeyId: 'current' });
   const encrypted = cipher.encrypt('confidential', 'message:one:content');
   assert.throws(() => cipher.decrypt(encrypted, 'message:two:content'), (error) => error.code === 'AI_CONTENT_DECRYPTION_FAILED');
-  assert.throws(() => cipher.decrypt(`${encrypted.slice(0, -1)}A`, 'message:one:content'), (error) => error.code === 'AI_CONTENT_DECRYPTION_FAILED');
+  const parts = encrypted.split(':');
+  const ciphertext = Buffer.from(parts[5], 'base64url');
+  ciphertext[0] ^= 1;
+  parts[5] = ciphertext.toString('base64url');
+  assert.throws(() => cipher.decrypt(parts.join(':'), 'message:one:content'), (error) => error.code === 'AI_CONTENT_DECRYPTION_FAILED');
 });
 
 test('keyrings decrypt older envelopes while new content uses the active key', () => {

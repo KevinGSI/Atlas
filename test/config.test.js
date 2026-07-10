@@ -15,6 +15,8 @@ test('production defaults to a cloud-compatible listener', () => {
   assert.equal(config.aiProvider, null);
   assert.equal(config.cmsSyncEnabled, false);
   assert.equal(config.cmsSyncIntervalMs, 300_000);
+  assert.equal(config.situationalSweepEnabled, true);
+  assert.equal(config.situationalSweepIntervalMs, 60_000);
   assert.equal(config.openAiBaseUrl, 'https://api.openai.com/v1');
 });
 
@@ -67,4 +69,5 @@ test('configuration validates positive numeric limits', () => {
   assert.throws(() => loadConfig({ PASSWORD_RESET_TTL_SECONDS: '0' }), /PASSWORD_RESET_TTL_SECONDS must be a positive integer/);
   assert.throws(() => loadConfig({ LOGIN_FAILURE_THRESHOLD: '0' }), /LOGIN_FAILURE_THRESHOLD must be a positive integer/);
   assert.throws(() => loadConfig({ CMS_SYNC_INTERVAL_MS: '0' }), /CMS_SYNC_INTERVAL_MS must be a positive integer/);
+  assert.throws(() => loadConfig({ SITUATIONAL_SWEEP_INTERVAL_MS: '0' }), /SITUATIONAL_SWEEP_INTERVAL_MS must be a positive integer/);
 });

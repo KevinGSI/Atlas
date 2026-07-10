@@ -135,6 +135,9 @@ export class AtlasService {
     };
   }
 
+  async whileYouWereGone(workspaceId,userId,since=null){const items=await this.repository.listAwarenessItems(workspaceId,userId,since);const [observations,actions]=await Promise.all([this.repository.listIntelligenceObservations(workspaceId),this.repository.listAiActionProposals(workspaceId)]);const observationMap=new Map(observations.map((item)=>[item.id,item]));const actionMap=new Map(actions.map((item)=>[item.id,item]));return items.map((item)=>({...item,observations:item.observationIds.map((id)=>observationMap.get(id)).filter(Boolean),actions:item.actionProposalIds.map((id)=>actionMap.get(id)).filter(Boolean)}));}
+  async updateAwarenessStatus(workspaceId,itemId,userId,status){if(!['seen','reviewed','dismissed'].includes(status))throw new AtlasError('VALIDATION_ERROR','status must be seen, reviewed, or dismissed',400);return this.repository.updateAwarenessReceipt(workspaceId,itemId,userId,status,this.clock());}
+
   async searchTwin(workspaceId, query) {
     const text=required(query,'query').trim().toLowerCase();
     const [objects,observations]=await Promise.all([this.repository.listObjects(workspaceId,{}),this.repository.listIntelligenceObservations(workspaceId,'accepted')]);
@@ -231,7 +234,7 @@ export class AtlasService {
   async createEvent(workspaceId, input) {
     return this.repository.transaction(async (repository) => {
       const event = await repository.createEvent(this.buildEvent(workspaceId, input));
-      await repository.createIntelligenceJob(this.buildIntelligenceJob(workspaceId, 'timeline.event', event.parentObjectId, event.id, { event }));
+      await repository.createIntelligenceJob(this.buildIntelligenceJob(workspaceId, event.type || 'timeline.event', event.parentObjectId, event.id, { event }));
       return event;
     });
   }

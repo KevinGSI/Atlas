@@ -4,7 +4,7 @@ export class StructuredModelIntelligenceProvider {
   constructor(model, options={}) { if(typeof model?.complete!=='function')throw new AtlasError('INTELLIGENCE_PROVIDER_INVALID','Structured model provider requires a model',500);this.model=model;this.triggers=options.triggers??['*']; }
   capabilities(){return {triggers:this.triggers,structuredExtraction:true,providerNeutralModel:true};}
   async analyze({event,context}){
-    const response=await this.model.complete({messages:[{role:'user',content:JSON.stringify({instruction:'Analyze this authorized Atlas event. Return JSON only with arrays observations and actionProposals. Observation kinds: classification, entity, matter_match, fact, deadline, duty, conflict, risk, recommendation. Each observation requires kind, data object, confidence 0..1, and optional sourceLocation. Action types: create_task, create_document, draft_email.',event,context})}],tools:[],context});
+    const response=await this.model.complete({messages:[{role:'user',content:JSON.stringify({instruction:'Analyze this authorized Atlas event without waiting for a user prompt. Return JSON only with arrays observations and actionProposals plus optional awareness. Perform classification, entity/matter matching, fact/deadline/duty/risk extraction, and safe work preparation in tandem. Observation kinds: classification, entity, matter_match, fact, deadline, duty, conflict, risk, recommendation. Each observation requires kind, data object, confidence 0..1, and optional sourceLocation. Action types: create_task, create_document, draft_email. awareness requires category, priority (low|normal|high|urgent), headline, summary, and optional targetUserId. Never propose sending, filing, publishing, deleting, or another external consequential action.',event,context})}],tools:[],context});
     if(typeof response?.text!=='string')throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Model did not return structured intelligence text',502);
     try{return JSON.parse(response.text);}catch{throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Model intelligence output was not valid JSON',502);}
   }
@@ -39,6 +39,7 @@ export class AtlasIntelligenceRuntime {
     this.clock = options.clock ?? (() => new Date().toISOString());
     this.projector = options.projector ?? null;
     this.resolver = options.resolver ?? null;
+    this.playbooks = options.playbooks ?? null;
   }
   async processNext() {
     const job = await this.repository.claimIntelligenceJob(this.clock());
@@ -50,7 +51,8 @@ export class AtlasIntelligenceRuntime {
         matters:await this.resolver.resolveMatter(job.workspaceId,{title:email?.title,reference:email?.title}),
         entities:await this.resolver.resolveEntity(job.workspaceId,{email:email?.state?.from})
       }:undefined;
-      const result = await provider.analyze({ event: job.payload, context: { workspaceId: job.workspaceId, objectId: job.objectId, eventId: job.eventId, ...(resolution?{resolution}:{}) } });
+      let result = await provider.analyze({ event: job.payload, context: { workspaceId: job.workspaceId, objectId: job.objectId, eventId: job.eventId, ...(resolution?{resolution}:{}) } });
+      if(this.playbooks)result=this.playbooks.apply(job,result);
       return await this.repository.transaction(async (repository) => {
         if (this.projector) await this.projector.project(repository, job, selected.name, result);
         return repository.completeIntelligenceJob(job.id, result, selected.name, this.clock());

@@ -71,6 +71,8 @@ export function loadConfig(env = process.env) {
     cmsSyncIntervalMs: positiveInteger(env.CMS_SYNC_INTERVAL_MS, 300_000, 'CMS_SYNC_INTERVAL_MS'),
     cmsCredentialEncryptionKey,
     cmsCredentialEncryptionKeyId,
+    situationalSweepEnabled: env.SITUATIONAL_SWEEP_ENABLED === 'true' || production,
+    situationalSweepIntervalMs: positiveInteger(env.SITUATIONAL_SWEEP_INTERVAL_MS, 60_000, 'SITUATIONAL_SWEEP_INTERVAL_MS'),
     databasePoolSize: positiveInteger(env.DATABASE_POOL_SIZE, 10, 'DATABASE_POOL_SIZE'),
     maxBodyBytes: positiveInteger(env.MAX_BODY_BYTES, 1_048_576, 'MAX_BODY_BYTES'),
     shutdownTimeoutMs: positiveInteger(env.SHUTDOWN_TIMEOUT_MS, 10_000, 'SHUTDOWN_TIMEOUT_MS'),

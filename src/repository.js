@@ -26,13 +26,18 @@ export class InMemoryRepository {
   #cmsConnections = new Map();
   #cmsRecordLinks = new Map();
   #encryptedSecrets = new Map();
+  #awarenessItems = new Map();
+  #awarenessReceipts = new Map();
+  #automationMarkers = new Set();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets]
+    const markerSnapshot=new Set(this.#automationMarkers);
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts] = snapshot;
+      this.#automationMarkers=markerSnapshot;
       throw error;
     }
   }
@@ -41,6 +46,7 @@ export class InMemoryRepository {
     this.#workspaces.set(workspace.id, clone(workspace));
     return clone(workspace);
   }
+  listWorkspaces(){return [...this.#workspaces.values()].map(clone);}
 
   getWorkspace(id) {
     const workspace = this.#workspaces.get(id);
@@ -342,4 +348,8 @@ export class InMemoryRepository {
   createEncryptedSecret(value){this.#encryptedSecrets.set(value.id,clone(value));return clone(value);}
   getEncryptedSecret(id){const value=this.#encryptedSecrets.get(id);if(!value)throw new AtlasError('CMS_CREDENTIAL_UNAVAILABLE','CMS credential is unavailable',503);return clone(value);}
   deleteEncryptedSecret(id){this.#encryptedSecrets.delete(id);return {deleted:true};}
+  createAwarenessItem(value){if([...this.#awarenessItems.values()].some((x)=>x.sourceJobId===value.sourceJobId))throw new AtlasError('AWARENESS_ITEM_EXISTS','Awareness item already exists for job',409);this.#awarenessItems.set(value.id,clone(value));return clone(value);}
+  listAwarenessItems(workspaceId,userId,since){return [...this.#awarenessItems.values()].filter((x)=>x.workspaceId===workspaceId&&(!x.targetUserId||x.targetUserId===userId)&&(!since||x.createdAt>since)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map((item)=>({...clone(item),reviewStatus:this.#awarenessReceipts.get(`${item.id}:${userId}`)?.status??'unseen'}));}
+  updateAwarenessReceipt(workspaceId,itemId,userId,status,updatedAt){const item=this.#awarenessItems.get(itemId);if(!item||item.workspaceId!==workspaceId||item.targetUserId&&item.targetUserId!==userId)throw new AtlasError('AWARENESS_ITEM_NOT_FOUND','Awareness item not found',404);const value={itemId,userId,status,updatedAt};this.#awarenessReceipts.set(`${itemId}:${userId}`,value);return clone(value);}
+  createAutomationMarker(workspaceId,markerKey){const key=`${workspaceId}:${markerKey}`;if(this.#automationMarkers.has(key))return false;this.#automationMarkers.add(key);return true;}
 }

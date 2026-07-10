@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.21.0` adds secure CMS coexistence so firms can connect an existing practice-management system, synchronize into Atlas incrementally, and transition without an immediate cutover.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.22.0` adds autonomous situational awareness: native AI processes firm events without prompting, prepares safe work in tandem, and presents attorney review items through “While You Were Gone.”
 
 ## Implemented
 
@@ -89,6 +89,12 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Stable external-record links, cursors, checksums, source timestamps, and timeline provenance
 - Scheduled coexistence sync while the external CMS remains active
 - Encrypted durable OAuth-token vault with production fail-closed configuration
+- Event taxonomy for email, phone call, document upload, missed deadline, CMS activity, and other firm events
+- Autonomous classification, extraction, resolution, risk analysis, and safe work preparation
+- Missed-discovery sweep with idempotent deadline detection
+- Automatic unfiled motion-to-compel draft and review-task proposals
+- Per-attorney While You Were Gone awareness items and review receipts
+- Noise suppression for events that produce no material finding or proposed action
 
 ## Local development
 
@@ -118,6 +124,19 @@ GET /live    Process liveness
 GET /ready   Database-aware readiness
 GET /health  Compatibility health endpoint
 ```
+
+## Autonomous situational awareness
+
+Atlas turns firm activity into intelligence jobs without waiting for a chat prompt. Incoming email, phone-call, document-upload, CMS, timeline, and missed-deadline events are classified and analyzed through the provider-neutral native-intelligence boundary. A configured provider can perform multiple related functions in one pass: extraction, matter resolution, deadline and duty detection, risk analysis, and preparation of reviewable work.
+
+The deterministic missed-discovery playbook runs even though AI vendors remain interchangeable. It prepares an unfiled motion-to-compel draft and a review task, then places an urgent item in the responsible attorney's feed. It never files the document. The same safety boundary prevents autonomous email sending, publishing, or destructive actions.
+
+```text
+GET   /v1/workspaces/:workspaceId/home/while-you-were-gone
+PATCH /v1/workspaces/:workspaceId/home/while-you-were-gone/:itemId
+```
+
+The feed returns source provenance, linked observations, proposed actions, and the current user's review status. The PATCH endpoint accepts `seen`, `reviewed`, or `dismissed`.
 
 ## Render staging deployment
 

@@ -15,7 +15,8 @@ export class IntelligenceProjectionService {
       if (!kinds.has(item.kind) || typeof item.data !== 'object' || typeof item.confidence !== 'number' || item.confidence < 0 || item.confidence > 1) throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Intelligence observation is invalid',502);
     }
     for (const item of actionProposals) if (!actions.has(item.actionType) || typeof item.input !== 'object') throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Intelligence action proposal is invalid',502);
-    return { observations, actionProposals };
+    const awareness=result.awareness??null;if(awareness&&(typeof awareness!=='object'||!['low','normal','high','urgent'].includes(awareness.priority??'normal')||typeof (awareness.headline??'')!=='string'||typeof (awareness.summary??'')!=='string'))throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Situational awareness result is invalid',502);
+    return { observations, actionProposals, awareness };
   }
   async project(repository, job, provider, result) {
     const normalized = this.validate(result);
@@ -27,6 +28,8 @@ export class IntelligenceProjectionService {
       id:createId('aap'),workspaceId:job.workspaceId,runId:null,intelligenceJobId:job.id,originType:'intelligence',proposedBy:null,
       actionType:item.actionType,input:item.input,status:'pending',version:1,decidedBy:null,resultObjectId:null,createdAt:this.clock(),decidedAt:null
     })));
-    return { observations, actionProposals };
+    const awarenessData=normalized.awareness;
+    const awareness=awarenessData?await repository.createAwarenessItem({id:createId('awi'),workspaceId:job.workspaceId,targetUserId:awarenessData.targetUserId??null,sourceJobId:job.id,sourceObjectId:job.objectId,category:awarenessData.category??'firm_activity',priority:awarenessData.priority??'normal',headline:awarenessData.headline??'Atlas completed background work',summary:awarenessData.summary??`${observations.length} observation(s) and ${actionProposals.length} action(s) are ready.`,observationIds:observations.map((item)=>item.id),actionProposalIds:actionProposals.map((item)=>item.id),createdAt:this.clock()}):null;
+    return { observations, actionProposals, awareness };
   }
 }
