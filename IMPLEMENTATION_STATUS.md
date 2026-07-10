@@ -1,8 +1,14 @@
-# Atlas Core 0.24.0 — Attorney Review Center Status
+# Atlas Core 0.25.0 — Knowledge Verification Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.23.0`
+- Everything verified through Atlas Core `0.24.0`
+- Candidate observation previews inside attorney awareness cards
+- Confidence, kind, evidence-derived description, and review status presentation
+- Authenticated acceptance and rejection from the connected homepage
+- Accepted facts, deadlines, duties, risks, conflicts, recommendations, and entities promoted to canonical twin objects
+- Accepted matter matches promoted to graph relationships
+- Rejected observations retained as rejected ledger entries without canonical mutation
 - Reviewable task, email-draft, and legal-document proposals inside awareness cards
 - Human-readable proposal previews with safe HTML escaping
 - Approve and reject controls using authenticated, version-checked decisions
@@ -45,7 +51,11 @@
 
 ## Verification completed here
 
-- 137 canonical tests across the complete Atlas Core surface
+- 138 canonical tests across the complete Atlas Core surface
+- End-to-end candidate observation acceptance and rejection over HTTP
+- Proof that acceptance creates canonical risk knowledge
+- Proof that rejection creates no canonical object
+- Connected-client delivery checks for observation decisions
 - End-to-end awareness-to-approval HTTP workflow
 - Proof that an approved motion remains a draft with `filed: false`
 - Connected-client delivery checks for decision controls and endpoints

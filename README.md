@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.24.0` turns “While You Were Gone” into an attorney review center for inspecting, approving, or rejecting AI-prepared tasks, email drafts, and legal-document drafts.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.25.0` adds attorney verification of AI-identified facts, deadlines, duties, risks, conflicts, entities, recommendations, and matter matches directly inside “While You Were Gone.”
 
 ## Implemented
 
@@ -107,6 +107,10 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Version-checked decisions preventing stale or duplicate approvals
 - Approved tasks become open task records; approved emails and legal documents remain drafts
 - Permanent `sent: false` and `filed: false` safety boundaries on approved draft creation
+- Observation previews with kind, source-derived content, confidence, and current review state
+- Attorney accept/reject controls for candidate digital-twin knowledge
+- Accepted findings promoted to canonical objects or matter relationships with provenance
+- Rejected findings retained in the intelligence ledger without contaminating canonical firm knowledge
 
 ## Local development
 
