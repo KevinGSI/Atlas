@@ -49,3 +49,23 @@ test('PostgreSQL object reads enforce workspace and soft-delete boundaries', asy
   assert.match(calls[0].sql, /workspace_id = \$1 AND id = \$2 AND deleted_at IS NULL/);
   assert.deepEqual(calls[0].values, ['wsp_1', 'obj_1']);
 });
+
+test('PostgreSQL identity adapter stores password hashes without exposing SQL interpolation', async () => {
+  const calls = [];
+  const row = { id: 'usr_1', email: 'lawyer@example.com', name: 'Lawyer', password_hash: 'scrypt$hash', created_at: timestamp };
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rows: [row] }; } };
+  const repository = new PostgresRepository(pool);
+  const user = await repository.createUser({ id: row.id, email: row.email, name: row.name, passwordHash: row.password_hash, createdAt: timestamp });
+  assert.equal(user.passwordHash, 'scrypt$hash');
+  assert.match(calls[0].sql, /VALUES \(\$1,\$2,\$3,\$4,\$5\)/);
+  assert.equal(calls[0].values[3], 'scrypt$hash');
+});
+
+test('PostgreSQL membership lookup is scoped by workspace and user', async () => {
+  const calls = [];
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rows: [] }; } };
+  const repository = new PostgresRepository(pool);
+  await assert.rejects(() => repository.getMembership('wsp_1', 'usr_1'), (error) => error.code === 'ACCESS_DENIED');
+  assert.match(calls[0].sql, /workspace_id = \$1 AND user_id = \$2/);
+  assert.deepEqual(calls[0].values, ['wsp_1', 'usr_1']);
+});

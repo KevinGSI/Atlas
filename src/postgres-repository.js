@@ -25,6 +25,8 @@ function event(row) {
     occurredAt: iso(row.occurred_at), createdAt: iso(row.created_at)
   };
 }
+function user(row) { return { id: row.id, email: row.email, name: row.name, passwordHash: row.password_hash, createdAt: iso(row.created_at) }; }
+function membership(row) { return { id: row.id, workspaceId: row.workspace_id, userId: row.user_id, role: row.role, createdAt: iso(row.created_at) }; }
 
 export class PostgresRepository {
   constructor(executor, pool = executor) {
@@ -130,5 +132,55 @@ export class PostgresRepository {
     if (parentObjectId) { values.push(parentObjectId); sql += ' AND parent_object_id = $2'; }
     const result = await this.executor.query(`${sql} ORDER BY occurred_at, id`, values);
     return result.rows.map(event);
+  }
+
+  async createUser(value) {
+    try {
+      const result = await this.executor.query(
+        'INSERT INTO atlas_user (id, email, name, password_hash, created_at) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+        [value.id, value.email, value.name, value.passwordHash, value.createdAt]);
+      return user(result.rows[0]);
+    } catch (error) {
+      if (error.code === '23505') throw new AtlasError('EMAIL_EXISTS', 'Email is already registered', 409);
+      throw error;
+    }
+  }
+
+  async getUserByEmail(email) {
+    const result = await this.executor.query('SELECT * FROM atlas_user WHERE lower(email) = lower($1)', [email]);
+    if (!result.rows[0]) throw new AtlasError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+    return user(result.rows[0]);
+  }
+
+  async getUser(id) {
+    const result = await this.executor.query('SELECT * FROM atlas_user WHERE id = $1', [id]);
+    if (!result.rows[0]) throw new AtlasError('USER_NOT_FOUND', 'User not found', 404);
+    return user(result.rows[0]);
+  }
+
+  async createMembership(value) {
+    try {
+      const result = await this.executor.query(
+        `INSERT INTO atlas_workspace_membership (id, workspace_id, user_id, role, created_at)
+         VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        [value.id, value.workspaceId, value.userId, value.role, value.createdAt]);
+      return membership(result.rows[0]);
+    } catch (error) {
+      if (error.code === '23505') throw new AtlasError('MEMBERSHIP_EXISTS', 'Membership already exists', 409);
+      throw error;
+    }
+  }
+
+  async getMembership(workspaceId, userId) {
+    const result = await this.executor.query(
+      'SELECT * FROM atlas_workspace_membership WHERE workspace_id = $1 AND user_id = $2', [workspaceId, userId]);
+    if (!result.rows[0]) throw new AtlasError('ACCESS_DENIED', 'Workspace access denied', 403);
+    return membership(result.rows[0]);
+  }
+
+  async listMemberships(workspaceId) {
+    const result = await this.executor.query(
+      'SELECT * FROM atlas_workspace_membership WHERE workspace_id = $1 ORDER BY created_at, id', [workspaceId]);
+    return result.rows.map(membership);
   }
 }

@@ -7,6 +7,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://atlas:atlas@postgres:5432/atlas
       CORS_ORIGINS: http://localhost:5173
+      AUTH_TOKEN_SECRET: local-atlas-development-secret-32-chars
     ports:
       - "3000:3000"
     depends_on:

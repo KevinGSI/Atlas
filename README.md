@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.3.0` adds a deployable staging foundation to the persistence work completed in `0.2.0`.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.4.0` adds authenticated users and workspace role enforcement to the deployable staging foundation.
 
 ## Implemented
 
@@ -15,6 +15,9 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Strict CORS and security response headers
 - Liveness, readiness, and graceful shutdown
 - Docker, Docker Compose, and Render deployment definitions
+- Scrypt password hashing and signed short-lived access tokens
+- Owner, admin, member, and viewer workspace roles
+- Protected workspace routes and membership administration
 
 ## Local development
 
@@ -60,9 +63,20 @@ export NODE_ENV=production
 export HOST=0.0.0.0
 export DATABASE_URL=postgresql://user:password@host:5432/atlas
 export CORS_ORIGINS=https://staging.example.com
+export AUTH_TOKEN_SECRET=replace-with-at-least-32-random-characters
 pnpm migrate
 pnpm start
 ```
+
+## Authentication
+
+Register with `POST /v1/auth/register` or log in with `POST /v1/auth/login`. Send the returned token on workspace requests:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+Creating a workspace atomically makes the authenticated creator its owner. Owners and admins can add memberships through `POST /v1/workspaces/:workspaceId/memberships`.
 
 ## Verification
 

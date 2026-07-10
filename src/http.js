@@ -35,7 +35,7 @@ function corsHeaders(origin, config) {
   return {
     'access-control-allow-origin': origin,
     'access-control-allow-methods': 'GET,POST,OPTIONS',
-    'access-control-allow-headers': 'content-type,x-atlas-request-id',
+    'access-control-allow-headers': 'authorization,content-type,x-atlas-request-id',
     'access-control-max-age': '600',
     vary: 'Origin'
   };
@@ -51,8 +51,12 @@ function route(method, pathname) {
     ['GET', /^\/health$/, 'health'],
     ['GET', /^\/live$/, 'live'],
     ['GET', /^\/ready$/, 'ready'],
+    ['POST', /^\/v1\/auth\/register$/, 'register'],
+    ['POST', /^\/v1\/auth\/login$/, 'login'],
     ['POST', /^\/v1\/workspaces$/, 'createWorkspace'],
     ['GET', /^\/v1\/workspaces\/([^/]+)$/, 'getWorkspace'],
+    ['POST', /^\/v1\/workspaces\/([^/]+)\/memberships$/, 'createMembership'],
+    ['GET', /^\/v1\/workspaces\/([^/]+)\/memberships$/, 'listMemberships'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/objects$/, 'createObject'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/objects$/, 'listObjects'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)$/, 'getObject'],
@@ -72,6 +76,7 @@ function route(method, pathname) {
 export function createAtlasHandler(service, options = {}) {
   const config = options.config ?? { maxBodyBytes: 1_048_576, corsOrigins: [] };
   const ready = options.ready ?? (async () => true);
+  const identity = options.identity;
   return async (request, response) => {
     const requestId = request.headers?.['x-atlas-request-id'] || randomUUID();
     let headers = securityHeaders(requestId);
@@ -82,12 +87,23 @@ export function createAtlasHandler(service, options = {}) {
       const match = route(request.method, url.pathname);
       if (!match) throw new AtlasError('ROUTE_NOT_FOUND', 'Route not found', 404);
       const [workspaceId, objectId] = match.params;
+      const publicRoute = ['health', 'live', 'ready', 'register', 'login'].includes(match.name);
+      const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
+      if (identity && workspaceId) {
+        const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships'].includes(match.name)
+          ? 'workspace:read' : match.name === 'createMembership' ? 'members:admin' : 'workspace:write';
+        await identity.authorize(workspaceId, user.id, permission);
+      }
       let result;
       switch (match.name) {
-        case 'health': case 'live': result = { status: 'ok', version: '0.3.0' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.3.0' }; break;
-        case 'createWorkspace': result = await service.createWorkspace(await readJson(request, config.maxBodyBytes)); break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.4.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.4.0' }; break;
+        case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
+        case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes)); break;
+        case 'createWorkspace': result = await service.createWorkspace(await readJson(request, config.maxBodyBytes), user?.id); break;
         case 'getWorkspace': result = await service.getWorkspace(workspaceId); break;
+        case 'createMembership': { const input = await readJson(request, config.maxBodyBytes); result = await identity.addMembership(workspaceId, input.userId, input.role); break; }
+        case 'listMemberships': result = await identity.repository.listMemberships(workspaceId); break;
         case 'createObject': result = await service.createObject(workspaceId, await readJson(request, config.maxBodyBytes)); break;
         case 'listObjects': result = await service.listObjects(workspaceId, { type: url.searchParams.get('type'), dimension: url.searchParams.get('dimension') }); break;
         case 'getObject': result = await service.getObject(workspaceId, objectId); break;

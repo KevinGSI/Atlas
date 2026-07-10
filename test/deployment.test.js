@@ -10,6 +10,7 @@ test('Render Blueprint is valid and wires migrations, readiness, and PostgreSQL'
   assert.equal(service.preDeployCommand, 'node scripts/migrate.js');
   assert.equal(service.healthCheckPath, '/ready');
   assert.equal(service.envVars.find((item) => item.key === 'DATABASE_URL').fromDatabase.name, 'atlas-postgres');
+  assert.equal(service.envVars.find((item) => item.key === 'AUTH_TOKEN_SECRET').generateValue, true);
   assert.equal(blueprint.databases[0].name, 'atlas-postgres');
 });
 

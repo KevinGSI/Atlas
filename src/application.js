@@ -3,6 +3,7 @@ import { InMemoryRepository } from './repository.js';
 import { AtlasService } from './service.js';
 import { loadConfig } from './config.js';
 import { createPostgresRuntime } from './runtime.js';
+import { IdentityService, TokenService } from './identity.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -14,7 +15,8 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     ? await createPostgresRuntime({ ...env, DATABASE_POOL_SIZE: String(config.databasePoolSize) })
     : memoryRuntime());
   const service = new AtlasService(runtime.repository);
-  const server = createAtlasServer(service, { config, ready: runtime.ready });
+  const identity = new IdentityService(runtime.repository, new TokenService(config.tokenSecret, config.accessTokenTtlSeconds));
+  const server = createAtlasServer(service, { config, ready: runtime.ready, identity });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, resolve);

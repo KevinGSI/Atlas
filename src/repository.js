@@ -9,13 +9,15 @@ export class InMemoryRepository {
   #objects = new Map();
   #relationships = new Map();
   #events = new Map();
+  #users = new Map();
+  #memberships = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships] = snapshot;
       throw error;
     }
   }
@@ -88,5 +90,44 @@ export class InMemoryRepository {
       .filter((item) => !parentObjectId || item.parentObjectId === parentObjectId)
       .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
       .map(clone);
+  }
+
+  createUser(user) {
+    if ([...this.#users.values()].some((item) => item.email === user.email)) {
+      throw new AtlasError('EMAIL_EXISTS', 'Email is already registered', 409);
+    }
+    this.#users.set(user.id, clone(user));
+    return clone(user);
+  }
+
+  getUserByEmail(email) {
+    const user = [...this.#users.values()].find((item) => item.email === email);
+    if (!user) throw new AtlasError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+    return clone(user);
+  }
+
+  getUser(id) {
+    const user = this.#users.get(id);
+    if (!user) throw new AtlasError('USER_NOT_FOUND', 'User not found', 404);
+    return clone(user);
+  }
+
+  createMembership(membership) {
+    const key = `${membership.workspaceId}:${membership.userId}`;
+    if (this.#memberships.has(key)) throw new AtlasError('MEMBERSHIP_EXISTS', 'Membership already exists', 409);
+    this.getWorkspace(membership.workspaceId);
+    this.getUser(membership.userId);
+    this.#memberships.set(key, clone(membership));
+    return clone(membership);
+  }
+
+  getMembership(workspaceId, userId) {
+    const membership = this.#memberships.get(`${workspaceId}:${userId}`);
+    if (!membership) throw new AtlasError('ACCESS_DENIED', 'Workspace access denied', 403);
+    return clone(membership);
+  }
+
+  listMemberships(workspaceId) {
+    return [...this.#memberships.values()].filter((item) => item.workspaceId === workspaceId).map(clone);
   }
 }

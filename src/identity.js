@@ -1,0 +1,89 @@
+import { createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
+import { AtlasError, required } from './errors.js';
+import { createId } from './ids.js';
+
+const scrypt = promisify(scryptCallback);
+const roles = new Set(['owner', 'admin', 'member', 'viewer']);
+const permissions = {
+  owner: new Set(['workspace:read', 'workspace:write', 'members:admin']),
+  admin: new Set(['workspace:read', 'workspace:write', 'members:admin']),
+  member: new Set(['workspace:read', 'workspace:write']),
+  viewer: new Set(['workspace:read'])
+};
+
+function encode(value) { return Buffer.from(JSON.stringify(value)).toString('base64url'); }
+
+export async function hashPassword(password) {
+  if (typeof password !== 'string' || password.length < 12) throw new AtlasError('WEAK_PASSWORD', 'Password must contain at least 12 characters', 400);
+  const salt = randomBytes(16);
+  const derived = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 });
+  return `scrypt$16384$8$1$${salt.toString('base64url')}$${Buffer.from(derived).toString('base64url')}`;
+}
+
+export async function verifyPassword(password, encoded) {
+  const [algorithm, n, r, p, saltValue, hashValue] = encoded.split('$');
+  if (algorithm !== 'scrypt') return false;
+  const expected = Buffer.from(hashValue, 'base64url');
+  const actual = Buffer.from(await scrypt(password, Buffer.from(saltValue, 'base64url'), expected.length, { N: Number(n), r: Number(r), p: Number(p) }));
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+export class TokenService {
+  constructor(secret, ttlSeconds = 900, clock = () => Math.floor(Date.now() / 1000)) {
+    this.secret = secret; this.ttlSeconds = ttlSeconds; this.clock = clock;
+  }
+  issue(user) {
+    const header = encode({ alg: 'HS256', typ: 'JWT' });
+    const now = this.clock();
+    const payload = encode({ sub: user.id, email: user.email, iat: now, exp: now + this.ttlSeconds });
+    const signature = createHmac('sha256', this.secret).update(`${header}.${payload}`).digest('base64url');
+    return { accessToken: `${header}.${payload}.${signature}`, tokenType: 'Bearer', expiresIn: this.ttlSeconds };
+  }
+  verify(token) {
+    const parts = token?.split('.');
+    if (parts?.length !== 3) throw new AtlasError('INVALID_TOKEN', 'Invalid access token', 401);
+    const expected = createHmac('sha256', this.secret).update(`${parts[0]}.${parts[1]}`).digest();
+    const actual = Buffer.from(parts[2], 'base64url');
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new AtlasError('INVALID_TOKEN', 'Invalid access token', 401);
+    let payload;
+    try { payload = JSON.parse(Buffer.from(parts[1], 'base64url')); } catch { throw new AtlasError('INVALID_TOKEN', 'Invalid access token', 401); }
+    if (!payload.sub || payload.exp <= this.clock()) throw new AtlasError('TOKEN_EXPIRED', 'Access token expired', 401);
+    return payload;
+  }
+}
+
+export class IdentityService {
+  constructor(repository, tokenService, clock = () => new Date().toISOString()) {
+    this.repository = repository; this.tokens = tokenService; this.clock = clock;
+  }
+  publicUser(user) { return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt }; }
+  async register(input) {
+    const email = required(input.email, 'email').trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) throw new AtlasError('INVALID_EMAIL', 'Email address is invalid', 400);
+    const user = await this.repository.createUser({ id: createId('usr'), email, name: required(input.name, 'name'), passwordHash: await hashPassword(input.password), createdAt: this.clock() });
+    return { user: this.publicUser(user), ...this.tokens.issue(user) };
+  }
+  async login(input) {
+    let user;
+    try { user = await this.repository.getUserByEmail(required(input.email, 'email').trim().toLowerCase()); }
+    catch { throw new AtlasError('INVALID_CREDENTIALS', 'Invalid email or password', 401); }
+    if (!(await verifyPassword(input.password ?? '', user.passwordHash))) throw new AtlasError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+    return { user: this.publicUser(user), ...this.tokens.issue(user) };
+  }
+  async authenticate(header) {
+    if (!header?.startsWith('Bearer ')) throw new AtlasError('AUTHENTICATION_REQUIRED', 'Bearer access token required', 401);
+    const payload = this.tokens.verify(header.slice(7));
+    return this.repository.getUser(payload.sub);
+  }
+  async addOwner(workspaceId, userId) { return this.addMembership(workspaceId, userId, 'owner'); }
+  async addMembership(workspaceId, userId, role) {
+    if (!roles.has(role)) throw new AtlasError('INVALID_ROLE', 'Role is invalid', 400);
+    return this.repository.createMembership({ id: createId('mem'), workspaceId, userId, role, createdAt: this.clock() });
+  }
+  async authorize(workspaceId, userId, permission) {
+    const membership = await this.repository.getMembership(workspaceId, userId);
+    if (!permissions[membership.role]?.has(permission)) throw new AtlasError('ACCESS_DENIED', 'Workspace permission denied', 403);
+    return membership;
+  }
+}

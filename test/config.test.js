@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { loadConfig } from '../src/config.js';
 
 test('production defaults to a cloud-compatible listener', () => {
-  const config = loadConfig({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://example/atlas' });
+  const config = loadConfig({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://example/atlas', AUTH_TOKEN_SECRET: 'a'.repeat(32) });
   assert.equal(config.host, '0.0.0.0');
   assert.equal(config.port, 3000);
   assert.equal(config.maxBodyBytes, 1_048_576);
@@ -14,7 +14,11 @@ test('production refuses to start without PostgreSQL', () => {
 });
 
 test('production rejects wildcard CORS', () => {
-  assert.throws(() => loadConfig({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://example/atlas', CORS_ORIGINS: '*' }), /Wildcard CORS/);
+  assert.throws(() => loadConfig({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://example/atlas', AUTH_TOKEN_SECRET: 'a'.repeat(32), CORS_ORIGINS: '*' }), /Wildcard CORS/);
+});
+
+test('production rejects weak token secrets', () => {
+  assert.throws(() => loadConfig({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://example/atlas', AUTH_TOKEN_SECRET: 'short' }), /at least 32/);
 });
 
 test('configuration validates positive numeric limits', () => {

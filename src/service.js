@@ -9,14 +9,16 @@ export class AtlasService {
     this.clock = clock;
   }
 
-  async createWorkspace(input) {
+  async createWorkspace(input, ownerUserId = null) {
     const now = this.clock();
-    return this.repository.createWorkspace({
-      id: createId('wsp'),
-      name: required(input.name, 'name'),
-      createdAt: now,
-      updatedAt: now,
-      version: 1
+    return this.repository.transaction(async (repository) => {
+      const workspace = await repository.createWorkspace({
+        id: createId('wsp'), name: required(input.name, 'name'), createdAt: now, updatedAt: now, version: 1
+      });
+      if (ownerUserId) await repository.createMembership({
+        id: createId('mem'), workspaceId: workspace.id, userId: ownerUserId, role: 'owner', createdAt: now
+      });
+      return workspace;
     });
   }
 

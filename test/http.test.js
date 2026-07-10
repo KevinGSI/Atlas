@@ -4,6 +4,7 @@ import { Readable } from 'node:stream';
 import { createAtlasHandler } from '../src/http.js';
 import { InMemoryRepository } from '../src/repository.js';
 import { AtlasService } from '../src/service.js';
+import { IdentityService, TokenService } from '../src/identity.js';
 
 function fixture() {
   return createAtlasHandler(new AtlasService(new InMemoryRepository()), {
@@ -29,7 +30,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.3.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.4.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -87,4 +88,38 @@ test('HTTP errors have stable structured responses', async () => {
     const invalid = await json(handler, '/v1/workspaces', { method: 'POST', body: '{' });
     assert.equal(invalid.status, 400);
     assert.equal(invalid.body.error.code, 'INVALID_JSON');
+});
+
+test('authenticated HTTP flow enforces workspace roles', async () => {
+  const repository = new InMemoryRepository();
+  const service = new AtlasService(repository);
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));
+  const handler = createAtlasHandler(service, {
+    config: { maxBodyBytes: 1_048_576, corsOrigins: [] }, ready: async () => true, identity
+  });
+  const register = (email, name) => json(handler, '/v1/auth/register', {
+    method: 'POST', body: JSON.stringify({ email, name, password: 'correct horse battery staple' })
+  });
+  const owner = (await register('owner@example.com', 'Owner')).body.data;
+  const viewer = (await register('viewer@example.com', 'Viewer')).body.data;
+  const bearer = (token) => ({ authorization: `Bearer ${token}` });
+  const workspaceResponse = await json(handler, '/v1/workspaces', {
+    method: 'POST', headers: bearer(owner.accessToken), body: JSON.stringify({ name: 'Protected Firm' })
+  });
+  assert.equal(workspaceResponse.status, 201);
+  const workspaceId = workspaceResponse.body.data.id;
+  const addViewer = await json(handler, `/v1/workspaces/${workspaceId}/memberships`, {
+    method: 'POST', headers: bearer(owner.accessToken), body: JSON.stringify({ userId: viewer.user.id, role: 'viewer' })
+  });
+  assert.equal(addViewer.status, 201);
+  const deniedWrite = await json(handler, `/v1/workspaces/${workspaceId}/objects`, {
+    method: 'POST', headers: bearer(viewer.accessToken), body: JSON.stringify({ dimension: 'matter', type: 'civil', title: 'Denied' })
+  });
+  assert.equal(deniedWrite.status, 403);
+  assert.equal(deniedWrite.body.error.code, 'ACCESS_DENIED');
+  const allowedRead = await json(handler, `/v1/workspaces/${workspaceId}/objects`, { headers: bearer(viewer.accessToken) });
+  assert.equal(allowedRead.status, 200);
+  const missingToken = await json(handler, `/v1/workspaces/${workspaceId}`);
+  assert.equal(missingToken.status, 401);
+  assert.equal(missingToken.body.error.code, 'AUTHENTICATION_REQUIRED');
 });

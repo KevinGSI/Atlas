@@ -9,6 +9,8 @@ export function loadConfig(env = process.env) {
   const production = nodeEnv === 'production';
   const databaseUrl = env.DATABASE_URL || null;
   if (production && !databaseUrl) throw new Error('DATABASE_URL is required in production');
+  const tokenSecret = env.AUTH_TOKEN_SECRET || (production ? null : 'atlas-development-secret-change-me');
+  if (!tokenSecret || tokenSecret.length < 32) throw new Error('AUTH_TOKEN_SECRET must contain at least 32 characters');
   const corsOrigins = (env.CORS_ORIGINS ?? '')
     .split(',').map((value) => value.trim()).filter(Boolean);
   if (production && corsOrigins.includes('*')) throw new Error('Wildcard CORS is not allowed in production');
@@ -18,6 +20,8 @@ export function loadConfig(env = process.env) {
     host: env.HOST ?? (production ? '0.0.0.0' : '127.0.0.1'),
     port: positiveInteger(env.PORT, 3000, 'PORT'),
     databaseUrl,
+    tokenSecret,
+    accessTokenTtlSeconds: positiveInteger(env.ACCESS_TOKEN_TTL_SECONDS, 900, 'ACCESS_TOKEN_TTL_SECONDS'),
     databasePoolSize: positiveInteger(env.DATABASE_POOL_SIZE, 10, 'DATABASE_POOL_SIZE'),
     maxBodyBytes: positiveInteger(env.MAX_BODY_BYTES, 1_048_576, 'MAX_BODY_BYTES'),
     shutdownTimeoutMs: positiveInteger(env.SHUTDOWN_TIMEOUT_MS, 10_000, 'SHUTDOWN_TIMEOUT_MS'),

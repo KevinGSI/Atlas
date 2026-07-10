@@ -1,46 +1,40 @@
-# Atlas Core 0.3.0 — Implementation Status
+# Atlas Core 0.4.0 — Implementation Status
 
 ## Verified as implemented
 
-- Everything verified in Atlas Core `0.1.0` and `0.2.0`
-- Cloud-compatible production listener configuration
-- Production refusal without `DATABASE_URL`
-- Strict production CORS configuration
-- One-megabyte default JSON request limit with `413` responses
-- Security headers, cache prevention, and request correlation IDs
-- Liveness and dependency-aware readiness endpoints
-- Owned PostgreSQL runtime with readiness query and pool shutdown
-- Graceful `SIGTERM` and `SIGINT` handling
-- Standalone, checksum-protected migration command
-- Multi-stage, non-root Docker image definition with health check
-- Render Blueprint for API and managed PostgreSQL
-- Local Docker Compose API/PostgreSQL stack
-- Deployment, configuration, security, runtime, persistence, and domain tests
+- Everything verified in Atlas Core `0.1.0` through `0.3.0`
+- User registration with normalized unique email addresses
+- Memory-hard `scrypt` password hashing with unique 128-bit salts
+- Constant-time password and token signature comparison
+- Signed HS256 bearer access tokens with issuance and expiration times
+- Token tamper and expiration rejection
+- Production enforcement of a 32-character minimum signing secret
+- Workspace memberships with `owner`, `admin`, `member`, and `viewer` roles
+- Permission enforcement for workspace reads, writes, and membership administration
+- Atomic workspace and owner-membership creation
+- Authentication on every workspace API route in the real application runtime
+- PostgreSQL user and membership schema, indexes, repository methods, and constraints
+- Password hashes excluded from API registration and login responses
 
-## Runtime verification completed here
+## Verification completed here
 
-- 28 canonical automated tests
-- Real loopback HTTP listener and `/health` smoke request
-- Application lifecycle start, readiness, and idempotent shutdown smoke check
-- PostgreSQL client package installation and import
-- Git bundle and source ZIP reconstruction verification
+- 37 canonical tests covering domain, HTTP, deployment, persistence, identity, tokens, and roles
+- Wrong-password, token-tamper, token-expiry, missing-token, and viewer-write-denial tests
+- Real-socket registration, workspace ownership, authenticated access, and `401` rejection smoke test
+- Real listener, readiness, and shutdown lifecycle smoke tests inherited from `0.3.0`
+- Fresh package installation, Git-bundle reconstruction, and ZIP reconstruction
 
-## Explicitly not verified in this environment
+## Security limitations still remaining
 
-- Docker image build because no Docker daemon is installed
-- Render Blueprint deployment against a Render account
-- Execution against a live PostgreSQL server
-- Persistence across process or database restarts
-- Managed backup and restore
-
-## Not yet safe for confidential legal data
-
-- No authentication or authorization
-- No firm, workspace-membership, or matter-level access enforcement
+- No refresh-token rotation, revocation list, password reset, email verification, or MFA
+- No account lockout or distributed login rate limiting
+- No invitation acceptance workflow
+- No matter-specific ethical-wall permissions
+- No external identity provider or SSO
 - No encrypted evidence/file storage
 - No complete append-only audit ledger
-- No rate limiting, abuse protection, or external security review
+- No external penetration test
 
-## Verification boundary
+## Data-safety boundary
 
-Version `0.3.0` is a deployable staging foundation, not a production-ready legal product. It can be deployed to prove cloud networking, migrations, and PostgreSQL persistence using synthetic data. Confidential client data must wait for identity, authorization, audit, storage, backup, and security milestones.
+Version `0.4.0` establishes a tested identity and workspace authorization foundation, but it is not yet approved for confidential client data. Refresh-token security, account recovery, auditability, evidence storage, backup restoration, and external security assessment remain mandatory production milestones.
