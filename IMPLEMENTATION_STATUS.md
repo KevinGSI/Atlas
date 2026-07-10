@@ -1,8 +1,14 @@
-# Atlas Core 0.22.1 — Connected Situational Awareness Status
+# Atlas Core 0.23.0 — Event Ingestion Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.22.0`
+- Everything verified through Atlas Core `0.22.1`
+- Authenticated phone-call and standalone-document ingestion routes
+- Canonical call records with direction, parties, transcript, summary, duration, and external recording reference
+- Canonical uploaded-document records with blob reference, checksum, media type, size, and extraction status
+- Atomic timeline, intelligence-job, and ingestion-ledger persistence
+- Duplicate delivery suppression across phone and document connectors
+- Autonomous phone-call awareness with extracted duties and proposed callback work
 - Application-served phase-one homepage with functional Atlas login
 - Same-origin authenticated API client with no hard-coded demo identity
 - Attorney-scoped `While You Were Gone` loading and review decisions
@@ -33,7 +39,11 @@
 
 ## Verification completed here
 
-- 131 canonical tests across the complete Atlas Core surface
+- 136 canonical tests across the complete Atlas Core surface
+- Phone and document validation with transactional rollback
+- Phone and document idempotency and native-job routing
+- Authenticated HTTP ingestion for both event types
+- End-to-end phone ingestion through native intelligence into attorney awareness
 - Connected homepage asset delivery with restrictive security headers
 - Authenticated awareness retrieval and review through the HTTP boundary
 - PostgreSQL attorney-scoping and receipt-upsert query verification

@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.22.1` completes the first connected situational-awareness workflow: the application serves a real sign-in homepage that consumes the authenticated “While You Were Gone” API and records attorney review decisions.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.23.0` adds authenticated, idempotent phone-call and standalone-document ingestion so external events enter native intelligence and attorney situational awareness without a chat prompt.
 
 ## Implemented
 
@@ -98,6 +98,10 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Same-origin connected phase-one homepage served at `/`
 - Real Atlas authentication from the homepage without hard-coded demo credentials
 - Attorney-scoped awareness retrieval and review-state updates from the browser client
+- Canonical incoming and outgoing phone-call records with transcript and recording references
+- Standalone document-upload cataloging with external blob metadata and pending extraction state
+- Idempotent phone and document ingestion by workspace, connector, and external record ID
+- Native intelligence jobs and timeline provenance created atomically with ingested records
 
 ## Local development
 
@@ -204,6 +208,15 @@ Other providers are registered through the same `AiProviderRegistry`; legal tool
 Native intelligence runs beneath chat and direct platform workflows. Material object, timeline, ingestion, and approved-action events enqueue durable jobs. `pnpm worker:intelligence` runs the background worker. It selects interchangeable providers by declared trigger capabilities, validates normalized results, and projects candidate observations and action proposals with source, confidence, location, job, and provider provenance.
 
 Incoming connector emails enter through `POST /v1/workspaces/:workspaceId/ingestions/email`. Attachment metadata points to an external blob reference; binary storage, malware scanning, PDF parsing, and OCR are replaceable adapters rather than database blobs or vendor-specific domain code.
+
+Phone and standalone-document connectors use these authenticated routes:
+
+```text
+POST /v1/workspaces/:workspaceId/ingestions/phone-calls
+POST /v1/workspaces/:workspaceId/ingestions/documents
+```
+
+Repeated connector deliveries return the already cataloged record and do not duplicate intelligence jobs. Phone calls queue `phone_call.received`; documents queue `attachment.received` for provider-neutral processing.
 
 Candidates remain noncanonical until reviewed. The homepage can consume `GET /v1/workspaces/:workspaceId/intelligence/review-inbox`; authorized reviewers accept or reject observations through `POST /v1/workspaces/:workspaceId/intelligence/observations/:observationId/decision`. Accepted knowledge becomes canonical twin objects or relationships. Both ordinary screens and Atlas chat search the same accepted state through `GET /v1/workspaces/:workspaceId/intelligence/search?q=...` and the `search_twin` tool.
 

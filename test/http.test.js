@@ -6,6 +6,7 @@ import { InMemoryRepository } from '../src/repository.js';
 import { AtlasService } from '../src/service.js';
 import { IdentityService, TokenService } from '../src/identity.js';
 import { AtlasAssistant, AtlasToolRegistry } from '../src/assistant.js';
+import { AtlasIngestionService } from '../src/ingestion.js';
 
 function fixture() {
   return createAtlasHandler(new AtlasService(new InMemoryRepository()), {
@@ -35,7 +36,7 @@ test('serves the connected phase-one client from the application origin',async()
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.22.1' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.23.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -163,6 +164,13 @@ test('authenticated homepage loads and reviews attorney awareness through HTTP',
   await repository.createAwarenessItem({id:'awi_http',workspaceId:workspace.id,targetUserId:registered.user.id,sourceJobId:'inj_http',sourceObjectId:null,category:'incoming_email',priority:'high',headline:'Response email prepared',summary:'An unsent response is ready for attorney review.',observationIds:[],actionProposalIds:[],createdAt:'2026-07-10T12:00:00.000Z'});
   const feed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone`,{headers});assert.equal(feed.status,200);assert.equal(feed.body.data[0].reviewStatus,'unseen');assert.equal(feed.body.data[0].headline,'Response email prepared');
   const reviewed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone/awi_http`,{method:'PATCH',headers,body:JSON.stringify({status:'reviewed'})});assert.equal(reviewed.status,200);assert.equal(reviewed.body.data.status,'reviewed');const refreshed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone`,{headers});assert.equal(refreshed.body.data[0].reviewStatus,'reviewed');
+});
+
+test('authenticated ingestion routes accept phone calls and standalone documents idempotently',async()=>{
+  const repository=new InMemoryRepository();const service=new AtlasService(repository);const identity=new IdentityService(repository,new TokenService('a'.repeat(32)));const ingestion=new AtlasIngestionService(repository,()=> '2026-07-10T12:00:00.000Z');const handler=createAtlasHandler(service,{config:{maxBodyBytes:1_048_576,corsOrigins:[]},ready:async()=>true,identity,ingestion});
+  const registered=(await json(handler,'/v1/auth/register',{method:'POST',body:JSON.stringify({email:'events@example.com',name:'Event Attorney',password:'correct password long enough'})})).body.data;const headers={authorization:`Bearer ${registered.accessToken}`};const workspace=(await json(handler,'/v1/workspaces',{method:'POST',headers,body:JSON.stringify({name:'Event Firm'})})).body.data;
+  const callBody={connector:'test-phone',externalId:'call-http-1',direction:'incoming',from:'+15551230000',to:'+15559870000',transcript:'Please call me about discovery.',durationSeconds:45};const call=await json(handler,`/v1/workspaces/${workspace.id}/ingestions/phone-calls`,{method:'POST',headers,body:JSON.stringify(callBody)});assert.equal(call.status,200);assert.equal(call.body.data.root.type,'phone_call');const duplicate=await json(handler,`/v1/workspaces/${workspace.id}/ingestions/phone-calls`,{method:'POST',headers,body:JSON.stringify(callBody)});assert.equal(duplicate.body.data.duplicate,true);
+  const document=await json(handler,`/v1/workspaces/${workspace.id}/ingestions/documents`,{method:'POST',headers,body:JSON.stringify({connector:'test-portal',externalId:'doc-http-1',filename:'notice.pdf',storageRef:'blob://notice',sha256:'abc123',mediaType:'application/pdf',size:512})});assert.equal(document.status,200);assert.equal(document.body.data.root.type,'uploaded_document');assert.equal((await repository.listIntelligenceJobs(workspace.id)).filter((job)=>['phone_call.received','attachment.received'].includes(job.triggerType)).length,2);
 });
 
 test('HTTP refresh rotates sessions and logout prevents further refresh', async () => {

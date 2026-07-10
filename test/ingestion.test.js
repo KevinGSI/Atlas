@@ -25,6 +25,29 @@ test('email ingestion is idempotent by workspace connector and external message 
   assert.equal(first.duplicate,false);assert.equal(second.duplicate,true);assert.equal(second.root.id,first.root.id);
 });
 
+test('phone call ingestion creates one canonical call and one native intelligence job',async()=>{
+  const {repository,workspace,matter,ingestion}=await fixture();
+  const input={connector:'telephony',externalId:'call-1',direction:'incoming',from:'+15551230000',to:'+15559870000',transcript:'Client asked for a callback about discovery.',durationSeconds:93,matterId:matter.id};
+  const first=await ingestion.ingestPhoneCall(workspace.id,input,'usr_1'); const duplicate=await ingestion.ingestPhoneCall(workspace.id,input,'usr_1');
+  assert.equal(first.root.type,'phone_call');assert.equal(first.root.state.transcript,input.transcript);assert.equal(first.ingestion.kind,'phone_call');assert.equal(duplicate.duplicate,true);assert.equal(duplicate.root.id,first.root.id);
+  const jobs=await repository.listIntelligenceJobs(workspace.id);assert.equal(jobs.at(-1).triggerType,'phone_call.received');assert.equal(jobs.at(-1).payload.call.id,first.root.id);
+});
+
+test('standalone document ingestion catalogs metadata and queues extraction exactly once',async()=>{
+  const {repository,workspace,matter,ingestion}=await fixture();
+  const input={connector:'portal',externalId:'upload-1',filename:'interrogatories.pdf',storageRef:'blob://sha256/document',sha256:'document',mediaType:'application/pdf',size:2048,matterId:matter.id};
+  const first=await ingestion.ingestDocument(workspace.id,input,'usr_1');const duplicate=await ingestion.ingestDocument(workspace.id,input,'usr_1');
+  assert.equal(first.root.type,'uploaded_document');assert.equal(first.root.state.extractionStatus,'pending');assert.equal(first.ingestion.kind,'document');assert.equal(duplicate.duplicate,true);
+  const jobs=await repository.listIntelligenceJobs(workspace.id);assert.equal(jobs.at(-1).triggerType,'attachment.received');assert.equal(jobs.at(-1).payload.document.id,first.root.id);
+});
+
+test('invalid call and document inputs leave no partial canonical records',async()=>{
+  const {repository,workspace,ingestion}=await fixture();
+  await assert.rejects(()=>ingestion.ingestPhoneCall(workspace.id,{connector:'phone',externalId:'bad-call',direction:'sideways'}),(error)=>error.code==='INGESTION_INVALID');
+  await assert.rejects(()=>ingestion.ingestDocument(workspace.id,{connector:'portal',externalId:'bad-document',filename:'empty.pdf',storageRef:'blob://empty',sha256:'empty',mediaType:'application/pdf',size:-1}),(error)=>error.code==='INGESTION_INVALID');
+  const objects=await repository.listObjects(workspace.id,{});assert.equal(objects.some((object)=>['phone_call','uploaded_document'].includes(object.type)),false);
+});
+
 test('connector and extractor registries enforce interchangeable adapter contracts',()=>{
   assert.throws(()=>new IngestionConnectorRegistry().register('bad',{}),(error)=>error.code==='INGESTION_CONNECTOR_INVALID');
   const connectors=new IngestionConnectorRegistry().register('mail',{capabilities(){return {attachments:true};},async pull(){return [];}});assert.ok(connectors.resolve('mail'));

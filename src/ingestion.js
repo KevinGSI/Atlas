@@ -7,6 +7,17 @@ function emailAddress(value, field) {
   return text;
 }
 
+function nonNegativeInteger(value, field) {
+  if (value !== undefined && (!Number.isInteger(value) || value < 0)) throw new AtlasError('INGESTION_INVALID', `${field} must be a non-negative integer`, 400);
+  return value ?? null;
+}
+
+function documentMetadata(input) {
+  const storageRef=required(input.storageRef,'storageRef'); const sha256=required(input.sha256,'sha256'); const mediaType=required(input.mediaType,'mediaType');
+  const size=nonNegativeInteger(input.size,'size'); if(size===null)throw new AtlasError('INGESTION_INVALID','size is required',400);
+  return {storageRef,sha256,mediaType,size};
+}
+
 export class IngestionConnectorRegistry {
   #connectors = new Map();
   register(name, connector) {
@@ -53,6 +64,40 @@ export class AtlasIngestionService {
       await repository.createIntelligenceJob({id:createId('inj'),workspaceId,triggerType:'email.received',objectId:email.id,eventId:event.id,status:'pending',attempts:0,payload:{email,attachmentIds:documents.map((x)=>x.id)},result:null,provider:null,errorCode:null,availableAt:now,lockedAt:null,createdAt:now,completedAt:null});
       const ingestion=await repository.createIngestionRecord({id:createId('ing'),workspaceId,connector,externalId,kind:'email',status:'cataloged',rootObjectId:email.id,metadata:{attachmentCount:documents.length},errorCode:null,receivedAt:input.receivedAt??now,createdAt:now});
       return {ingestion,duplicate:false,root:email,attachments:documents};
+    });
+  }
+
+  async ingestPhoneCall(workspaceId,input,actorId='system') {
+    const connector=required(input.connector,'connector'); const externalId=required(input.externalId,'externalId'); const direction=input.direction??'incoming';
+    if(!['incoming','outgoing'].includes(direction))throw new AtlasError('INGESTION_INVALID','direction must be incoming or outgoing',400);
+    const durationSeconds=nonNegativeInteger(input.durationSeconds,'durationSeconds'); const now=this.clock();
+    return this.repository.transaction(async(repository)=>{
+      const existing=await repository.findIngestionRecord(workspaceId,connector,externalId);
+      if(existing)return {ingestion:existing,duplicate:true,root:await repository.getObject(workspaceId,existing.rootObjectId)};
+      if(input.matterId)await repository.getObject(workspaceId,input.matterId);
+      const call={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'operation',type:'phone_call',title:input.title?.trim()||`${direction==='incoming'?'Incoming':'Outgoing'} call`,state:{direction,from:input.from??null,to:input.to??null,transcript:input.transcript??null,summary:input.summary??null,recordingRef:input.recordingRef??null,durationSeconds,occurredAt:input.occurredAt??now,status:'received'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
+      await repository.createObject(call);
+      const event={id:createId('evt'),workspaceId,parentObjectId:call.id,type:'phone_call.received',actorId,source:`connector:${connector}`,confidence:1,visibility:'workspace',relatedObjectIds:input.matterId?[input.matterId]:[],data:{externalId,direction,durationSeconds},occurredAt:input.occurredAt??now,createdAt:now};
+      await repository.createEvent(event);
+      await repository.createIntelligenceJob({id:createId('inj'),workspaceId,triggerType:'phone_call.received',objectId:call.id,eventId:event.id,status:'pending',attempts:0,payload:{call,matterId:input.matterId??null},result:null,provider:null,errorCode:null,availableAt:now,lockedAt:null,createdAt:now,completedAt:null});
+      const ingestion=await repository.createIngestionRecord({id:createId('ing'),workspaceId,connector,externalId,kind:'phone_call',status:'cataloged',rootObjectId:call.id,metadata:{direction,durationSeconds,hasTranscript:Boolean(input.transcript)},errorCode:null,receivedAt:input.occurredAt??now,createdAt:now});
+      return {ingestion,duplicate:false,root:call};
+    });
+  }
+
+  async ingestDocument(workspaceId,input,actorId='system') {
+    const connector=required(input.connector,'connector'); const externalId=required(input.externalId,'externalId'); const file=documentMetadata(input); const now=this.clock();
+    return this.repository.transaction(async(repository)=>{
+      const existing=await repository.findIngestionRecord(workspaceId,connector,externalId);
+      if(existing)return {ingestion:existing,duplicate:true,root:await repository.getObject(workspaceId,existing.rootObjectId)};
+      if(input.matterId)await repository.getObject(workspaceId,input.matterId);
+      const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:'uploaded_document',title:required(input.filename,'filename'),state:{...file,documentType:input.documentType??null,uploadedAt:input.uploadedAt??now,extractionStatus:'pending'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
+      await repository.createObject(document);
+      const event={id:createId('evt'),workspaceId,parentObjectId:document.id,type:'attachment.received',actorId,source:`connector:${connector}`,confidence:1,visibility:'workspace',relatedObjectIds:input.matterId?[input.matterId]:[],data:{externalId,filename:document.title,mediaType:file.mediaType},occurredAt:input.uploadedAt??now,createdAt:now};
+      await repository.createEvent(event);
+      await repository.createIntelligenceJob({id:createId('inj'),workspaceId,triggerType:'attachment.received',objectId:document.id,eventId:event.id,status:'pending',attempts:0,payload:{document,matterId:input.matterId??null},result:null,provider:null,errorCode:null,availableAt:now,lockedAt:null,createdAt:now,completedAt:null});
+      const ingestion=await repository.createIngestionRecord({id:createId('ing'),workspaceId,connector,externalId,kind:'document',status:'cataloged',rootObjectId:document.id,metadata:{mediaType:file.mediaType,size:file.size},errorCode:null,receivedAt:input.uploadedAt??now,createdAt:now});
+      return {ingestion,duplicate:false,root:document};
     });
   }
 }

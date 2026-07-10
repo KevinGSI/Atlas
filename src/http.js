@@ -90,6 +90,8 @@ function route(method, pathname) {
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/assistant\/actions\/([^/]+)\/decision$/, 'decideAssistantAction']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/intelligence\/review-inbox$/, 'intelligenceReviewInbox']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/ingestions\/email$/, 'ingestEmail']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/ingestions\/phone-calls$/, 'ingestPhoneCall']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/ingestions\/documents$/, 'ingestDocument']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/intelligence\/search$/, 'searchTwin']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/intelligence\/observations\/([^/]+)\/decision$/, 'decideIntelligenceObservation']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/cms\/([^/]+)\/authorize$/, 'beginCmsAuthorization']
@@ -133,8 +135,8 @@ export function createAtlasHandler(service, options = {}) {
       let result;
       switch (match.name) {
         case 'frontendIndex': case 'frontendApp': return sendAsset(response,await phaseOneAsset(match.name),headers);
-        case 'health': case 'live': result = { status: 'ok', version: '0.22.1' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.22.1' }; break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.23.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.23.0' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes)); break;
         case 'refresh': result = await identity.refresh(await readJson(request, config.maxBodyBytes)); break;
@@ -169,6 +171,8 @@ export function createAtlasHandler(service, options = {}) {
         case 'decideAssistantAction': result = await service.decideAiActionProposal(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'intelligenceReviewInbox': result = await service.intelligenceReviewInbox(workspaceId); break;
         case 'ingestEmail': result = await ingestion.ingestEmail(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
+        case 'ingestPhoneCall': result = await ingestion.ingestPhoneCall(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
+        case 'ingestDocument': result = await ingestion.ingestDocument(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'searchTwin': result = await service.searchTwin(workspaceId,url.searchParams.get('q')); break;
         case 'decideIntelligenceObservation': result = await service.decideIntelligenceObservation(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'beginCmsAuthorization': result = await cms.beginAuthorization(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;
