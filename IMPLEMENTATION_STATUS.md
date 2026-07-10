@@ -1,8 +1,14 @@
-# Atlas Core 0.33.2 — Live PostgreSQL Identity Fixture Correction Status
+# Atlas Core 0.33.3 — PostgreSQL Integrity Audit Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.33.1`
+- Everything verified through Atlas Core `0.33.2`
+- Corrected live table verification to exclude and separately verify migration history
+- Migration expectations now derive from the actual ordered migration set
+- PostgreSQL ingestion constraints now support email, phone-call, and document records used by runtime code
+- Live integration exercises phone-call and document ingestion
+- Append-only timeline updates and deletes are now rejected by PostgreSQL triggers
+- Added migration `0019_postgres_integrity.sql`
 - Corrected the live awareness receipt fixture to create its referenced user
 - Created the live workspace with that user as its actual owner
 - Corrected the live awareness fixture to create its foreign-key source intelligence job

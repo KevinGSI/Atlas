@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.33.2` completes the live PostgreSQL fixture's identity prerequisites so awareness receipts reference a real user and workspace membership.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.33.3` completes a PostgreSQL integrity audit: migration-history-aware table verification, runtime-aligned ingestion constraints, and database-enforced append-only timeline events.
 
 ## Implemented
 
