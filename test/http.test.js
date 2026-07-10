@@ -30,7 +30,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.7.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.8.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -188,4 +188,27 @@ test('HTTP password recovery uses the delivery boundary and replaces credentials
   assert.deepEqual(completed.body.data, { reset: true });
   const login = await json(handler, '/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'recover-http@example.com', password: 'replacement password long enough' }) });
   assert.equal(login.status, 200);
+});
+
+test('HTTP session inventory supports individual and global logout', async () => {
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));
+  const handler = createAtlasHandler(new AtlasService(repository), {
+    config: { maxBodyBytes: 1_048_576, corsOrigins: [] }, ready: async () => true, identity
+  });
+  const credentials = { email: 'inventory@example.com', password: 'original password long enough' };
+  const registered = (await json(handler, '/v1/auth/register', { method: 'POST', body: JSON.stringify({ ...credentials, name: 'Inventory' }) })).body.data;
+  const loggedIn = (await json(handler, '/v1/auth/login', { method: 'POST', body: JSON.stringify(credentials) })).body.data;
+  const headers = { authorization: `Bearer ${loggedIn.accessToken}` };
+  const inventory = await json(handler, '/v1/auth/sessions', { headers });
+  assert.equal(inventory.status, 200);
+  assert.equal(inventory.body.data.length, 2);
+  const current = inventory.body.data.find((session) => session.current);
+  assert.ok(current);
+  const revoked = await json(handler, `/v1/auth/sessions/${current.id}`, { method: 'DELETE', headers });
+  assert.equal(revoked.body.data.sessionId, current.id);
+  const all = await json(handler, '/v1/auth/sessions', { method: 'DELETE', headers });
+  assert.deepEqual(all.body.data, { revoked: true });
+  const denied = await json(handler, '/v1/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: registered.refreshToken }) });
+  assert.equal(denied.body.error.code, 'REFRESH_TOKEN_REUSED');
 });

@@ -34,10 +34,10 @@ export class TokenService {
   constructor(secret, ttlSeconds = 900, clock = () => Math.floor(Date.now() / 1000)) {
     this.secret = secret; this.ttlSeconds = ttlSeconds; this.clock = clock;
   }
-  issue(user) {
+  issue(user, sessionId = undefined) {
     const header = encode({ alg: 'HS256', typ: 'JWT' });
     const now = this.clock();
-    const payload = encode({ sub: user.id, email: user.email, iat: now, exp: now + this.ttlSeconds });
+    const payload = encode({ sub: user.id, email: user.email, ...(sessionId ? { sid: sessionId } : {}), iat: now, exp: now + this.ttlSeconds });
     const signature = createHmac('sha256', this.secret).update(`${header}.${payload}`).digest('base64url');
     return { accessToken: `${header}.${payload}.${signature}`, tokenType: 'Bearer', expiresIn: this.ttlSeconds };
   }
@@ -71,7 +71,7 @@ export class IdentityService {
       id: createId('ses'), userId: user.id, familyId, tokenHash: hashToken(refreshToken),
       expiresAt, createdAt, usedAt: null, revokedAt: null, replacedBySessionId: null
     });
-    return { ...this.tokens.issue(user), refreshToken, refreshTokenExpiresAt: session.expiresAt };
+    return { ...this.tokens.issue(user, session.id), refreshToken, refreshTokenExpiresAt: session.expiresAt };
   }
   async register(input) {
     const email = required(input.email, 'email').trim().toLowerCase();
@@ -117,6 +117,30 @@ export class IdentityService {
     if (!session.revokedAt) await this.repository.revokeRefreshSession(session.id, this.clock());
     return { revoked: true };
   }
+  publicSession(session, currentSessionId) {
+    const now = new Date(this.clock()).getTime();
+    const status = session.revokedAt ? 'revoked'
+      : session.usedAt ? 'rotated'
+        : new Date(session.expiresAt).getTime() <= now ? 'expired' : 'active';
+    return {
+      id: session.id, status, current: session.id === currentSessionId,
+      createdAt: session.createdAt, expiresAt: session.expiresAt,
+      usedAt: session.usedAt, revokedAt: session.revokedAt
+    };
+  }
+  async listSessions(userId, currentSessionId) {
+    const sessions = await this.repository.listRefreshSessions(userId);
+    return sessions.map((session) => this.publicSession(session, currentSessionId));
+  }
+  async revokeSession(userId, sessionId) {
+    const session = await this.repository.getRefreshSession(userId, sessionId);
+    if (!session.revokedAt) await this.repository.revokeRefreshSession(session.id, this.clock());
+    return { revoked: true, sessionId };
+  }
+  async revokeAllSessions(userId) {
+    await this.repository.revokeRefreshSessionsForUser(userId, this.clock());
+    return { revoked: true };
+  }
   async requestPasswordReset(input) {
     const email = required(input.email, 'email').trim().toLowerCase();
     let user;
@@ -153,7 +177,7 @@ export class IdentityService {
   async authenticate(header) {
     if (!header?.startsWith('Bearer ')) throw new AtlasError('AUTHENTICATION_REQUIRED', 'Bearer access token required', 401);
     const payload = this.tokens.verify(header.slice(7));
-    return this.repository.getUser(payload.sub);
+    return { ...(await this.repository.getUser(payload.sub)), sessionId: payload.sid ?? null };
   }
   async addOwner(workspaceId, userId) { return this.addMembership(workspaceId, userId, 'owner'); }
   async addMembership(workspaceId, userId, role) {

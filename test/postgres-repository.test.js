@@ -106,6 +106,19 @@ test('PostgreSQL refresh sessions store only token hashes and lock during rotati
   assert.deepEqual(calls[1].values, ['hashed']);
 });
 
+test('PostgreSQL session inventory and lookup are always scoped to the owning user', async () => {
+  const calls = [];
+  const row = { id: 'ses_1', user_id: 'usr_1', family_id: 'fam_1', token_hash: 'hashed', expires_at: timestamp, created_at: timestamp, used_at: null, revoked_at: null, replaced_by_session_id: null };
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rows: [row] }; } };
+  const repository = new PostgresRepository(pool);
+  assert.equal((await repository.getRefreshSession('usr_1', 'ses_1')).id, 'ses_1');
+  assert.deepEqual(calls[0].values, ['usr_1', 'ses_1']);
+  assert.match(calls[0].sql, /user_id = \$1 AND id = \$2/);
+  assert.equal((await repository.listRefreshSessions('usr_1')).length, 1);
+  assert.deepEqual(calls[1].values, ['usr_1']);
+  assert.match(calls[1].sql, /ORDER BY created_at DESC/);
+});
+
 test('PostgreSQL password reset stores only hashes and locks tokens before consumption', async () => {
   const calls = [];
   const row = { id: 'rst_1', user_id: 'usr_1', token_hash: 'hashed-reset', expires_at: timestamp, created_at: timestamp, used_at: null };

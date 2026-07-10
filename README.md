@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.7.0` adds secure, single-use password recovery and credential-wide session revocation.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.8.0` adds user-controlled session inventory, individual device revocation, and global logout.
 
 ## Implemented
 
@@ -26,6 +26,9 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Hashed, expiring, single-use password-reset tokens
 - Anti-enumeration reset requests and an injectable email-delivery boundary
 - Atomic password replacement with revocation of every existing refresh session and reset token
+- Session-bound access-token claims identifying the issuing login
+- Safe session inventory without token hashes or family identifiers
+- User-scoped individual session revocation and global logout
 
 ## Local development
 
@@ -89,6 +92,8 @@ Creating a workspace atomically makes the authenticated creator its owner. Owner
 Access tokens are short-lived. Exchange each refresh token exactly once through `POST /v1/auth/refresh`; the response contains its replacement. Reusing an older token revokes the entire session family. `POST /v1/auth/logout` revokes the supplied refresh token.
 
 Password recovery begins with `POST /v1/auth/password-reset/request`, which always returns the same accepted response whether an account exists or delivery succeeds. A configured delivery provider receives the raw token; Atlas persists only its hash. Complete recovery through `POST /v1/auth/password-reset/complete`. The successful transaction replaces the password and invalidates all reset tokens and refresh sessions for the user.
+
+Authenticated users can inspect their login history with `GET /v1/auth/sessions`, revoke one session with `DELETE /v1/auth/sessions/:sessionId`, or revoke every refresh session with `DELETE /v1/auth/sessions`. Session responses expose status and timestamps but never stored token hashes or internal token-family identifiers.
 
 ## Object mutation and audit
 

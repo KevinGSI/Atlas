@@ -158,6 +158,19 @@ export class InMemoryRepository {
     return clone(session);
   }
 
+  getRefreshSession(userId, id) {
+    const session = this.#refreshSessions.get(id);
+    if (!session || session.userId !== userId) throw new AtlasError('SESSION_NOT_FOUND', 'Session not found', 404);
+    return clone(session);
+  }
+
+  listRefreshSessions(userId) {
+    return [...this.#refreshSessions.values()]
+      .filter((session) => session.userId === userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(clone);
+  }
+
   consumeRefreshSession(id, usedAt, replacedBySessionId) {
     const session = this.#refreshSessions.get(id);
     if (!session || session.usedAt || session.revokedAt) throw new AtlasError('INVALID_REFRESH_TOKEN', 'Invalid refresh token', 401);

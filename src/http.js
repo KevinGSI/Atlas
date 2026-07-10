@@ -57,6 +57,9 @@ function route(method, pathname) {
     ['POST', /^\/v1\/auth\/logout$/, 'logout'],
     ['POST', /^\/v1\/auth\/password-reset\/request$/, 'requestPasswordReset'],
     ['POST', /^\/v1\/auth\/password-reset\/complete$/, 'resetPassword'],
+    ['GET', /^\/v1\/auth\/sessions$/, 'listSessions'],
+    ['DELETE', /^\/v1\/auth\/sessions$/, 'revokeAllSessions'],
+    ['DELETE', /^\/v1\/auth\/sessions\/([^/]+)$/, 'revokeSession'],
     ['POST', /^\/v1\/workspaces$/, 'createWorkspace'],
     ['GET', /^\/v1\/workspaces\/([^/]+)$/, 'getWorkspace'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/memberships$/, 'createMembership'],
@@ -97,21 +100,24 @@ export function createAtlasHandler(service, options = {}) {
       const [workspaceId, objectId] = match.params;
       const publicRoute = ['health', 'live', 'ready', 'register', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
-      if (identity && workspaceId) {
+      if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/')) {
         const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits'].includes(match.name)
           ? 'workspace:read' : match.name === 'createMembership' ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
       let result;
       switch (match.name) {
-        case 'health': case 'live': result = { status: 'ok', version: '0.7.0' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.7.0' }; break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.8.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.8.0' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes)); break;
         case 'refresh': result = await identity.refresh(await readJson(request, config.maxBodyBytes)); break;
         case 'logout': result = await identity.logout(await readJson(request, config.maxBodyBytes)); break;
         case 'requestPasswordReset': result = await identity.requestPasswordReset(await readJson(request, config.maxBodyBytes)); break;
         case 'resetPassword': result = await identity.resetPassword(await readJson(request, config.maxBodyBytes)); break;
+        case 'listSessions': result = await identity.listSessions(user.id, user.sessionId); break;
+        case 'revokeSession': result = await identity.revokeSession(user.id, workspaceId); break;
+        case 'revokeAllSessions': result = await identity.revokeAllSessions(user.id); break;
         case 'createWorkspace': result = await service.createWorkspace(await readJson(request, config.maxBodyBytes), user?.id); break;
         case 'getWorkspace': result = await service.getWorkspace(workspaceId); break;
         case 'createMembership': { const input = await readJson(request, config.maxBodyBytes); result = await identity.addMembership(workspaceId, input.userId, input.role); break; }

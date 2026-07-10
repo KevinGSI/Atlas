@@ -26,6 +26,12 @@ test('tokens reject tampering and expiration', async () => {
   await assert.rejects(async () => tokens.verify(issued.accessToken), (error) => error.code === 'TOKEN_EXPIRED');
 });
 
+test('access tokens can identify the refresh session that issued them', () => {
+  const tokens = new TokenService('a'.repeat(32), 60, () => 1000);
+  const issued = tokens.issue({ id: 'usr_1', email: 'lawyer@example.com' }, 'ses_current');
+  assert.equal(tokens.verify(issued.accessToken).sid, 'ses_current');
+});
+
 test('registration normalizes email and login rejects wrong passwords', async () => {
   const repository = new InMemoryRepository();
   const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));
@@ -132,6 +138,36 @@ test('password-reset delivery failure keeps the generic anti-enumeration respons
   await identity.register({ email: 'delivery@example.com', name: 'Delivery', password: 'original password long enough' });
   assert.deepEqual(await identity.requestPasswordReset({ email: 'delivery@example.com' }), { accepted: true });
   assert.deepEqual(await identity.requestPasswordReset({ email: 'missing@example.com' }), { accepted: true });
+});
+
+test('users can inspect and revoke only their own sessions', async () => {
+  let sequence = 0;
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)), undefined, {
+    randomToken: () => `session-secret-${++sequence}`
+  });
+  const first = await identity.register({ email: 'sessions@example.com', name: 'Sessions', password: 'original password long enough' });
+  const second = await identity.login({ email: 'sessions@example.com', password: 'original password long enough' });
+  const currentSessionId = identity.tokens.verify(second.accessToken).sid;
+  const sessions = await identity.listSessions(first.user.id, currentSessionId);
+  assert.equal(sessions.length, 2);
+  assert.equal(sessions.find((session) => session.current).id, currentSessionId);
+  assert.ok(sessions.every((session) => !('tokenHash' in session) && !('familyId' in session)));
+  const other = await identity.register({ email: 'other-sessions@example.com', name: 'Other', password: 'original password long enough' });
+  const otherSessionId = identity.tokens.verify(other.accessToken).sid;
+  await assert.rejects(() => identity.revokeSession(first.user.id, otherSessionId), (error) => error.code === 'SESSION_NOT_FOUND');
+  await identity.revokeSession(first.user.id, currentSessionId);
+  await assert.rejects(() => identity.refresh({ refreshToken: second.refreshToken }), (error) => error.code === 'REFRESH_TOKEN_REUSED');
+});
+
+test('global logout revokes every refresh session for the authenticated user', async () => {
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));
+  const first = await identity.register({ email: 'global@example.com', name: 'Global', password: 'original password long enough' });
+  const second = await identity.login({ email: 'global@example.com', password: 'original password long enough' });
+  assert.deepEqual(await identity.revokeAllSessions(first.user.id), { revoked: true });
+  await assert.rejects(() => identity.refresh({ refreshToken: first.refreshToken }), (error) => error.code === 'REFRESH_TOKEN_REUSED');
+  await assert.rejects(() => identity.refresh({ refreshToken: second.refreshToken }), (error) => error.code === 'REFRESH_TOKEN_REUSED');
 });
 
 test('password replacement rolls back if reset consumption fails', async () => {

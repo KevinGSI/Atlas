@@ -223,6 +223,19 @@ export class PostgresRepository {
     return refreshSession(result.rows[0]);
   }
 
+  async getRefreshSession(userId, id) {
+    const result = await this.executor.query(
+      'SELECT * FROM atlas_refresh_session WHERE user_id = $1 AND id = $2', [userId, id]);
+    if (!result.rows[0]) throw new AtlasError('SESSION_NOT_FOUND', 'Session not found', 404);
+    return refreshSession(result.rows[0]);
+  }
+
+  async listRefreshSessions(userId) {
+    const result = await this.executor.query(
+      'SELECT * FROM atlas_refresh_session WHERE user_id = $1 ORDER BY created_at DESC, id', [userId]);
+    return result.rows.map(refreshSession);
+  }
+
   async consumeRefreshSession(id, usedAt, replacedBySessionId) {
     const result = await this.executor.query(
       `UPDATE atlas_refresh_session SET used_at = $2, replaced_by_session_id = $3
