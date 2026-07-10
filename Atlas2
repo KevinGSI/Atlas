@@ -1,0 +1,6 @@
+git clone atlas-complete-history.gitbundle atlas
+cd atlas
+
+git remote add origin https://github.com/KevinGSI/atlas.git
+git push -u origin main
+git push origin --tags
