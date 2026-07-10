@@ -19,6 +19,7 @@ export class AtlasIntelligenceRuntime {
     this.providerName = options.providerName ?? null;
     this.maxAttempts = options.maxAttempts ?? 3;
     this.clock = options.clock ?? (() => new Date().toISOString());
+    this.projector = options.projector ?? null;
   }
   async processNext() {
     if (!this.providerName) return null;
@@ -27,7 +28,10 @@ export class AtlasIntelligenceRuntime {
     try {
       const provider = this.providers.resolve(this.providerName);
       const result = await provider.analyze({ event: job.payload, context: { workspaceId: job.workspaceId, objectId: job.objectId, eventId: job.eventId } });
-      return this.repository.completeIntelligenceJob(job.id, result, this.providerName, this.clock());
+      return await this.repository.transaction(async (repository) => {
+        if (this.projector) await this.projector.project(repository, job, this.providerName, result);
+        return repository.completeIntelligenceJob(job.id, result, this.providerName, this.clock());
+      });
     } catch (error) {
       await this.repository.failIntelligenceJob(job.id, error instanceof AtlasError ? error.code : 'INTELLIGENCE_ANALYSIS_FAILED', this.clock(), this.maxAttempts);
       throw error;

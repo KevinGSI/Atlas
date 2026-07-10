@@ -167,7 +167,7 @@ export class AtlasAssistant {
         errorCode: null, createdAt: this.clock()
       });
       if (this.repository) result.actionProposals = await Promise.all(result.actionProposals.map((proposal) => this.repository.createAiActionProposal({
-        id: createId('aap'), workspaceId: input.workspaceId, runId, proposedBy: input.userId,
+        id: createId('aap'), workspaceId: input.workspaceId, runId, intelligenceJobId: null, originType: 'chat', proposedBy: input.userId,
         actionType: proposal.actionType, input: proposal.input, status: 'pending', version: 1,
         decidedBy: null, resultObjectId: null, createdAt: this.clock(), decidedAt: null
       })));

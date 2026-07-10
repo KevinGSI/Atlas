@@ -122,6 +122,19 @@ export class AtlasService {
     return this.repository.listAiActionProposals(workspaceId, status);
   }
 
+  async intelligenceReviewInbox(workspaceId) {
+    const [observations, actions, jobs] = await Promise.all([
+      this.repository.listIntelligenceObservations(workspaceId, 'candidate'),
+      this.repository.listAiActionProposals(workspaceId, 'pending'),
+      this.repository.listIntelligenceJobs(workspaceId)
+    ]);
+    const failedJobs = jobs.filter((job) => job.status === 'failed');
+    return {
+      counts: { observations: observations.length, actions: actions.length, failures: failedJobs.length },
+      observations, actions, failures: failedJobs
+    };
+  }
+
   async decideAiActionProposal(workspaceId, proposalId, input, actorId) {
     const version = this.validateVersion(input.version);
     const decision = required(input.decision, 'decision');

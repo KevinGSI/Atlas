@@ -20,13 +20,14 @@ export class InMemoryRepository {
   #aiMessages = new Map();
   #aiActionProposals = new Map();
   #intelligenceJobs = new Map();
+  #intelligenceObservations = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations] = snapshot;
       throw error;
     }
   }
@@ -317,4 +318,6 @@ export class InMemoryRepository {
   claimIntelligenceJob(now) { const value=[...this.#intelligenceJobs.values()].find((x)=>x.status==='pending'&&x.availableAt<=now); if(!value)return null; const claimed={...value,status:'processing',attempts:value.attempts+1,lockedAt:now}; this.#intelligenceJobs.set(value.id,claimed); return clone(claimed); }
   completeIntelligenceJob(id,result,provider,now) { const value=this.#intelligenceJobs.get(id); const completed={...value,status:'completed',result,provider,errorCode:null,completedAt:now}; this.#intelligenceJobs.set(id,completed); return clone(completed); }
   failIntelligenceJob(id,errorCode,now,maxAttempts) { const value=this.#intelligenceJobs.get(id); const failed={...value,status:value.attempts>=maxAttempts?'failed':'pending',errorCode,lockedAt:null,availableAt:now}; this.#intelligenceJobs.set(id,failed); return clone(failed); }
+  createIntelligenceObservation(value) { this.#intelligenceObservations.set(value.id,clone(value));return clone(value); }
+  listIntelligenceObservations(workspaceId,status) { return [...this.#intelligenceObservations.values()].filter((x)=>x.workspaceId===workspaceId&&(!status||x.status===status)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(clone); }
 }

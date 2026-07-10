@@ -82,6 +82,7 @@ function route(method, pathname) {
     ['GET', /^\/v1\/workspaces\/([^/]+)\/assistant\/conversations\/([^/]+)\/messages$/, 'listAssistantMessages']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/assistant\/actions$/, 'listAssistantActions']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/assistant\/actions\/([^/]+)\/decision$/, 'decideAssistantAction']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/intelligence\/review-inbox$/, 'intelligenceReviewInbox']
   ];
   for (const [expectedMethod, regex, name] of patterns) {
     const match = pathname.match(regex);
@@ -108,7 +109,7 @@ export function createAtlasHandler(service, options = {}) {
       const publicRoute = ['health', 'live', 'ready', 'register', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/')) {
-        const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions'].includes(match.name)
+        const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox'].includes(match.name)
           ? 'workspace:read' : match.name === 'createMembership' ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
@@ -147,6 +148,7 @@ export function createAtlasHandler(service, options = {}) {
         case 'listAssistantMessages': result = await assistant.listMessages(workspaceId,user.id,objectId); break;
         case 'listAssistantActions': result = await service.listAiActionProposals(workspaceId,url.searchParams.get('status')); break;
         case 'decideAssistantAction': result = await service.decideAiActionProposal(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;
+        case 'intelligenceReviewInbox': result = await service.intelligenceReviewInbox(workspaceId); break;
       }
       send(response, match.name.startsWith('create') ? 201 : 200, { data: result }, headers);
     } catch (error) {
