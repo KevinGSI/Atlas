@@ -1,44 +1,42 @@
-# Atlas Core 0.18.0 — Implementation Status
+# Atlas Core 0.19.0 — Implementation Status
 
 ## Verified as implemented
 
-- Everything verified in Atlas Core `0.1.0` through `0.17.0`
-- Provider-neutral proposals for task, legal-document draft, and email draft creation
-- Document title, type, matter, and generated body validation
-- Email subject, recipient list, matter, and generated body validation
-- 100,000-character generated-content limit and recipient-count limit
-- Matter existence and workspace-boundary validation before proposal creation
-- Human approval required before any draft object exists
-- Approved legal documents remain unfiled drafts
-- Approved emails remain unsent drafts
-- Proposal, approver, result-object, AI-run, and timeline linkage
-- PostgreSQL action-type constraint migration `0010`
+- Everything verified in Atlas Core `0.1.0` through `0.18.0`
+- Provider-neutral native intelligence registry requiring `analyze` and `capabilities`
+- Shared intelligence runtime independent of the homepage chat pathway
+- Durable intelligence jobs for object creation, update, deletion, restoration, timeline events, and approved AI actions
+- Business mutation and intelligence enqueue committed in the same transaction
+- Pending, processing, completed, and failed job lifecycle
+- Bounded retry attempts and sanitized failure codes
+- Provider identity and structured analysis result provenance
+- PostgreSQL atomic job claiming using `FOR UPDATE SKIP LOCKED`
+- In-memory and PostgreSQL implementations plus migration `0011`
 
 ## Verification completed here
 
-- 95 canonical tests across the full Atlas Core surface
-- Two simultaneous model-generated draft proposals
-- Human approval into correctly typed document and email objects
-- Matter-parent linkage and proposal provenance
-- Proof that approved email is not sent and approved document is not filed
-- Invalid-recipient and oversized-content rejection
-- Full regression verification of permissions, encryption, migration, AI orchestration, and deployment definitions
+- 99 canonical tests across the full Atlas Core surface
+- Proof that ordinary document and matter activity queues intelligence without chat
+- Interchangeable analyzer execution and capability discovery
+- Analysis completion with provider and structured-result persistence
+- Retry-to-terminal-failure behavior
+- Invalid and duplicate provider rejection
+- Full regression verification of chat, approvals, encryption, authentication, and deployment definitions
 
 ## Explicitly not verified in this environment
 
-- Draft persistence and approval against live PostgreSQL
-- Live model generation quality or legal accuracy
-- Rendering to DOCX/PDF, email-provider integration, filing, delivery, or electronic signature
-- Concurrent approval behavior across live application processes
+- Queue processing against live PostgreSQL or multiple concurrent workers
+- A deployed background worker process
+- Real email, PDF, OCR, embedding, or document-understanding providers
+- Provider routing by task capability, cost, jurisdiction, or confidentiality policy
 
 ## Security and product limitations still remaining
 
-- Draft bodies are stored as workspace object state and are not yet encrypted by the AI-content cipher
-- No template engine, citation verification, clause library, redlining, or document version comparison
-- No email sending, recipient directory, attachment handling, delivery tracking, or privilege warning
-- No multi-approver policy, risk tiers, proposal expiration, or cancellation
-- No provider privacy certification, external penetration test, or independent legal-quality evaluation
+- This release establishes the native runtime and queue; it does not yet implement email/PDF ingestion or the unified review inbox
+- Intelligence job payloads are stored as JSON and require encryption before confidential production use
+- No dead-letter administration, scheduled backoff, worker heartbeat recovery, or operational metrics
+- No ethical walls, provider privacy certification, external penetration test, or independent legal-quality evaluation
 
-## Data-safety boundary
+## Architectural boundary
 
-Version `0.18.0` creates reviewable drafts only. It cannot file a document or send an email. Live PostgreSQL verification, encrypted draft storage, template/citation controls, delivery integrations, and independent legal and security review remain required before production legal use.
+Version `0.19.0` makes chat one consumer rather than the owner of Atlas intelligence. The next increments must build email/document ingestion, extraction, entity resolution, deadlines, and the homepage review inbox on this shared runtime. Live infrastructure and security verification remain required before production legal use.

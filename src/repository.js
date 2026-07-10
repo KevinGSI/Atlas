@@ -19,13 +19,14 @@ export class InMemoryRepository {
   #aiConversations = new Map();
   #aiMessages = new Map();
   #aiActionProposals = new Map();
+  #intelligenceJobs = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs] = snapshot;
       throw error;
     }
   }
@@ -311,4 +312,9 @@ export class InMemoryRepository {
   getAiActionProposal(workspaceId, id) { const value=this.#aiActionProposals.get(id); if(!value||value.workspaceId!==workspaceId) throw new AtlasError('AI_ACTION_NOT_FOUND','AI action proposal not found',404); return clone(value); }
   listAiActionProposals(workspaceId, status) { return [...this.#aiActionProposals.values()].filter((x)=>x.workspaceId===workspaceId&&(!status||x.status===status)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(clone); }
   decideAiActionProposal(workspaceId,id,version,status,decidedBy,resultObjectId,decidedAt) { const value=this.getAiActionProposal(workspaceId,id); if(value.status!=='pending') throw new AtlasError('AI_ACTION_ALREADY_DECIDED','AI action proposal has already been decided',409); if(value.version!==version) throw new AtlasError('VERSION_CONFLICT','AI action proposal version is stale',409,{currentVersion:value.version}); const updated={...value,status,decidedBy,resultObjectId,decidedAt,version:value.version+1}; this.#aiActionProposals.set(id,clone(updated)); return clone(updated); }
+  createIntelligenceJob(value) { this.#intelligenceJobs.set(value.id,clone(value)); return clone(value); }
+  listIntelligenceJobs(workspaceId) { return [...this.#intelligenceJobs.values()].filter((x)=>x.workspaceId===workspaceId).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).map(clone); }
+  claimIntelligenceJob(now) { const value=[...this.#intelligenceJobs.values()].find((x)=>x.status==='pending'&&x.availableAt<=now); if(!value)return null; const claimed={...value,status:'processing',attempts:value.attempts+1,lockedAt:now}; this.#intelligenceJobs.set(value.id,claimed); return clone(claimed); }
+  completeIntelligenceJob(id,result,provider,now) { const value=this.#intelligenceJobs.get(id); const completed={...value,status:'completed',result,provider,errorCode:null,completedAt:now}; this.#intelligenceJobs.set(id,completed); return clone(completed); }
+  failIntelligenceJob(id,errorCode,now,maxAttempts) { const value=this.#intelligenceJobs.get(id); const failed={...value,status:value.attempts>=maxAttempts?'failed':'pending',errorCode,lockedAt:null,availableAt:now}; this.#intelligenceJobs.set(id,failed); return clone(failed); }
 }

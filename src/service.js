@@ -22,6 +22,11 @@ export class AtlasService {
     });
   }
 
+  buildIntelligenceJob(workspaceId, triggerType, objectId, eventId, payload) {
+    const now = this.clock();
+    return { id: createId('inj'), workspaceId, triggerType, objectId, eventId, status: 'pending', attempts: 0, payload, result: null, provider: null, errorCode: null, availableAt: now, lockedAt: null, createdAt: now, completedAt: null };
+  }
+
   async getWorkspace(id) { return this.repository.getWorkspace(id); }
 
   async createObject(workspaceId, input) {
@@ -44,7 +49,7 @@ export class AtlasService {
         deletedAt: null,
         version: 1
       });
-      await repository.createEvent(this.buildEvent(workspaceId, {
+      const event = await repository.createEvent(this.buildEvent(workspaceId, {
         parentObjectId: object.id,
         type: 'object.created',
         actorId: input.actorId ?? 'system',
@@ -53,6 +58,7 @@ export class AtlasService {
         visibility: 'workspace',
         data: { objectType: object.type }
       }));
+      await repository.createIntelligenceJob(this.buildIntelligenceJob(workspaceId, 'object.created', object.id, event.id, { object }));
       return object;
     });
   }
@@ -80,6 +86,7 @@ export class AtlasService {
       const after = await repository.updateObject(workspaceId, objectId, version, changes, this.clock());
       await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: objectId, type: 'object.updated', actorId, source: 'atlas', data: { version: after.version } }));
       await repository.createAudit(this.buildAudit(workspaceId, objectId, actorId, 'object.updated', before, after));
+      await repository.createIntelligenceJob(this.buildIntelligenceJob(workspaceId, 'object.updated', objectId, null, { before, after }));
       return after;
     });
   }
@@ -91,6 +98,7 @@ export class AtlasService {
       await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: objectId, type: 'object.deleted', actorId, source: 'atlas', data: { previousVersion: before.version } }));
       const after = await repository.softDeleteObject(workspaceId, objectId, version, this.clock());
       await repository.createAudit(this.buildAudit(workspaceId, objectId, actorId, 'object.deleted', before, after));
+      await repository.createIntelligenceJob(this.buildIntelligenceJob(workspaceId, 'object.deleted', objectId, null, { before, after }));
       return after;
     });
   }
@@ -102,6 +110,7 @@ export class AtlasService {
       const after = await repository.restoreObject(workspaceId, objectId, version, this.clock());
       await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: objectId, type: 'object.restored', actorId, source: 'atlas', data: { version: after.version } }));
       await repository.createAudit(this.buildAudit(workspaceId, objectId, actorId, 'object.restored', before, after));
+      await repository.createIntelligenceJob(this.buildIntelligenceJob(workspaceId, 'object.restored', objectId, null, { before, after }));
       return after;
     });
   }
@@ -135,6 +144,7 @@ export class AtlasService {
         createdAt: now, updatedAt: now, deletedAt: null, version: 1
       });
       await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: created.id, type: 'object.created', actorId, source: 'atlas.ai.approval', data: { objectType: created.type, actionType: proposal.actionType, proposalId } }));
+      await repository.createIntelligenceJob(this.buildIntelligenceJob(workspaceId, 'ai_action.approved', created.id, null, { proposalId, actionType: proposal.actionType, object: created }));
       const decided = await repository.decideAiActionProposal(workspaceId, proposalId, version, 'approved', actorId, created.id, now);
       return { proposal: decided, result: created };
     });
@@ -179,7 +189,11 @@ export class AtlasService {
   }
 
   async createEvent(workspaceId, input) {
-    return this.repository.createEvent(this.buildEvent(workspaceId, input));
+    return this.repository.transaction(async (repository) => {
+      const event = await repository.createEvent(this.buildEvent(workspaceId, input));
+      await repository.createIntelligenceJob(this.buildIntelligenceJob(workspaceId, 'timeline.event', event.parentObjectId, event.id, { event }));
+      return event;
+    });
   }
 
   async listEvents(workspaceId, parentObjectId) {

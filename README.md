@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.18.0` adds human-approved legal-document and email drafts without permitting automatic filing or sending.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.19.0` begins the native-intelligence rebuild with a provider-neutral runtime and durable event-driven work queue beneath every interface, including chat.
 
 ## Implemented
 
@@ -68,6 +68,11 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Approval-gated email draft creation with validated recipients
 - Hard `filed: false` and `sent: false` boundaries on AI-created drafts
 - Generated-content size limits and structured field validation
+- Provider-neutral native intelligence adapter contract independent of chat providers
+- Transactional intelligence jobs for object, timeline, and approved-action activity
+- Durable pending, processing, completed, and failed job lifecycle
+- Concurrent-worker-safe PostgreSQL claiming with `SKIP LOCKED`
+- Bounded retries, result provenance, provider identity, and terminal failure records
 
 ## Local development
 

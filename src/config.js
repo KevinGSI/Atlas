@@ -15,6 +15,7 @@ export function loadConfig(env = process.env) {
     .split(',').map((value) => value.trim()).filter(Boolean);
   if (production && corsOrigins.includes('*')) throw new Error('Wildcard CORS is not allowed in production');
   const aiProvider = env.AI_PROVIDER || null;
+  const intelligenceProvider = env.INTELLIGENCE_PROVIDER || null;
   const aiModel = env.AI_MODEL || null;
   const openAiApiKey = env.OPENAI_API_KEY || null;
   const aiContentEncryptionKey = env.AI_CONTENT_ENCRYPTION_KEY || null;
@@ -48,6 +49,7 @@ export function loadConfig(env = process.env) {
     loginFailureWindowSeconds: positiveInteger(env.LOGIN_FAILURE_WINDOW_SECONDS, 900, 'LOGIN_FAILURE_WINDOW_SECONDS'),
     loginLockSeconds: positiveInteger(env.LOGIN_LOCK_SECONDS, 900, 'LOGIN_LOCK_SECONDS'),
     aiProvider,
+    intelligenceProvider,
     aiModel,
     openAiApiKey,
     aiContentEncryptionKey,
