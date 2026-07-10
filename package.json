@@ -1,0 +1,13 @@
+{
+  "name": "atlas-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Verified Atlas production rebuild baseline",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "verify": "node scripts/verify.js"
+  },
+  "engines": { "node": ">=20" }
+}
