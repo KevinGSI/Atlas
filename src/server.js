@@ -1,12 +1,25 @@
-import { createAtlasServer } from './http.js';
-import { InMemoryRepository } from './repository.js';
-import { AtlasService } from './service.js';
-import { createRuntimeRepository } from './runtime.js';
+import { pathToFileURL } from 'node:url';
+import { startAtlas } from './application.js';
 
-const host = process.env.HOST ?? '127.0.0.1';
-const port = Number(process.env.PORT ?? 3000);
-const repository = process.env.DATABASE_URL
-  ? await createRuntimeRepository(process.env)
-  : new InMemoryRepository();
-const server = createAtlasServer(new AtlasService(repository));
-server.listen(port, host, () => console.log(`Atlas Core 0.2.0 listening on http://${host}:${port}`));
+export async function main(env = process.env, logger = console) {
+  const app = await startAtlas(env);
+  const address = app.address;
+  logger.log(`Atlas Core 0.3.0 listening on http://${address.address}:${address.port}`);
+  let stopping = false;
+  const shutdown = async (signal) => {
+    if (stopping) return;
+    stopping = true;
+    logger.log(`Received ${signal}; shutting down`);
+    const timeout = setTimeout(() => process.exit(1), app.config.shutdownTimeoutMs);
+    timeout.unref();
+    try { await app.stop(); clearTimeout(timeout); }
+    catch (error) { logger.error(error); process.exitCode = 1; }
+  };
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  return app;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => { console.error(error); process.exit(1); });
+}

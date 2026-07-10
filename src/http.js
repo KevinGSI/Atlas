@@ -1,22 +1,56 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { AtlasError } from './errors.js';
 
-async function readJson(request) {
+async function readJson(request, maxBodyBytes) {
   const chunks = [];
-  for await (const chunk of request) chunks.push(chunk);
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > maxBodyBytes) throw new AtlasError('PAYLOAD_TOO_LARGE', 'Request body is too large', 413);
+    chunks.push(chunk);
+  }
   if (chunks.length === 0) return {};
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { throw new AtlasError('INVALID_JSON', 'Request body must be valid JSON', 400); }
 }
 
-function send(response, status, body) {
-  response.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
+function securityHeaders(requestId) {
+  return {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY',
+    'referrer-policy': 'no-referrer',
+    'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
+    'x-atlas-request-id': requestId
+  };
+}
+
+function corsHeaders(origin, config) {
+  if (!origin) return {};
+  if (!config.corsOrigins.includes(origin) && !config.corsOrigins.includes('*')) {
+    throw new AtlasError('CORS_ORIGIN_DENIED', 'Origin is not allowed', 403);
+  }
+  return {
+    'access-control-allow-origin': origin,
+    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    'access-control-allow-headers': 'content-type,x-atlas-request-id',
+    'access-control-max-age': '600',
+    vary: 'Origin'
+  };
+}
+
+function send(response, status, body, headers = {}) {
+  response.writeHead(status, { ...headers, 'content-length': Buffer.byteLength(JSON.stringify(body)) });
   response.end(JSON.stringify(body));
 }
 
 function route(method, pathname) {
   const patterns = [
     ['GET', /^\/health$/, 'health'],
+    ['GET', /^\/live$/, 'live'],
+    ['GET', /^\/ready$/, 'ready'],
     ['POST', /^\/v1\/workspaces$/, 'createWorkspace'],
     ['GET', /^\/v1\/workspaces\/([^/]+)$/, 'getWorkspace'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/objects$/, 'createObject'],
@@ -35,37 +69,45 @@ function route(method, pathname) {
   return null;
 }
 
-export function createAtlasHandler(service) {
+export function createAtlasHandler(service, options = {}) {
+  const config = options.config ?? { maxBodyBytes: 1_048_576, corsOrigins: [] };
+  const ready = options.ready ?? (async () => true);
   return async (request, response) => {
+    const requestId = request.headers?.['x-atlas-request-id'] || randomUUID();
+    let headers = securityHeaders(requestId);
     try {
+      headers = { ...headers, ...corsHeaders(request.headers?.origin, config) };
+      if (request.method === 'OPTIONS') return send(response, 204, {}, headers);
       const url = new URL(request.url, 'http://atlas.local');
       const match = route(request.method, url.pathname);
       if (!match) throw new AtlasError('ROUTE_NOT_FOUND', 'Route not found', 404);
       const [workspaceId, objectId] = match.params;
       let result;
       switch (match.name) {
-        case 'health': result = { status: 'ok', version: '0.2.0' }; break;
-        case 'createWorkspace': result = await service.createWorkspace(await readJson(request)); break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.3.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.3.0' }; break;
+        case 'createWorkspace': result = await service.createWorkspace(await readJson(request, config.maxBodyBytes)); break;
         case 'getWorkspace': result = await service.getWorkspace(workspaceId); break;
-        case 'createObject': result = await service.createObject(workspaceId, await readJson(request)); break;
+        case 'createObject': result = await service.createObject(workspaceId, await readJson(request, config.maxBodyBytes)); break;
         case 'listObjects': result = await service.listObjects(workspaceId, { type: url.searchParams.get('type'), dimension: url.searchParams.get('dimension') }); break;
         case 'getObject': result = await service.getObject(workspaceId, objectId); break;
-        case 'createRelationship': result = await service.createRelationship(workspaceId, await readJson(request)); break;
+        case 'createRelationship': result = await service.createRelationship(workspaceId, await readJson(request, config.maxBodyBytes)); break;
         case 'graph': result = await service.expandGraph(workspaceId, objectId); break;
-        case 'createEvent': result = await service.createEvent(workspaceId, await readJson(request)); break;
+        case 'createEvent': result = await service.createEvent(workspaceId, await readJson(request, config.maxBodyBytes)); break;
         case 'listEvents': result = await service.listEvents(workspaceId, url.searchParams.get('parentObjectId')); break;
         case 'matterHealth': result = await service.matterHealth(workspaceId, objectId); break;
       }
-      send(response, match.name.startsWith('create') ? 201 : 200, { data: result });
+      send(response, match.name.startsWith('create') ? 201 : 200, { data: result }, headers);
     } catch (error) {
       const known = error instanceof AtlasError;
-      send(response, known ? error.status : 500, {
-        error: { code: known ? error.code : 'INTERNAL_ERROR', message: known ? error.message : 'Internal server error', ...(known && error.details ? { details: error.details } : {}) }
-      });
+      const status = known ? error.status : (request.url === '/ready' ? 503 : 500);
+      send(response, status, {
+        error: { code: known ? error.code : (status === 503 ? 'NOT_READY' : 'INTERNAL_ERROR'), message: known ? error.message : (status === 503 ? 'Service is not ready' : 'Internal server error'), ...(known && error.details ? { details: error.details } : {}) }
+      }, headers);
     }
   };
 }
 
-export function createAtlasServer(service) {
-  return createServer(createAtlasHandler(service));
+export function createAtlasServer(service, options) {
+  return createServer(createAtlasHandler(service, options));
 }

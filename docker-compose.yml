@@ -1,4 +1,19 @@
 services:
+  api:
+    build: .
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://atlas:atlas@postgres:5432/atlas
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "node scripts/migrate.js && node src/server.js"]
+
   postgres:
     image: postgres:16-alpine
     environment:

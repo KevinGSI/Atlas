@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: atlas-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    preDeployCommand: node scripts/migrate.js
+    healthCheckPath: /ready
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: atlas-postgres
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_POOL_SIZE
+        value: 10
+      - key: MAX_BODY_BYTES
+        value: 1048576
+      - key: CORS_ORIGINS
+        sync: false
+
+databases:
+  - name: atlas-postgres
+    plan: basic-256mb
+    databaseName: atlas
+    user: atlas

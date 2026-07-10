@@ -1,0 +1,10 @@
+.git
+node_modules
+outputs
+work
+test
+*.zip
+*.gitbundle
+.env
+*.log
+.DS_Store

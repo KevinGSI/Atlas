@@ -1,61 +1,73 @@
 # Atlas Core
 
-Atlas Core is a clean, verified rebuild of the Atlas legal intelligence platform. Version `0.2.0` adds the first PostgreSQL runtime adapter to the verified `0.1.0` baseline.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.3.0` adds a deployable staging foundation to the persistence work completed in `0.2.0`.
 
-## Implemented vertical slice
+## Implemented
 
 - Canonical workspaces and nested workspace objects
 - Matter, client, evidence, document, person, organization, and operation dimensions
-- Typed, duplicate-safe object relationships
-- Immutable timeline events with confidence and visibility metadata
-- One-hop relationship graph expansion
-- Explainable matter-health scoring
-- Structured JSON errors
-- PostgreSQL 16 initial schema
-- Dependency-free HTTP runtime and automated tests
-- PostgreSQL repository with parameterized queries and transaction support
-- Ordered migration runner with SHA-256 checksum protection
-- Atomic object and timeline-event creation
-- Runtime repository selection through `DATABASE_URL`
+- Typed relationships and one-hop graph expansion
+- Immutable timeline events and explainable matter-health scoring
+- In-memory and PostgreSQL repositories
+- Atomic object/timeline transactions
+- Ordered, checksum-protected migrations
+- Structured API errors and bounded request bodies
+- Strict CORS and security response headers
+- Liveness, readiness, and graceful shutdown
+- Docker, Docker Compose, and Render deployment definitions
 
-## Requirements
+## Local development
 
-- Node.js 20 or newer and `npm install`
-- Docker only if you want to start PostgreSQL (the runtime adapter is not part of `0.1.0`)
-
-## Run
+Requirements: Node.js 20+, pnpm 11+, and optionally Docker.
 
 ```bash
-npm start
+pnpm install --frozen-lockfile
+pnpm test
+pnpm verify
+pnpm start
 ```
 
-The API listens on `http://127.0.0.1:3000` by default. Check it with `GET /health`.
+Without `DATABASE_URL`, development uses the in-memory repository.
 
-## Test and verify
+## Local PostgreSQL stack
 
 ```bash
-npm test
-npm run verify
+docker compose up --build
 ```
 
-The verification command reruns the complete tests and checks release-critical files, the package version, the PostgreSQL dependency, and all four initial database tables.
+This starts PostgreSQL, applies migrations, and exposes Atlas at `http://localhost:3000`.
 
-## API routes
+## Health endpoints
 
 ```text
-GET  /health
-POST /v1/workspaces
-GET  /v1/workspaces/:workspaceId
-POST /v1/workspaces/:workspaceId/objects
-GET  /v1/workspaces/:workspaceId/objects
-GET  /v1/workspaces/:workspaceId/objects/:objectId
-POST /v1/workspaces/:workspaceId/relationships
-GET  /v1/workspaces/:workspaceId/objects/:objectId/graph
-POST /v1/workspaces/:workspaceId/events
-GET  /v1/workspaces/:workspaceId/events
-GET  /v1/workspaces/:workspaceId/matters/:matterId/health
+GET /live    Process liveness
+GET /ready   Database-aware readiness
+GET /health  Compatibility health endpoint
 ```
 
-## PostgreSQL schema
+## Render staging deployment
 
-Start PostgreSQL with `docker compose up -d postgres`, run `npm install`, and launch with `DATABASE_URL=postgresql://atlas:atlas@localhost:5432/atlas npm start`. Atlas validates the connection and applies ordered migrations before listening. Without `DATABASE_URL`, it uses the in-memory repository.
+1. Push this repository to GitHub.
+2. In Render, create a Blueprint from the repository's `render.yaml`.
+3. Set `CORS_ORIGINS` to the exact staging frontend origin.
+4. Deploy. Render provisions managed PostgreSQL, runs `node scripts/migrate.js`, starts the container, and checks `/ready`.
+5. Use only synthetic data until the security milestones in `IMPLEMENTATION_STATUS.md` are complete.
+
+## Manual production-like commands
+
+```bash
+export NODE_ENV=production
+export HOST=0.0.0.0
+export DATABASE_URL=postgresql://user:password@host:5432/atlas
+export CORS_ORIGINS=https://staging.example.com
+pnpm migrate
+pnpm start
+```
+
+## Verification
+
+```bash
+pnpm verify
+```
+
+Verification reruns all canonical tests and validates required source, migration, container, and Render configuration files. See `IMPLEMENTATION_STATUS.md` for the precise live-infrastructure boundary.

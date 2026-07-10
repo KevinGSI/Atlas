@@ -6,13 +6,17 @@ import { InMemoryRepository } from '../src/repository.js';
 import { AtlasService } from '../src/service.js';
 
 function fixture() {
-  return createAtlasHandler(new AtlasService(new InMemoryRepository()));
+  return createAtlasHandler(new AtlasService(new InMemoryRepository()), {
+    config: { maxBodyBytes: 1_048_576, corsOrigins: ['https://atlas.example'] },
+    ready: async () => true
+  });
 }
 
 async function json(handler, url, options = {}) {
   const request = Readable.from(options.body ? [Buffer.from(options.body)] : []);
   request.method = options.method ?? 'GET';
   request.url = url;
+  request.headers = options.headers ?? {};
   return new Promise((resolve, reject) => {
     const response = {
       writeHead(status, headers) { this.status = status; this.headers = headers; },
@@ -25,7 +29,36 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.2.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.3.0' } });
+  assert.equal(response.headers['x-content-type-options'], 'nosniff');
+  assert.equal(response.headers['x-frame-options'], 'DENY');
+});
+
+test('readiness returns 503 when its dependency fails', async () => {
+  const handler = createAtlasHandler(new AtlasService(new InMemoryRepository()), {
+    config: { maxBodyBytes: 100, corsOrigins: [] },
+    ready: async () => { throw new Error('database unavailable'); }
+  });
+  const response = await json(handler, '/ready');
+  assert.equal(response.status, 503);
+  assert.equal(response.body.error.code, 'NOT_READY');
+});
+
+test('rejects oversized JSON bodies', async () => {
+  const handler = createAtlasHandler(new AtlasService(new InMemoryRepository()), {
+    config: { maxBodyBytes: 10, corsOrigins: [] }, ready: async () => true
+  });
+  const response = await json(handler, '/v1/workspaces', { method: 'POST', body: JSON.stringify({ name: 'far too large' }) });
+  assert.equal(response.status, 413);
+  assert.equal(response.body.error.code, 'PAYLOAD_TOO_LARGE');
+});
+
+test('allows configured CORS origins and rejects others', async () => {
+  const allowed = await json(fixture(), '/health', { headers: { origin: 'https://atlas.example' } });
+  assert.equal(allowed.headers['access-control-allow-origin'], 'https://atlas.example');
+  const denied = await json(fixture(), '/health', { headers: { origin: 'https://evil.example' } });
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body.error.code, 'CORS_ORIGIN_DENIED');
 });
 
 test('HTTP vertical slice creates workspace, matter, evidence, graph, timeline, and health', async () => {
