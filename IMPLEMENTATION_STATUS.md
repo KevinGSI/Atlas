@@ -1,8 +1,14 @@
-# Atlas Core 0.23.0 — Event Ingestion Status
+# Atlas Core 0.24.0 — Attorney Review Center Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.22.1`
+- Everything verified through Atlas Core `0.23.0`
+- Reviewable task, email-draft, and legal-document proposals inside awareness cards
+- Human-readable proposal previews with safe HTML escaping
+- Approve and reject controls using authenticated, version-checked decisions
+- Immediate decision state shown without implying that external action occurred
+- Approved proposal linkage to newly created canonical draft or task records
+- Hard unsent and unfiled state after approval
 - Authenticated phone-call and standalone-document ingestion routes
 - Canonical call records with direction, parties, transcript, summary, duration, and external recording reference
 - Canonical uploaded-document records with blob reference, checksum, media type, size, and extraction status
@@ -39,7 +45,10 @@
 
 ## Verification completed here
 
-- 136 canonical tests across the complete Atlas Core surface
+- 137 canonical tests across the complete Atlas Core surface
+- End-to-end awareness-to-approval HTTP workflow
+- Proof that an approved motion remains a draft with `filed: false`
+- Connected-client delivery checks for decision controls and endpoints
 - Phone and document validation with transactional rollback
 - Phone and document idempotency and native-job routing
 - Authenticated HTTP ingestion for both event types

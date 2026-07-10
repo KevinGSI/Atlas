@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.23.0` adds authenticated, idempotent phone-call and standalone-document ingestion so external events enter native intelligence and attorney situational awareness without a chat prompt.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.24.0` turns “While You Were Gone” into an attorney review center for inspecting, approving, or rejecting AI-prepared tasks, email drafts, and legal-document drafts.
 
 ## Implemented
 
@@ -102,6 +102,11 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Standalone document-upload cataloging with external blob metadata and pending extraction state
 - Idempotent phone and document ingestion by workspace, connector, and external record ID
 - Native intelligence jobs and timeline provenance created atomically with ingested records
+- Awareness cards with human-readable proposal previews
+- Attorney approval and rejection controls inside the connected homepage
+- Version-checked decisions preventing stale or duplicate approvals
+- Approved tasks become open task records; approved emails and legal documents remain drafts
+- Permanent `sent: false` and `filed: false` safety boundaries on approved draft creation
 
 ## Local development
 

@@ -31,12 +31,12 @@ async function json(handler, url, options = {}) {
 
 async function raw(handler,url){const request=Readable.from([]);request.method='GET';request.url=url;request.headers={};return new Promise((resolve,reject)=>{const response={writeHead(status,headers){this.status=status;this.headers=headers;},end(body){resolve({status:this.status,headers:this.headers,body:Buffer.from(body).toString('utf8')});}};Promise.resolve(handler(request,response)).catch(reject);});}
 
-test('serves the connected phase-one client from the application origin',async()=>{const handler=fixture();const page=await raw(handler,'/');assert.equal(page.status,200);assert.match(page.headers['content-type'],/text\/html/);assert.match(page.body,/While You Were Gone/);const script=await raw(handler,'/app.js');assert.match(script.headers['content-type'],/javascript/);assert.match(script.body,/authorization:`Bearer/);});
+test('serves the connected phase-one client from the application origin',async()=>{const handler=fixture();const page=await raw(handler,'/');assert.equal(page.status,200);assert.match(page.headers['content-type'],/text\/html/);assert.match(page.body,/While You Were Gone/);const script=await raw(handler,'/app.js');assert.match(script.headers['content-type'],/javascript/);assert.match(script.body,/authorization:`Bearer/);assert.match(script.body,/assistant\/actions/);assert.match(script.body,/Approve draft/);});
 
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.23.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.24.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -164,6 +164,13 @@ test('authenticated homepage loads and reviews attorney awareness through HTTP',
   await repository.createAwarenessItem({id:'awi_http',workspaceId:workspace.id,targetUserId:registered.user.id,sourceJobId:'inj_http',sourceObjectId:null,category:'incoming_email',priority:'high',headline:'Response email prepared',summary:'An unsent response is ready for attorney review.',observationIds:[],actionProposalIds:[],createdAt:'2026-07-10T12:00:00.000Z'});
   const feed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone`,{headers});assert.equal(feed.status,200);assert.equal(feed.body.data[0].reviewStatus,'unseen');assert.equal(feed.body.data[0].headline,'Response email prepared');
   const reviewed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone/awi_http`,{method:'PATCH',headers,body:JSON.stringify({status:'reviewed'})});assert.equal(reviewed.status,200);assert.equal(reviewed.body.data.status,'reviewed');const refreshed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone`,{headers});assert.equal(refreshed.body.data[0].reviewStatus,'reviewed');
+});
+
+test('homepage review approves an AI legal draft but never files it',async()=>{
+  const repository=new InMemoryRepository();const service=new AtlasService(repository);const identity=new IdentityService(repository,new TokenService('a'.repeat(32)));const handler=createAtlasHandler(service,{config:{maxBodyBytes:1_048_576,corsOrigins:[]},ready:async()=>true,identity});
+  const registered=(await json(handler,'/v1/auth/register',{method:'POST',body:JSON.stringify({email:'review@example.com',name:'Review Attorney',password:'correct password long enough'})})).body.data;const headers={authorization:`Bearer ${registered.accessToken}`};const workspace=(await json(handler,'/v1/workspaces',{method:'POST',headers,body:JSON.stringify({name:'Review Firm'})})).body.data;
+  const proposal=await repository.createAiActionProposal({id:'aap_home_document',workspaceId:workspace.id,runId:null,intelligenceJobId:'inj_home',originType:'native_intelligence',proposedBy:'atlas',actionType:'create_document',input:{title:'Motion to Compel',documentType:'motion_to_compel',content:'DRAFT FOR ATTORNEY REVIEW'},status:'pending',version:1,decidedBy:null,resultObjectId:null,createdAt:'2026-07-10T12:00:00.000Z',decidedAt:null});await repository.createAwarenessItem({id:'awi_home_document',workspaceId:workspace.id,targetUserId:registered.user.id,sourceJobId:'inj_home',sourceObjectId:null,category:'missed_deadline',priority:'urgent',headline:'Motion requires review',summary:'An unfiled motion draft is ready.',observationIds:[],actionProposalIds:[proposal.id],createdAt:'2026-07-10T12:00:00.000Z'});
+  const feed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone`,{headers});assert.equal(feed.body.data[0].actions[0].status,'pending');const approved=await json(handler,`/v1/workspaces/${workspace.id}/assistant/actions/${proposal.id}/decision`,{method:'POST',headers,body:JSON.stringify({version:1,decision:'approve'})});assert.equal(approved.body.data.proposal.status,'approved');assert.equal(approved.body.data.result.type,'motion_to_compel');assert.equal(approved.body.data.result.state.filed,false);assert.equal(approved.body.data.result.state.status,'draft');const refreshed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone`,{headers});assert.equal(refreshed.body.data[0].actions[0].status,'approved');
 });
 
 test('authenticated ingestion routes accept phone calls and standalone documents idempotently',async()=>{
