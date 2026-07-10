@@ -211,10 +211,15 @@ export class IdentityService {
   async addOwner(workspaceId, userId) { return this.addMembership(workspaceId, userId, 'owner'); }
   async addMembership(workspaceId, userId, role) {
     if (!roles.has(role)) throw new AtlasError('INVALID_ROLE', 'Role is invalid', 400);
+    const subscription=await this.repository.getSubscription(workspaceId);
+    const memberships=await this.repository.listMemberships(workspaceId);
+    if(memberships.length>=subscription.seatLimit)throw new AtlasError('SEAT_LIMIT_REACHED','Firm subscription seat limit reached',409,{seatLimit:subscription.seatLimit});
     return this.repository.createMembership({ id: createId('mem'), workspaceId, userId, role, createdAt: this.clock() });
   }
   async authorize(workspaceId, userId, permission) {
     const membership = await this.repository.getMembership(workspaceId, userId);
+    const subscription=await this.repository.getSubscription(workspaceId);
+    if(!['trialing','active'].includes(subscription.status))throw new AtlasError('SUBSCRIPTION_INACTIVE','Firm subscription is not active',402,{status:subscription.status});
     if (!permissions[membership.role]?.has(permission)) throw new AtlasError('ACCESS_DENIED', 'Workspace permission denied', 403);
     return membership;
   }

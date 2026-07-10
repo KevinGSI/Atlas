@@ -11,6 +11,7 @@ export class InMemoryRepository {
   #events = new Map();
   #users = new Map();
   #memberships = new Map();
+  #subscriptions = new Map();
   #audits = new Map();
   #refreshSessions = new Map();
   #passwordResets = new Map();
@@ -35,12 +36,12 @@ export class InMemoryRepository {
 
   async transaction(work) {
     const markerSnapshot=new Set(this.#automationMarkers);const leaseSnapshot=new Map(this.#schedulerLeases);const canonicalEventSnapshot=new Map(this.#canonicalEvents);const canonicalDeliverySnapshot=new Map(this.#canonicalDeliveries);
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#subscriptions, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     const beforeObjects=new Map([...this.#objects].map(([key,value])=>[key,JSON.stringify(value)]));const beforeRelationships=new Set(this.#relationships.keys());const beforeEvents=new Set(this.#canonicalEvents.keys());
     try { const result=await work(this);const mutated=new Set();for(const [id,value] of this.#objects)if(beforeObjects.get(id)!==JSON.stringify(value))mutated.add(id);for(const [id,relationship] of this.#relationships)if(!beforeRelationships.has(id)){mutated.add(relationship.fromObjectId);mutated.add(relationship.toObjectId);}const covered=new Set([...this.#canonicalEvents].filter(([id])=>!beforeEvents.has(id)).flatMap(([,event])=>event.affectedObjectIds));const missing=[...mutated].filter((id)=>!covered.has(id));if(missing.length)throw new AtlasError('CANONICAL_EVENT_REQUIRED','Material canonical mutations require event coverage',500,{objectIds:missing});return result; }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#subscriptions, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts] = snapshot;
       this.#automationMarkers=markerSnapshot;this.#schedulerLeases=leaseSnapshot;this.#canonicalEvents=canonicalEventSnapshot;this.#canonicalDeliveries=canonicalDeliverySnapshot;
       throw error;
     }
@@ -295,6 +296,9 @@ export class InMemoryRepository {
   listMemberships(workspaceId) {
     return [...this.#memberships.values()].filter((item) => item.workspaceId === workspaceId).map(clone);
   }
+  createSubscription(value){this.getWorkspace(value.workspaceId);if(this.#subscriptions.has(value.workspaceId))throw new AtlasError('SUBSCRIPTION_EXISTS','Firm subscription already exists',409);this.#subscriptions.set(value.workspaceId,clone(value));return clone(value);}
+  getSubscription(workspaceId){this.getWorkspace(workspaceId);const value=this.#subscriptions.get(workspaceId);if(!value)throw new AtlasError('SUBSCRIPTION_NOT_FOUND','Firm subscription not found',404);return clone(value);}
+  updateSubscription(workspaceId,changes,updatedAt){const current=this.getSubscription(workspaceId);const value={...current,...clone(changes),workspaceId,updatedAt};this.#subscriptions.set(workspaceId,value);return clone(value);}
 
   createAudit(audit) {
     this.#audits.set(audit.id, clone(audit));

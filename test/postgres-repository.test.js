@@ -72,6 +72,16 @@ test('PostgreSQL membership lookup is scoped by workspace and user', async () =>
   assert.deepEqual(calls[0].values, ['wsp_1', 'usr_1']);
 });
 
+test('PostgreSQL subscription lookup is constrained to one firm workspace',async()=>{
+  const calls=[];
+  const row={id:'sub_1',workspace_id:'wsp_1',plan:'pilot',status:'active',seat_limit:10,trial_ends_at:null,current_period_ends_at:null,created_at:timestamp,updated_at:timestamp};
+  const pool={async query(sql,values){calls.push({sql,values});return {rows:[row]};}};
+  const value=await new PostgresRepository(pool).getSubscription('wsp_1');
+  assert.deepEqual({workspaceId:value.workspaceId,status:value.status,seatLimit:value.seatLimit},{workspaceId:'wsp_1',status:'active',seatLimit:10});
+  assert.match(calls[0].sql,/workspace_id = \$1/);
+  assert.deepEqual(calls[0].values,['wsp_1']);
+});
+
 test('PostgreSQL optimistic update constrains workspace, id, version, and deletion state', async () => {
   const calls = [];
   const base = { id: 'obj_1', workspace_id: 'wsp_1', parent_object_id: null, dimension: 'matter', type: 'civil', title: 'Before', state: {}, version: 1, created_at: timestamp, updated_at: timestamp, deleted_at: null };

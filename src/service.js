@@ -18,6 +18,10 @@ export class AtlasService {
       if (ownerUserId) await repository.createMembership({
         id: createId('mem'), workspaceId: workspace.id, userId: ownerUserId, role: 'owner', createdAt: now
       });
+      await repository.createSubscription({
+        id:createId('sub'),workspaceId:workspace.id,plan:input.plan??'pilot',status:'trialing',seatLimit:input.seatLimit??10,
+        trialEndsAt:input.trialEndsAt??null,currentPeriodEndsAt:null,createdAt:now,updatedAt:now
+      });
       return workspace;
     });
   }

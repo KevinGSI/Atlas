@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InMemoryRepository } from '../src/repository.js';
 import { hashPassword, verifyPassword, IdentityService, TokenService } from '../src/identity.js';
+import { AtlasService } from '../src/service.js';
 
 test('passwords use salted scrypt hashes and verify safely', async () => {
   const first = await hashPassword('correct horse battery staple');
@@ -241,8 +242,7 @@ test('workspace roles enforce read, write, and membership administration', async
   const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));
   const owner = await identity.register({ email: 'owner@example.com', name: 'Owner', password: 'owner password long enough' });
   const viewer = await identity.register({ email: 'viewer@example.com', name: 'Viewer', password: 'viewer password long enough' });
-  const workspace = await repository.createWorkspace({ id: 'wsp_1', name: 'Firm', version: 1, createdAt: 'now', updatedAt: 'now' });
-  await identity.addOwner(workspace.id, owner.user.id);
+  const workspace = await new AtlasService(repository).createWorkspace({ name: 'Firm' },owner.user.id);
   await identity.addMembership(workspace.id, viewer.user.id, 'viewer');
   assert.equal((await identity.authorize(workspace.id, viewer.user.id, 'workspace:read')).role, 'viewer');
   await assert.rejects(() => identity.authorize(workspace.id, viewer.user.id, 'workspace:write'), (error) => error.code === 'ACCESS_DENIED');
