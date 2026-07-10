@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.25.0` adds attorney verification of AI-identified facts, deadlines, duties, risks, conflicts, entities, recommendations, and matter matches directly inside “While You Were Gone.”
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.26.0` adds a fail-closed, isolated-schema PostgreSQL integration harness and CI database service for verifying the complete live persistence path.
 
 ## Implemented
 
@@ -111,6 +111,11 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Attorney accept/reject controls for candidate digital-twin knowledge
 - Accepted findings promoted to canonical objects or matter relationships with provenance
 - Rejected findings retained in the intelligence ledger without contaminating canonical firm knowledge
+- Isolated live-PostgreSQL integration schema created and destroyed per test run
+- Complete ordered migration execution and idempotent migration rerun checks
+- Live table-count, object persistence, awareness receipt, rollback, and append-only trigger checks
+- Dedicated `pnpm test:postgres` command that refuses to pass without `TEST_DATABASE_URL`
+- GitHub Actions PostgreSQL 16 service for automatic real-database verification after repository publication
 
 ## Local development
 
@@ -124,6 +129,15 @@ pnpm start
 ```
 
 Without `DATABASE_URL`, development uses the in-memory repository.
+
+Run the dedicated live-database suite against a disposable PostgreSQL database:
+
+```bash
+export TEST_DATABASE_URL=postgresql://user:password@127.0.0.1:5432/atlas_test
+pnpm test:postgres
+```
+
+The harness uses its own randomly named schema and removes it after the run. Never point integration tests at a database account that lacks permission to create and drop isolated schemas.
 
 Open `http://localhost:3000/` to use the connected phase-one client. Enter an existing Atlas account and workspace ID. This client reads live API data; it does not substitute fictional awareness cards.
 

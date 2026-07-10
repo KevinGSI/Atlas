@@ -23,3 +23,5 @@ test('Docker image is non-root and has a readiness health check', async () => {
   assert.match(dockerfile, /HEALTHCHECK/);
   assert.match(dockerfile, /\/ready/);
 });
+
+test('CI provisions real PostgreSQL and fails closed without its integration URL',async()=>{const workflow=YAML.parse(await readFile('.github/workflows/postgres-integration.yml','utf8'));const job=workflow.jobs['postgres-integration'];assert.equal(job.services.postgres.image,'postgres:16-alpine');assert.match(job.env.TEST_DATABASE_URL,/postgresql:\/\//);assert.equal(job.steps.at(-1).run,'pnpm test:postgres');const harness=await readFile('scripts/test-postgres.js','utf8');assert.match(harness,/TEST_DATABASE_URL is required/);});

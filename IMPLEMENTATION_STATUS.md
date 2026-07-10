@@ -1,8 +1,13 @@
-# Atlas Core 0.25.0 — Knowledge Verification Status
+# Atlas Core 0.26.0 — PostgreSQL Integration Readiness Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.24.0`
+- Everything verified through Atlas Core `0.25.0`
+- Disposable-schema live PostgreSQL integration harness
+- All 16 migrations applied in order and verified idempotent on rerun
+- Live checks for 24 tables, canonical persistence, awareness receipts, transactional rollback, and immutable timeline triggers
+- Fail-closed live-test command requiring an explicit database URL
+- PostgreSQL 16 CI service with health checks and locked dependency installation
 - Candidate observation previews inside attorney awareness cards
 - Confidence, kind, evidence-derived description, and review status presentation
 - Authenticated acceptance and rejection from the connected homepage
@@ -51,7 +56,9 @@
 
 ## Verification completed here
 
-- 138 canonical tests across the complete Atlas Core surface
+- 139 canonical tests passed locally across the complete non-live Atlas Core surface
+- 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
+- CI workflow and fail-closed environment guard verified locally
 - End-to-end candidate observation acceptance and rejection over HTTP
 - Proof that acceptance creates canonical risk knowledge
 - Proof that rejection creates no canonical object
@@ -91,6 +98,7 @@
 - A real mailbox, telephony provider, document store, or production AI model processing an event end to end
 - Deployment of the connected homepage against a public production environment
 - Live local network-listener execution in this restricted workspace (`listen EPERM`)
+- Execution of the new integration harness against a real PostgreSQL daemon; this workspace supplied neither `TEST_DATABASE_URL` nor a database service
 - A production KMS/HSM-backed vault, multi-instance scheduler locks, rate-limit behavior, or large-firm migration volumes
 - Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
 
