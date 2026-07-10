@@ -6,7 +6,7 @@ const requiredFiles = [
   'Dockerfile', '.dockerignore', 'render.yaml', 'src/server.js', 'src/application.js', 'src/config.js', 'src/scheduler-leases.js', 'src/native-capabilities.js', 'src/canonical-events.js',
   'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js', 'src/ai-evaluation.js', 'src/staging-smoke.js', 'src/content-security.js', 'src/ai-content-migration.js', 'src/intelligence.js', 'src/intelligence-projection.js', 'src/ingestion.js', 'src/webhook-security.js', 'src/resolution.js', 'src/cms-connectors.js', 'src/cms-provider-adapters.js', 'src/situational-awareness.js', 'src/phase-one-web.js', 'web/phase-one/index.html', 'web/phase-one/app.js', 'docs/NATIVE_INTELLIGENCE_CONSTITUTION.md', 'docs/NATIVE_INTELLIGENCE_VERIFICATION.md',
   'src/postgres-repository.js', 'src/migrations.js', 'src/runtime.js',
-  'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'db/migrations/0007_ai_run_ledger.sql', 'db/migrations/0008_ai_conversations.sql', 'db/migrations/0009_ai_action_proposals.sql', 'db/migrations/0010_ai_draft_actions.sql', 'db/migrations/0011_intelligence_jobs.sql', 'db/migrations/0012_intelligence_observations.sql', 'db/migrations/0013_ingestion_records.sql', 'db/migrations/0014_cms_coexistence.sql', 'db/migrations/0015_encrypted_secrets.sql', 'db/migrations/0016_situational_awareness.sql', 'db/migrations/0017_scheduler_leases.sql', 'db/migrations/0018_canonical_event_ledger.sql', 'db/migrations/0019_postgres_integrity.sql', 'test/service.test.js', 'test/http.test.js',
+  'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'db/migrations/0007_ai_run_ledger.sql', 'db/migrations/0008_ai_conversations.sql', 'db/migrations/0009_ai_action_proposals.sql', 'db/migrations/0010_ai_draft_actions.sql', 'db/migrations/0011_intelligence_jobs.sql', 'db/migrations/0012_intelligence_observations.sql', 'db/migrations/0013_ingestion_records.sql', 'db/migrations/0014_cms_coexistence.sql', 'db/migrations/0015_encrypted_secrets.sql', 'db/migrations/0016_situational_awareness.sql', 'db/migrations/0017_scheduler_leases.sql', 'db/migrations/0018_canonical_event_ledger.sql', 'db/migrations/0019_postgres_integrity.sql', 'db/migrations/0020_cms_tombstones.sql', 'test/service.test.js', 'test/http.test.js',
   'test/postgres-repository.test.js', 'test/migrations.test.js', 'test/config.test.js', 'test/runtime.test.js',
   'test/deployment.test.js', 'test/staging-smoke.test.js', 'test/live-postgres.test.js', 'test/identity.test.js', 'test/assistant.test.js', 'test/ai-providers.test.js', 'test/ai-evaluation.test.js', 'test/content-security.test.js', 'test/ai-content-migration.test.js', 'test/intelligence.test.js', 'test/ingestion.test.js', 'test/webhook-security.test.js', 'test/resolution.test.js', 'test/architecture.test.js', 'test/cms-connectors.test.js', 'test/situational-awareness.test.js', 'test/scheduler-leases.test.js', 'test/native-capabilities.test.js', 'test/canonical-events.test.js', 'docs/NATIVE_AI_CAPABILITIES.md', 'scripts/encrypt-ai-content.js', 'scripts/intelligence-worker.js', 'scripts/test-postgres.js', 'scripts/test-ai-provider.js', 'scripts/test-staging.js', '.github/workflows/postgres-integration.yml', '.github/workflows/openai-evaluation.yml', '.github/workflows/staging-smoke.yml'
 ];
@@ -17,7 +17,7 @@ for (const file of requiredFiles) {
 }
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-if (pkg.version !== '0.33.3') failures.push(`expected version 0.33.3, got ${pkg.version}`);
+if (pkg.version !== '0.34.0') failures.push(`expected version 0.34.0, got ${pkg.version}`);
 
 const migration = await readFile('db/migrations/0001_initial.sql', 'utf8');
 for (const table of ['atlas_workspace', 'atlas_object', 'atlas_relationship', 'atlas_timeline_event']) {
@@ -70,6 +70,8 @@ for(const table of ['atlas_canonical_event','atlas_canonical_event_object','atla
 const postgresIntegrityMigration=await readFile('db/migrations/0019_postgres_integrity.sql','utf8');
 for(const kind of ['email','phone_call','document'])if(!postgresIntegrityMigration.includes(`'${kind}'`))failures.push(`PostgreSQL ingestion kind missing ${kind}`);
 if(!postgresIntegrityMigration.includes('atlas_timeline_no_update')||!postgresIntegrityMigration.includes('atlas_timeline_no_delete'))failures.push('append-only timeline triggers are missing');
+const cmsTombstoneMigration=await readFile('db/migrations/0020_cms_tombstones.sql','utf8');
+if(!cmsTombstoneMigration.includes('source_deleted_at')||!cmsTombstoneMigration.includes('reconciliation_status'))failures.push('CMS tombstone reconciliation columns are missing');
 if (!pkg.dependencies?.pg) failures.push('pg runtime dependency is missing');
 if (pkg.scripts?.migrate !== 'node scripts/migrate.js') failures.push('standalone migration command is missing');
 if (pkg.scripts?.['encrypt-ai-content'] !== 'node scripts/encrypt-ai-content.js') failures.push('AI content encryption migration command is missing');

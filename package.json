@@ -1,6 +1,6 @@
 {
   "name": "atlas-core",
-  "version": "0.33.3",
+  "version": "0.34.0",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "type": "module",

@@ -1,6 +1,6 @@
 import { AtlasError } from './errors.js';
 
-function basicRecord(type,row){return {type,id:String(row.id),updatedAt:row.updated_at??row.updatedAt??null,checksum:row.etag??null,data:{...row,title:row.display_number??row.name??row.subject??`${type} ${row.id}`}};}
+function basicRecord(type,row){return {type,id:String(row.id),updatedAt:row.updated_at??row.updatedAt??null,checksum:row.etag??null,deleted:Boolean(row.deleted_at||row.deletedAt||row.archived_at||row.archivedAt||row.status==='deleted'),deletedAt:row.deleted_at??row.deletedAt??row.archived_at??row.archivedAt??null,data:{...row,title:row.display_number??row.name??row.subject??`${type} ${row.id}`}};}
 
 export class OAuthCmsConnector {
   constructor(options){this.name=options.name;this.clientId=options.clientId;this.clientSecret=options.clientSecret;this.authorizeEndpoint=options.authorizeEndpoint;this.tokenEndpoint=options.tokenEndpoint;this.revokeEndpoint=options.revokeEndpoint;this.apiBase=options.apiBase;this.scopes=options.scopes??[];this.resources=options.resources??[];this.transport=options.transport??fetch;}

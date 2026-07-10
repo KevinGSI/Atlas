@@ -1,8 +1,16 @@
-# Atlas Core 0.33.3 — PostgreSQL Integrity Audit Status
+# Atlas Core 0.34.0 — CMS Tombstone Reconciliation Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.33.2`
+- Everything verified through Atlas Core `0.33.3`
+- Provider-neutral CMS deletion and archive normalization
+- Source tombstones preserve canonical Atlas objects instead of deleting them
+- Reconciliation state and source-deletion timestamps retained on durable CMS links
+- Canonical `cms.record.tombstone` events and native intelligence jobs
+- Duplicate tombstones suppressed without repeated tasks or awareness noise
+- Reappearing source records reactivate the existing canonical object without duplication
+- Deterministic retention-risk observation and internal reconciliation task capability
+- Migration `0020_cms_tombstones.sql`
 - Corrected live table verification to exclude and separately verify migration history
 - Migration expectations now derive from the actual ordered migration set
 - PostgreSQL ingestion constraints now support email, phone-call, and document records used by runtime code

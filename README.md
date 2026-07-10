@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.33.3` completes a PostgreSQL integrity audit: migration-history-aware table verification, runtime-aligned ingestion constraints, and database-enforced append-only timeline events.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.34.0` adds safe CMS tombstone reconciliation: source deletions are preserved in Atlas, recorded canonically, deduplicated, and converted into reviewable retention work.
 
 ## Implemented
 
