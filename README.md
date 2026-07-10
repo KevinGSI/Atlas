@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.14.0` adds persistent, private AI conversations and append-only message history for the Atlas homepage chat.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.15.0` adds authenticated application-layer encryption for stored AI conversations, messages, prompts, and answers.
 
 ## Implemented
 
@@ -53,6 +53,10 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Append-only user and assistant messages with source references and AI run linkage
 - Provider-neutral continuation using normalized prior message history
 - Authenticated conversation-list and message-history endpoints
+- AES-256-GCM content envelopes with unique nonces and record-bound authentication
+- Encryption-key identifiers for controlled rotation and historical-key decryption
+- Transparent decryption only after existing workspace and conversation authorization
+- Startup refusal when an AI provider is enabled without a valid 32-byte content key
 
 ## Local development
 
@@ -131,13 +135,15 @@ The runtime accepts providers implementing `complete({ messages, tools, context,
 
 For the initial OpenAI adapter, set `AI_PROVIDER=openai`, `AI_MODEL` to an explicitly selected model ID, and `OPENAI_API_KEY`. `OPENAI_BASE_URL` defaults to `https://api.openai.com/v1`. The adapter uses the Responses API, keeps remote storage disabled, preserves provider response state locally for tool rounds, and normalizes token usage and provider errors before returning control to Atlas.
 
+Any configured AI provider also requires `AI_CONTENT_ENCRYPTION_KEY`, a base64-encoded 32-byte secret, and accepts `AI_CONTENT_ENCRYPTION_KEY_ID` (default `primary`). Generate a development key with `openssl rand -base64 32`. Keep production keys in the deployment platform's secret manager, never in Git. Losing a key makes its encrypted content unrecoverable.
+
 Other providers are registered through the same `AiProviderRegistry`; legal tools and workflows do not import or reference the OpenAI adapter.
 
 ## AI accountability ledger
 
 Every assistant request receives a stable `runId`. Completed runs record the answer, source objects, tool count, provider/model identity, and normalized usage. Failed runs record the prompt, actor, timestamp, provider when known, and a sanitized Atlas error code. The ledger is workspace-scoped and append-only; PostgreSQL rejects updates and deletions.
 
-Authorized users can review recent execution records through `GET /v1/workspaces/:workspaceId/assistant/runs?limit=50`. Prompts and answers may contain privileged information, so production deployments must apply encryption, retention, export, and deletion policies consistent with legal and contractual obligations.
+Authorized users can review recent execution records through `GET /v1/workspaces/:workspaceId/assistant/runs?limit=50`. Stored conversation titles, messages, run prompts, and answers are encrypted with AES-256-GCM whenever the encryption key is configured. Provider execution still necessarily receives decrypted prompt context in memory. Production deployments must also apply retention, export, and deletion policies consistent with legal and contractual obligations.
 
 Conversation queries accept an optional `conversationId`; omitting it creates a new private conversation. Users can list their conversations at `GET /v1/workspaces/:workspaceId/assistant/conversations` and retrieve messages at `GET /v1/workspaces/:workspaceId/assistant/conversations/:conversationId/messages`. Conversation ownership is enforced independently of workspace membership.
 

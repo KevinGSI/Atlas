@@ -80,6 +80,7 @@ export class AtlasAssistant {
     this.maxPromptCharacters = options.maxPromptCharacters ?? 8_000;
     this.repository = options.repository ?? null;
     this.clock = options.clock ?? (() => new Date().toISOString());
+    this.contentCipher = options.contentCipher ?? { encrypt: (value) => value, decrypt: (value) => value };
   }
 
   async executeQuery({ workspaceId, userId, prompt, history = [] }) {
@@ -128,25 +129,30 @@ export class AtlasAssistant {
       let history = [];
       if (this.repository) {
         if (input.conversationId) await this.repository.getAiConversation(input.workspaceId, input.userId, conversationId);
-        else await this.repository.createAiConversation({ id: conversationId, workspaceId: input.workspaceId, actorId: input.userId, title: auditPrompt.slice(0, 120) || 'New conversation', createdAt: this.clock() });
-        history = await this.repository.listAiMessages(input.workspaceId, input.userId, conversationId);
-        await this.repository.createAiMessage({ id: createId('aim'), conversationId, workspaceId: input.workspaceId, actorId: input.userId, runId: null, role: 'user', content: auditPrompt, sources: [], createdAt: this.clock() });
+        else await this.repository.createAiConversation({ id: conversationId, workspaceId: input.workspaceId, actorId: input.userId, title: this.contentCipher.encrypt(auditPrompt.slice(0, 120) || 'New conversation', `conversation:${conversationId}:title`), createdAt: this.clock() });
+        history = (await this.repository.listAiMessages(input.workspaceId, input.userId, conversationId))
+          .map((message) => ({ ...message, content: this.contentCipher.decrypt(message.content, `message:${message.id}:content`) }));
+        const userMessageId = createId('aim');
+        await this.repository.createAiMessage({ id: userMessageId, conversationId, workspaceId: input.workspaceId, actorId: input.userId, runId: null, role: 'user', content: this.contentCipher.encrypt(auditPrompt, `message:${userMessageId}:content`), sources: [], createdAt: this.clock() });
       }
       const result = await this.executeQuery({ ...input, history });
       if (this.repository) await this.repository.createAiRun({
         id: runId, workspaceId: input.workspaceId, actorId: input.userId, status: 'completed',
-        prompt: auditPrompt, answer: result.answer, provider: result.provider ?? null, model: result.model ?? null,
+        prompt: this.contentCipher.encrypt(auditPrompt, `run:${runId}:prompt`), answer: this.contentCipher.encrypt(result.answer, `run:${runId}:answer`), provider: result.provider ?? null, model: result.model ?? null,
         sources: result.sources, toolCalls: result.toolCalls, usage: result.usage,
         errorCode: null, createdAt: this.clock()
       });
-      if (this.repository) await this.repository.createAiMessage({ id: createId('aim'), conversationId, workspaceId: input.workspaceId, actorId: input.userId, runId, role: 'assistant', content: result.answer, sources: result.sources, createdAt: this.clock() });
+      if (this.repository) {
+        const assistantMessageId = createId('aim');
+        await this.repository.createAiMessage({ id: assistantMessageId, conversationId, workspaceId: input.workspaceId, actorId: input.userId, runId, role: 'assistant', content: this.contentCipher.encrypt(result.answer, `message:${assistantMessageId}:content`), sources: result.sources, createdAt: this.clock() });
+      }
       return { ...result, runId, conversationId };
     } catch (error) {
       if (this.repository) {
         try {
           await this.repository.createAiRun({
             id: runId, workspaceId: input.workspaceId, actorId: input.userId, status: 'failed',
-            prompt: auditPrompt, answer: null, provider: error.details?.provider ?? null, model: null,
+            prompt: this.contentCipher.encrypt(auditPrompt, `run:${runId}:prompt`), answer: null, provider: error.details?.provider ?? null, model: null,
             sources: [], toolCalls: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
             errorCode: error instanceof AtlasError ? error.code : 'INTERNAL_ERROR', createdAt: this.clock()
           });
@@ -159,8 +165,12 @@ export class AtlasAssistant {
   async listRuns(workspaceId, limit = 50) {
     if (!this.repository) throw new AtlasError('AI_AUDIT_NOT_CONFIGURED', 'AI audit repository is not configured', 503);
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new AtlasError('VALIDATION_ERROR', 'limit must be between 1 and 100', 400);
-    return this.repository.listAiRuns(workspaceId, limit);
+    return (await this.repository.listAiRuns(workspaceId, limit)).map((run) => ({
+      ...run,
+      prompt: this.contentCipher.decrypt(run.prompt, `run:${run.id}:prompt`),
+      answer: this.contentCipher.decrypt(run.answer, `run:${run.id}:answer`)
+    }));
   }
-  async listConversations(workspaceId,userId) { if(!this.repository) throw new AtlasError('AI_AUDIT_NOT_CONFIGURED','AI repository is not configured',503); return this.repository.listAiConversations(workspaceId,userId); }
-  async listMessages(workspaceId,userId,conversationId) { if(!this.repository) throw new AtlasError('AI_AUDIT_NOT_CONFIGURED','AI repository is not configured',503); return this.repository.listAiMessages(workspaceId,userId,conversationId); }
+  async listConversations(workspaceId,userId) { if(!this.repository) throw new AtlasError('AI_AUDIT_NOT_CONFIGURED','AI repository is not configured',503); return (await this.repository.listAiConversations(workspaceId,userId)).map((conversation) => ({ ...conversation, title: this.contentCipher.decrypt(conversation.title, `conversation:${conversation.id}:title`) })); }
+  async listMessages(workspaceId,userId,conversationId) { if(!this.repository) throw new AtlasError('AI_AUDIT_NOT_CONFIGURED','AI repository is not configured',503); return (await this.repository.listAiMessages(workspaceId,userId,conversationId)).map((message) => ({ ...message, content: this.contentCipher.decrypt(message.content, `message:${message.id}:content`) })); }
 }
