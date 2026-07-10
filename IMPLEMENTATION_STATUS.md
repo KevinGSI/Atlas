@@ -1,8 +1,16 @@
-# Atlas Core 0.31.0 — Native AI Capability Framework Status
+# Atlas Core 0.32.0 — Continuously Aware Digital Twin Foundation Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.30.0`
+- Everything verified through Atlas Core `0.31.0`
+- Universal append-only canonical event ledger mirroring every material timeline event
+- Enforced workspace-safe links from events to primary and affected canonical objects
+- Correlation and causation fields for tracing chains of firm activity
+- Consumer-specific idempotent delivery, replay, bounded retries, and dead-letter state
+- Continuously running application dispatcher with graceful shutdown
+- Graph-impact consumer discovering connected objects and queuing reanalysis exactly once
+- Relationship mutations now publish canonical events affecting both connected objects
+- Infrastructure-only records remain outside the legal/business event graph
 - Independently registered and semantically versioned native-AI capability modules
 - Trigger-scoped capability discovery and execution through a stable Core registry
 - Dependency-injected capability registries for deployments and future package loaders

@@ -199,14 +199,13 @@ export class AtlasService {
     if (fromObjectId === toObjectId) {
       throw new AtlasError('SELF_RELATIONSHIP', 'An object cannot relate to itself', 400);
     }
-    return this.repository.createRelationship({
-      id: createId('rel'),
-      workspaceId,
-      fromObjectId,
-      toObjectId,
-      type: required(input.type, 'type'),
-      attributes: input.attributes ?? {},
-      createdAt: this.clock()
+    return this.repository.transaction(async(repository)=>{
+      const relationship=await repository.createRelationship({
+        id: createId('rel'),workspaceId,fromObjectId,toObjectId,type:required(input.type,'type'),attributes:input.attributes??{},createdAt:this.clock()
+      });
+      const event=await repository.createEvent(this.buildEvent(workspaceId,{parentObjectId:fromObjectId,relatedObjectIds:[toObjectId],type:'relationship.created',actorId:input.actorId??'system',source:'atlas',data:{relationshipId:relationship.id,relationshipType:relationship.type}}));
+      await repository.createIntelligenceJob(this.buildIntelligenceJob(workspaceId,'relationship.created',fromObjectId,event.id,{relationship}));
+      return relationship;
     });
   }
 

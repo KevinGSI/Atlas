@@ -59,6 +59,7 @@ function cmsConnection(row){return {id:row.id,workspaceId:row.workspace_id,provi
 function cmsRecordLink(row){return {id:row.id,workspaceId:row.workspace_id,connectionId:row.connection_id,externalType:row.external_type,externalId:row.external_id,atlasObjectId:row.atlas_object_id,sourceUpdatedAt:iso(row.source_updated_at),sourceChecksum:row.source_checksum,lastSyncedAt:iso(row.last_synced_at)};}
 function awarenessItem(row){return {id:row.id,workspaceId:row.workspace_id,targetUserId:row.target_user_id,sourceJobId:row.source_job_id,sourceObjectId:row.source_object_id,category:row.category,priority:row.priority,headline:row.headline,summary:row.summary,observationIds:row.observation_ids,actionProposalIds:row.action_proposal_ids,createdAt:iso(row.created_at),...(row.review_status?{reviewStatus:row.review_status}:{})};}
 function intelligenceJob(row) { return { id: row.id, workspaceId: row.workspace_id, triggerType: row.trigger_type, objectId: row.object_id, eventId: row.event_id, status: row.status, attempts: row.attempts, payload: row.payload, result: row.result, provider: row.provider, errorCode: row.error_code, availableAt: iso(row.available_at), lockedAt: iso(row.locked_at), createdAt: iso(row.created_at), completedAt: iso(row.completed_at) }; }
+function canonicalEvent(row){return {id:row.id,workspaceId:row.workspace_id,eventType:row.event_type,actorId:row.actor_id,source:row.source,causationId:row.causation_id,correlationId:row.correlation_id,payload:row.payload,occurredAt:iso(row.occurred_at),createdAt:iso(row.created_at),affectedObjectIds:row.affected_object_ids??[]};}
 
 export class PostgresRepository {
   constructor(executor, pool = executor) {
@@ -186,8 +187,17 @@ export class PostgresRepository {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [value.id, value.workspaceId, value.parentObjectId, value.type, value.actorId, value.source,
         value.confidence, value.visibility, value.relatedObjectIds, value.data, value.occurredAt, value.createdAt]);
-    return event(result.rows[0]);
+    const created=event(result.rows[0]);const affected=[...new Set([value.parentObjectId,...(value.relatedObjectIds??[])].filter(Boolean))];
+    for(const objectId of affected)await this.getObject(value.workspaceId,objectId,{includeDeleted:true});
+    await this.executor.query('INSERT INTO atlas_canonical_event (id,workspace_id,event_type,actor_id,source,causation_id,correlation_id,payload,occurred_at,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[value.id,value.workspaceId,value.type,value.actorId,value.source,value.data?.causationId??null,value.data?.correlationId??value.id,value.data,value.occurredAt,value.createdAt]);
+    for(const objectId of affected)await this.executor.query('INSERT INTO atlas_canonical_event_object (workspace_id,event_id,object_id,role) VALUES ($1,$2,$3,$4)',[value.workspaceId,value.id,objectId,objectId===value.parentObjectId?'primary':'affected']);
+    return created;
   }
+
+  async listCanonicalEventsForConsumer(consumerId,limit=100,now=new Date().toISOString()){const r=await this.executor.query(`SELECT e.*,COALESCE(array_agg(o.object_id) FILTER (WHERE o.object_id IS NOT NULL),'{}') affected_object_ids FROM atlas_canonical_event e LEFT JOIN atlas_canonical_event_object o ON o.event_id=e.id WHERE NOT EXISTS (SELECT 1 FROM atlas_canonical_event_delivery d WHERE d.event_id=e.id AND d.consumer_id=$1 AND (d.status IN ('processing','completed','dead_letter') OR d.available_at>$3)) GROUP BY e.id ORDER BY e.created_at,e.id LIMIT $2`,[consumerId,limit,now]);return r.rows.map(canonicalEvent);}
+  async claimCanonicalEventDelivery(eventId,consumerId,now){const r=await this.executor.query(`INSERT INTO atlas_canonical_event_delivery (event_id,consumer_id,status,attempts,available_at,locked_at) VALUES ($1,$2,'processing',1,$3,$3) ON CONFLICT (event_id,consumer_id) DO UPDATE SET status='processing',attempts=atlas_canonical_event_delivery.attempts+1,locked_at=$3,error_code=NULL WHERE atlas_canonical_event_delivery.status='failed' AND atlas_canonical_event_delivery.available_at<=$3 RETURNING *`,[eventId,consumerId,now]);return r.rows[0]??null;}
+  async completeCanonicalEventDelivery(eventId,consumerId,now){const r=await this.executor.query("UPDATE atlas_canonical_event_delivery SET status='completed',completed_at=$3,locked_at=NULL WHERE event_id=$1 AND consumer_id=$2 AND status='processing' RETURNING *",[eventId,consumerId,now]);return r.rows[0]??null;}
+  async failCanonicalEventDelivery(eventId,consumerId,errorCode,maxAttempts,now){const r=await this.executor.query("UPDATE atlas_canonical_event_delivery SET status=CASE WHEN attempts >= $4 THEN 'dead_letter' ELSE 'failed' END,available_at=$5,locked_at=NULL,error_code=$3 WHERE event_id=$1 AND consumer_id=$2 AND status='processing' RETURNING *",[eventId,consumerId,errorCode,maxAttempts,now]);return r.rows[0]??null;}
 
   async listEvents(workspaceId, parentObjectId) {
     await this.getWorkspace(workspaceId);

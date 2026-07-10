@@ -16,6 +16,7 @@ import { ClioManageConnector, MyCaseOpenApiConnector } from './cms-provider-adap
 import { SituationalPlaybookEngine, SituationalSweepService, runSituationalSweepScheduler } from './situational-awareness.js';
 import { IngestionWebhookVerifier } from './webhook-security.js';
 import { SchedulerLeaseCoordinator } from './scheduler-leases.js';
+import { CanonicalEventConsumerRegistry, CanonicalEventDispatcher, DigitalTwinImpactConsumer, runCanonicalEventDispatcher } from './canonical-events.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -64,6 +65,9 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const cmsScheduler=config.cmsSyncEnabled?runCmsSyncScheduler(cms,{signal:cmsController.signal,intervalMs:config.cmsSyncIntervalMs,leaseCoordinator:schedulerLeases}):Promise.resolve();
   const sweepController=new AbortController();
   const sweepScheduler=config.situationalSweepEnabled?runSituationalSweepScheduler(new SituationalSweepService(runtime.repository),{signal:sweepController.signal,intervalMs:config.situationalSweepIntervalMs,leaseCoordinator:schedulerLeases}):Promise.resolve();
+  const eventController=new AbortController();
+  const canonicalConsumers=dependencies.canonicalEventConsumers??new CanonicalEventConsumerRegistry().register('digital-twin-impact',new DigitalTwinImpactConsumer(runtime.repository));
+  const eventDispatcher=runCanonicalEventDispatcher(new CanonicalEventDispatcher(runtime.repository,canonicalConsumers),{signal:eventController.signal,intervalMs:dependencies.canonicalEventIntervalMs??1000});
   let stopped = false;
   return {
     config,
@@ -76,8 +80,10 @@ export async function startAtlas(env = process.env, dependencies = {}) {
       stopped = true;
       cmsController.abort();
       sweepController.abort();
+      eventController.abort();
       await cmsScheduler;
       await sweepScheduler;
+      await eventDispatcher;
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
       await runtime.close();
     }

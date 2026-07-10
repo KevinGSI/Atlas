@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.31.0` adds independently versioned native-AI capability modules so new legal and operational behaviors can be installed without modifying the event engine or unrelated Core systems.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.32.0` establishes the continuously aware digital-twin backbone: every material timeline event enters a canonical object-linked ledger with replayable delivery and graph-impact reanalysis.
 
 ## Implemented
 

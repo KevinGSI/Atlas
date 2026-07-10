@@ -30,15 +30,17 @@ export class InMemoryRepository {
   #awarenessReceipts = new Map();
   #automationMarkers = new Set();
   #schedulerLeases = new Map();
+  #canonicalEvents = new Map();
+  #canonicalDeliveries = new Map();
 
   async transaction(work) {
-    const markerSnapshot=new Set(this.#automationMarkers);const leaseSnapshot=new Map(this.#schedulerLeases);
+    const markerSnapshot=new Set(this.#automationMarkers);const leaseSnapshot=new Map(this.#schedulerLeases);const canonicalEventSnapshot=new Map(this.#canonicalEvents);const canonicalDeliverySnapshot=new Map(this.#canonicalDeliveries);
     const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
       [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts] = snapshot;
-      this.#automationMarkers=markerSnapshot;this.#schedulerLeases=leaseSnapshot;
+      this.#automationMarkers=markerSnapshot;this.#schedulerLeases=leaseSnapshot;this.#canonicalEvents=canonicalEventSnapshot;this.#canonicalDeliveries=canonicalDeliverySnapshot;
       throw error;
     }
   }
@@ -127,8 +129,15 @@ export class InMemoryRepository {
     this.getWorkspace(event.workspaceId);
     if (event.parentObjectId) this.getObject(event.workspaceId, event.parentObjectId);
     this.#events.set(event.id, clone(event));
+    const affectedObjectIds=[...new Set([event.parentObjectId,...(event.relatedObjectIds??[])].filter(Boolean))];
+    for(const objectId of affectedObjectIds)this.getObject(event.workspaceId,objectId,{includeDeleted:true});
+    this.#canonicalEvents.set(event.id,clone({id:event.id,workspaceId:event.workspaceId,eventType:event.type,actorId:event.actorId,source:event.source,causationId:event.data?.causationId??null,correlationId:event.data?.correlationId??event.id,payload:event.data,occurredAt:event.occurredAt,createdAt:event.createdAt,affectedObjectIds}));
     return clone(event);
   }
+  listCanonicalEventsForConsumer(consumerId,limit=100,now=new Date().toISOString()){return [...this.#canonicalEvents.values()].filter((event)=>{const delivery=this.#canonicalDeliveries.get(`${event.id}:${consumerId}`);return !delivery||(delivery.status==='failed'&&delivery.availableAt<=now);}).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id)).slice(0,limit).map(clone);}
+  claimCanonicalEventDelivery(eventId,consumerId,now){const key=`${eventId}:${consumerId}`;const current=this.#canonicalDeliveries.get(key);if(current&&!['failed'].includes(current.status))return null;const delivery={eventId,consumerId,status:'processing',attempts:(current?.attempts??0)+1,availableAt:now,lockedAt:now,completedAt:null,errorCode:null};this.#canonicalDeliveries.set(key,delivery);return clone(delivery);}
+  completeCanonicalEventDelivery(eventId,consumerId,now){const key=`${eventId}:${consumerId}`;const current=this.#canonicalDeliveries.get(key);if(!current||current.status!=='processing')return null;const result={...current,status:'completed',completedAt:now};this.#canonicalDeliveries.set(key,result);return clone(result);}
+  failCanonicalEventDelivery(eventId,consumerId,errorCode,maxAttempts,now){const key=`${eventId}:${consumerId}`;const current=this.#canonicalDeliveries.get(key);const result={...current,status:current.attempts>=maxAttempts?'dead_letter':'failed',availableAt:now,lockedAt:null,errorCode};this.#canonicalDeliveries.set(key,result);return clone(result);}
 
   listEvents(workspaceId, parentObjectId) {
     this.getWorkspace(workspaceId);
