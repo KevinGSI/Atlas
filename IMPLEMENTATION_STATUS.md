@@ -1,8 +1,12 @@
-# Atlas Core 0.29.2 — Deterministic Safe Work Preparation Status
+# Atlas Core 0.30.0 — Multi-Instance Scheduler Safety Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.29.1`
+- Everything verified through Atlas Core `0.29.2`
+- Provider-neutral scheduler lease coordinator with unique instance ownership
+- PostgreSQL-backed atomic acquisition, renewal, expiration recovery, and owner-scoped release
+- CMS synchronization and situational sweeps protected from concurrent multi-instance execution
+- Bounded lease expiration permits another healthy instance to recover after a crash
 - Provider-independent situational playbooks fill safe review work omitted by an interchangeable AI model
 - Extracted email response duties deterministically produce unsent email-draft proposals
 - Extracted phone callback duties deterministically produce internal task proposals
@@ -38,8 +42,8 @@
 - Malformed provider-output failure handling
 - Fail-closed live provider command with JSON report
 - Disposable-schema live PostgreSQL integration harness
-- All 16 migrations applied in order and verified idempotent on rerun
-- Live checks for 24 tables, canonical persistence, awareness receipts, transactional rollback, and immutable timeline triggers
+- All 17 migrations applied in order and verified idempotent on rerun
+- Live checks for 25 tables, canonical persistence, awareness receipts, transactional rollback, and immutable timeline triggers
 - Fail-closed live-test command requiring an explicit database URL
 - PostgreSQL 16 CI service with health checks and locked dependency installation
 - Candidate observation previews inside attorney awareness cards
@@ -86,6 +90,7 @@
 - Canonical mappings for matters, contacts, accounting, tasks, calendars, documents, and communications
 - Import/update timeline events and native-intelligence jobs for digital-twin learning
 - Continuous scheduled synchronization with isolated per-connection failures
+- Renewable distributed leases for multi-instance scheduler coordination
 - Authenticated connection, authorization, callback, list, sync, and disconnect HTTP routes
 
 ## Verification completed here
@@ -130,7 +135,7 @@
 - Clio developer application approval, real user authorization, or production API data
 - MyCase Advanced Tier/Open API enablement, issued endpoints, or real API data
 - Other CMS vendors not yet supplied as adapters
-- Live PostgreSQL execution of migrations `0014`, `0015`, and `0016`
+- Live PostgreSQL execution of migrations `0014`, `0015`, `0016`, and `0017`
 - A real mailbox, telephony provider, document store, or production AI model processing an event end to end
 - Deployment of the connected homepage against a public production environment
 - Live local network-listener execution in this restricted workspace (`listen EPERM`)
@@ -140,7 +145,7 @@
 - Execution result of the GitHub OpenAI workflow; it will exist only after this commit is pushed and the workflow is manually run
 - Real vendor webhook delivery; no mailbox, telephony, or document vendor credentials were supplied here
 - Execution against a public staging deployment; `STAGING_BASE_URL` has not been supplied and Atlas has not yet been deployed
-- A production KMS/HSM-backed vault, multi-instance scheduler locks, rate-limit behavior, or large-firm migration volumes
+- A production KMS/HSM-backed vault, sustained rate-limit behavior, or large-firm migration volumes
 - Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
 
 ## Safety boundary
@@ -155,7 +160,6 @@ Atlas must not ask customers to submit their Clio or MyCase password. Users auth
 
 - Provider field mappings require certification against each vendor account and enabled API surface
 - Deletion/tombstone reconciliation, attachment binary transfer, trust-account migration controls, and conflict-resolution UI need additional releases
-- A production multi-instance scheduler should use a dedicated distributed lease
 - Final cutover tooling and write-back require separate explicit authorization and reconciliation policies
 - Email and phone response drafting quality still depends on the configured interchangeable AI provider and connector-supplied content
 - The motion-to-compel output is a reviewable draft shell, not a jurisdiction-certified filing

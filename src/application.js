@@ -15,6 +15,7 @@ import { CmsCoexistenceService, CmsConnectorRegistry, InMemoryCredentialVault, R
 import { ClioManageConnector, MyCaseOpenApiConnector } from './cms-provider-adapters.js';
 import { SituationalPlaybookEngine, SituationalSweepService, runSituationalSweepScheduler } from './situational-awareness.js';
 import { IngestionWebhookVerifier } from './webhook-security.js';
+import { SchedulerLeaseCoordinator } from './scheduler-leases.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -59,9 +60,10 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     server.listen(config.port, config.host, resolve);
   });
   const cmsController=new AbortController();
-  const cmsScheduler=config.cmsSyncEnabled?runCmsSyncScheduler(cms,{signal:cmsController.signal,intervalMs:config.cmsSyncIntervalMs}):Promise.resolve();
+  const schedulerLeases=new SchedulerLeaseCoordinator(runtime.repository);
+  const cmsScheduler=config.cmsSyncEnabled?runCmsSyncScheduler(cms,{signal:cmsController.signal,intervalMs:config.cmsSyncIntervalMs,leaseCoordinator:schedulerLeases}):Promise.resolve();
   const sweepController=new AbortController();
-  const sweepScheduler=config.situationalSweepEnabled?runSituationalSweepScheduler(new SituationalSweepService(runtime.repository),{signal:sweepController.signal,intervalMs:config.situationalSweepIntervalMs}):Promise.resolve();
+  const sweepScheduler=config.situationalSweepEnabled?runSituationalSweepScheduler(new SituationalSweepService(runtime.repository),{signal:sweepController.signal,intervalMs:config.situationalSweepIntervalMs,leaseCoordinator:schedulerLeases}):Promise.resolve();
   let stopped = false;
   return {
     config,

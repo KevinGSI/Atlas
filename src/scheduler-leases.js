@@ -1,0 +1,6 @@
+import { randomUUID } from 'node:crypto';
+
+export class SchedulerLeaseCoordinator {
+  constructor(repository,options={}){this.repository=repository;this.ownerId=options.ownerId??randomUUID();this.clock=options.clock??(()=>new Date());this.leaseMs=options.leaseMs??120000;this.renewMs=options.renewMs??Math.max(1000,Math.floor(this.leaseMs/3));}
+  async runExclusive(name,work){const now=this.clock();const expiresAt=new Date(new Date(now).getTime()+this.leaseMs).toISOString();if(!await this.repository.acquireSchedulerLease(name,this.ownerId,new Date(now).toISOString(),expiresAt))return {acquired:false,result:null};let renewalError=null;const timer=setInterval(()=>{const renewedAt=this.clock();const renewedExpiry=new Date(new Date(renewedAt).getTime()+this.leaseMs).toISOString();Promise.resolve(this.repository.renewSchedulerLease(name,this.ownerId,new Date(renewedAt).toISOString(),renewedExpiry)).then((renewed)=>{if(!renewed)renewalError=new Error(`Scheduler lease lost: ${name}`);}).catch((error)=>{renewalError=error;});},this.renewMs);timer.unref?.();try{const result=await work();if(renewalError)throw renewalError;return {acquired:true,result};}finally{clearInterval(timer);await this.repository.releaseSchedulerLease(name,this.ownerId);}}
+}

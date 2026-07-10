@@ -4,7 +4,7 @@ import { startAtlas } from './application.js';
 export async function main(env = process.env, logger = console) {
   const app = await startAtlas(env);
   const address = app.address;
-  logger.log(`Atlas Core 0.29.2 listening on http://${address.address}:${address.port}`);
+  logger.log(`Atlas Core 0.30.0 listening on http://${address.address}:${address.port}`);
   let stopping = false;
   const shutdown = async (signal) => {
     if (stopping) return;

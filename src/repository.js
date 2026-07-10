@@ -29,15 +29,16 @@ export class InMemoryRepository {
   #awarenessItems = new Map();
   #awarenessReceipts = new Map();
   #automationMarkers = new Set();
+  #schedulerLeases = new Map();
 
   async transaction(work) {
-    const markerSnapshot=new Set(this.#automationMarkers);
+    const markerSnapshot=new Set(this.#automationMarkers);const leaseSnapshot=new Map(this.#schedulerLeases);
     const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
       [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts] = snapshot;
-      this.#automationMarkers=markerSnapshot;
+      this.#automationMarkers=markerSnapshot;this.#schedulerLeases=leaseSnapshot;
       throw error;
     }
   }
@@ -352,4 +353,7 @@ export class InMemoryRepository {
   listAwarenessItems(workspaceId,userId,since){return [...this.#awarenessItems.values()].filter((x)=>x.workspaceId===workspaceId&&(!x.targetUserId||x.targetUserId===userId)&&(!since||x.createdAt>since)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map((item)=>({...clone(item),reviewStatus:this.#awarenessReceipts.get(`${item.id}:${userId}`)?.status??'unseen'}));}
   updateAwarenessReceipt(workspaceId,itemId,userId,status,updatedAt){const item=this.#awarenessItems.get(itemId);if(!item||item.workspaceId!==workspaceId||item.targetUserId&&item.targetUserId!==userId)throw new AtlasError('AWARENESS_ITEM_NOT_FOUND','Awareness item not found',404);const value={itemId,userId,status,updatedAt};this.#awarenessReceipts.set(`${itemId}:${userId}`,value);return clone(value);}
   createAutomationMarker(workspaceId,markerKey){const key=`${workspaceId}:${markerKey}`;if(this.#automationMarkers.has(key))return false;this.#automationMarkers.add(key);return true;}
+  acquireSchedulerLease(leaseKey,ownerId,now,expiresAt){const current=this.#schedulerLeases.get(leaseKey);if(current&&current.ownerId!==ownerId&&new Date(current.expiresAt)>new Date(now))return false;this.#schedulerLeases.set(leaseKey,{leaseKey,ownerId,acquiredAt:now,expiresAt});return true;}
+  renewSchedulerLease(leaseKey,ownerId,now,expiresAt){const current=this.#schedulerLeases.get(leaseKey);if(!current||current.ownerId!==ownerId||new Date(current.expiresAt)<=new Date(now))return false;this.#schedulerLeases.set(leaseKey,{...current,expiresAt});return true;}
+  releaseSchedulerLease(leaseKey,ownerId){const current=this.#schedulerLeases.get(leaseKey);if(!current||current.ownerId!==ownerId)return false;this.#schedulerLeases.delete(leaseKey);return true;}
 }

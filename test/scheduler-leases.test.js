@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { InMemoryRepository } from '../src/repository.js';
+import { SchedulerLeaseCoordinator } from '../src/scheduler-leases.js';
+
+test('only one scheduler owner runs a named workload at a time',async()=>{const repository=new InMemoryRepository();let release;const blocked=new Promise((resolve)=>{release=resolve;});let firstRan=false;let secondRan=false;const first=new SchedulerLeaseCoordinator(repository,{ownerId:'instance-a',leaseMs:60000});const second=new SchedulerLeaseCoordinator(repository,{ownerId:'instance-b',leaseMs:60000});const running=first.runExclusive('cms-sync',async()=>{firstRan=true;await blocked;return 'done';});await new Promise((resolve)=>setImmediate(resolve));const skipped=await second.runExclusive('cms-sync',async()=>{secondRan=true;});assert.equal(skipped.acquired,false);assert.equal(secondRan,false);release();assert.deepEqual(await running,{acquired:true,result:'done'});assert.equal(firstRan,true);});
+
+test('expired leases can be recovered after an instance stops',async()=>{const repository=new InMemoryRepository();await repository.acquireSchedulerLease('situational-sweep','dead-instance','2026-07-10T12:00:00.000Z','2026-07-10T12:01:00.000Z');const coordinator=new SchedulerLeaseCoordinator(repository,{ownerId:'replacement',clock:()=>new Date('2026-07-10T12:02:00.000Z')});let ran=false;const result=await coordinator.runExclusive('situational-sweep',async()=>{ran=true;return 1;});assert.equal(result.acquired,true);assert.equal(ran,true);});
+
+test('a scheduler owner cannot release another owner lease',async()=>{const repository=new InMemoryRepository();await repository.acquireSchedulerLease('cms-sync','instance-a','2026-07-10T12:00:00.000Z','2026-07-10T12:05:00.000Z');assert.equal(await repository.releaseSchedulerLease('cms-sync','instance-b'),false);assert.equal(await repository.acquireSchedulerLease('cms-sync','instance-b','2026-07-10T12:01:00.000Z','2026-07-10T12:06:00.000Z'),false);});
