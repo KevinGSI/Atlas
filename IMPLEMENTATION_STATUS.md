@@ -1,8 +1,12 @@
-# Atlas Core 0.29.1 — Native Intelligence Duty Preparation Status
+# Atlas Core 0.29.2 — Deterministic Safe Work Preparation Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.29.0`
+- Everything verified through Atlas Core `0.29.1`
+- Provider-independent situational playbooks fill safe review work omitted by an interchangeable AI model
+- Extracted email response duties deterministically produce unsent email-draft proposals
+- Extracted phone callback duties deterministically produce internal task proposals
+- Extracted document deadlines deterministically produce deadline-linked internal task proposals
 - Explicit email response requests require an unsent email draft proposal for attorney review
 - Callback and follow-up duties require an internal task proposal
 - Source-supported deadlines and response dates require an internal task proposal

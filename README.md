@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.29.1` strengthens native situational intelligence so explicit response requests, callbacks, follow-ups, and deadlines produce the appropriate safe internal drafts or tasks for attorney review.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.29.2` makes safe work preparation deterministic after AI duty and deadline extraction, so interchangeable models cannot silently omit required internal drafts or review tasks.
 
 ## Implemented
 
