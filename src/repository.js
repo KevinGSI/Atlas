@@ -15,13 +15,14 @@ export class InMemoryRepository {
   #refreshSessions = new Map();
   #passwordResets = new Map();
   #loginThrottles = new Map();
+  #aiRuns = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns] = snapshot;
       throw error;
     }
   }
@@ -280,5 +281,17 @@ export class InMemoryRepository {
       .filter((item) => !objectId || item.objectId === objectId)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map(clone);
+  }
+
+  createAiRun(run) {
+    this.getWorkspace(run.workspaceId);
+    this.#aiRuns.set(run.id, clone(run));
+    return clone(run);
+  }
+
+  listAiRuns(workspaceId, limit = 50) {
+    this.getWorkspace(workspaceId);
+    return [...this.#aiRuns.values()].filter((run) => run.workspaceId === workspaceId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit).map(clone);
   }
 }

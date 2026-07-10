@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { AtlasAssistant, AtlasToolRegistry } from '../src/assistant.js';
 import { InMemoryRepository } from '../src/repository.js';
 import { AtlasService } from '../src/service.js';
+import { AtlasError } from '../src/errors.js';
 
 async function fixture() {
   const service = new AtlasService(new InMemoryRepository(), () => '2026-07-10T12:00:00.000Z');
@@ -78,4 +79,23 @@ test('assistant rejects invalid provider responses and invalid tool arguments', 
   await assert.rejects(() => new AtlasAssistant(invalid, tools).query({ workspaceId: workspace.id, userId: 'usr_1', prompt: 'Answer' }), (error) => error.code === 'AI_INVALID_RESPONSE');
   const badArguments = { async complete() { return { toolCalls: [{ id: 'bad_args', name: 'search_objects', arguments: { query: 'motion', limit: 500 } }] }; } };
   await assert.rejects(() => new AtlasAssistant(badArguments, tools).query({ workspaceId: workspace.id, userId: 'usr_1', prompt: 'Search' }), (error) => error.code === 'AI_TOOL_ARGUMENT_INVALID');
+});
+
+test('assistant records immutable-shaped completed and failed run records', async () => {
+  const { service, tools, workspace } = await fixture();
+  const repository = service.repository;
+  const success = { async complete() { return { text: 'Completed answer', provider: 'local', model: 'model-l', usage: { inputTokens: 2, outputTokens: 3, totalTokens: 5 } }; } };
+  const assistant = new AtlasAssistant(success, tools, { repository, clock: () => '2026-07-10T13:00:00.000Z' });
+  const answer = await assistant.query({ workspaceId: workspace.id, userId: 'usr_1', prompt: 'Summarize' });
+  assert.match(answer.runId, /^air_/);
+  let runs = await assistant.listRuns(workspace.id);
+  assert.equal(runs[0].status, 'completed');
+  assert.equal(runs[0].answer, 'Completed answer');
+  assert.deepEqual(runs[0].usage, { inputTokens: 2, outputTokens: 3, totalTokens: 5 });
+  const failed = new AtlasAssistant({ async complete() { throw new AtlasError('AI_PROVIDER_ERROR', 'failed', 502, { provider: 'local' }); } }, tools, { repository });
+  await assert.rejects(() => failed.query({ workspaceId: workspace.id, userId: 'usr_1', prompt: 'Fail safely' }), (error) => error.code === 'AI_PROVIDER_ERROR');
+  runs = await failed.listRuns(workspace.id);
+  assert.equal(runs[0].status, 'failed');
+  assert.equal(runs[0].errorCode, 'AI_PROVIDER_ERROR');
+  assert.equal(runs[0].answer, null);
 });

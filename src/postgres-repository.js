@@ -41,6 +41,14 @@ function passwordReset(row) {
 function loginThrottle(row) {
   return { principalHash: row.principal_hash, failedCount: row.failed_count, windowStartedAt: iso(row.window_started_at), lockedUntil: iso(row.locked_until), updatedAt: iso(row.updated_at) };
 }
+function aiRun(row) {
+  return {
+    id: row.id, workspaceId: row.workspace_id, actorId: row.actor_id, status: row.status,
+    prompt: row.prompt, answer: row.answer, provider: row.provider, model: row.model,
+    sources: row.sources, toolCalls: row.tool_calls, usage: row.usage,
+    errorCode: row.error_code, createdAt: iso(row.created_at)
+  };
+}
 
 export class PostgresRepository {
   constructor(executor, pool = executor) {
@@ -358,5 +366,21 @@ export class PostgresRepository {
     if (objectId) { values.push(objectId); sql += ' AND object_id = $2'; }
     const result = await this.executor.query(`${sql} ORDER BY created_at, id`, values);
     return result.rows.map(audit);
+  }
+
+  async createAiRun(value) {
+    const result = await this.executor.query(
+      `INSERT INTO atlas_ai_run
+       (id, workspace_id, actor_id, status, prompt, answer, provider, model, sources, tool_calls, usage, error_code, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [value.id, value.workspaceId, value.actorId, value.status, value.prompt, value.answer,
+        value.provider, value.model, value.sources, value.toolCalls, value.usage, value.errorCode, value.createdAt]);
+    return aiRun(result.rows[0]);
+  }
+
+  async listAiRuns(workspaceId, limit = 50) {
+    const result = await this.executor.query(
+      'SELECT * FROM atlas_ai_run WHERE workspace_id = $1 ORDER BY created_at DESC, id LIMIT $2', [workspaceId, limit]);
+    return result.rows.map(aiRun);
   }
 }

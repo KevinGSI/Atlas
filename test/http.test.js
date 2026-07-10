@@ -31,7 +31,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.12.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.13.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -244,7 +244,7 @@ test('authenticated assistant endpoint is workspace-scoped and source-aware', as
     assert.equal(input.context.userId.startsWith('usr_'), true);
     return { text: 'Your highest-priority matter is ready for review.' };
   } };
-  const assistant = new AtlasAssistant(model, new AtlasToolRegistry(service));
+  const assistant = new AtlasAssistant(model, new AtlasToolRegistry(service), { repository });
   const handler = createAtlasHandler(service, {
     config: { maxBodyBytes: 1_048_576, corsOrigins: [] }, ready: async () => true, identity, assistant
   });
@@ -256,6 +256,11 @@ test('authenticated assistant endpoint is workspace-scoped and source-aware', as
   });
   assert.equal(response.status, 200);
   assert.equal(response.body.data.answer, 'Your highest-priority matter is ready for review.');
+  const history = await json(handler, `/v1/workspaces/${workspace.id}/assistant/runs`, { headers });
+  assert.equal(history.status, 200);
+  assert.equal(history.body.data.length, 1);
+  assert.equal(history.body.data[0].status, 'completed');
+  assert.equal(history.body.data[0].prompt, 'What matters today?');
 });
 
 test('assistant endpoint reports unavailable providers without pretending AI ran', async () => {

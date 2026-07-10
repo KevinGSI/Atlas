@@ -148,3 +148,18 @@ test('PostgreSQL password reset stores only hashes and locks tokens before consu
   await repository.invalidatePasswordResetsForUser('usr_1', timestamp);
   assert.match(calls[3].sql, /user_id = \$1 AND used_at IS NULL/);
 });
+
+test('PostgreSQL AI run ledger persists complete accountability fields and scopes history', async () => {
+  const calls = [];
+  const value = { id: 'air_1', workspaceId: 'wsp_1', actorId: 'usr_1', status: 'completed', prompt: 'Summarize', answer: 'Answer', provider: 'openai', model: 'model-a', sources: [{ objectId: 'obj_1' }], toolCalls: 1, usage: { inputTokens: 2, outputTokens: 3, totalTokens: 5 }, errorCode: null, createdAt: timestamp };
+  const row = { id: value.id, workspace_id: value.workspaceId, actor_id: value.actorId, status: value.status, prompt: value.prompt, answer: value.answer, provider: value.provider, model: value.model, sources: value.sources, tool_calls: value.toolCalls, usage: value.usage, error_code: null, created_at: timestamp };
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rows: [row] }; } };
+  const repository = new PostgresRepository(pool);
+  const run = await repository.createAiRun(value);
+  assert.equal(run.usage.totalTokens, 5);
+  assert.match(calls[0].sql, /INSERT INTO atlas_ai_run/);
+  assert.deepEqual(calls[0].values[8], [{ objectId: 'obj_1' }]);
+  await repository.listAiRuns('wsp_1', 25);
+  assert.match(calls[1].sql, /workspace_id = \$1.*LIMIT \$2/);
+  assert.deepEqual(calls[1].values, ['wsp_1', 25]);
+});

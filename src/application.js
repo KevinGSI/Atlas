@@ -26,7 +26,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     deliverPasswordReset: dependencies.deliverPasswordReset
   });
   const providers = createAiProviderRegistry(config, dependencies);
-  const assistant = new AtlasAssistant(dependencies.aiModel ?? providers.resolve(config.aiProvider), new AtlasToolRegistry(service));
+  const assistant = new AtlasAssistant(dependencies.aiModel ?? providers.resolve(config.aiProvider), new AtlasToolRegistry(service), { repository: runtime.repository });
   const server = createAtlasServer(service, { config, ready: runtime.ready, identity, assistant });
   await new Promise((resolve, reject) => {
     server.once('error', reject);

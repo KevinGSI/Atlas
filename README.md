@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.12.0` adds an interchangeable AI-provider registry and the first OpenAI Responses API adapter behind Atlas’s neutral model contract.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.13.0` adds an immutable, workspace-scoped AI execution ledger for completed and failed assistant runs.
 
 ## Implemented
 
@@ -45,6 +45,10 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Provider-neutral state, usage, errors, messages, tool calls, and responses
 - OpenAI Responses API translation isolated in one adapter with no OpenAI dependency in core orchestration
 - Interchangeable injected-provider registration for future hosted or local models
+- Immutable AI run records for prompt, actor, outcome, provider/model, sources, tool count, and token usage
+- Sanitized failed-run records without stack traces or credentials
+- Authorized `GET /v1/workspaces/:workspaceId/assistant/runs` history endpoint
+- PostgreSQL triggers rejecting AI-ledger updates and deletions
 
 ## Local development
 
@@ -124,6 +128,12 @@ The runtime accepts providers implementing `complete({ messages, tools, context,
 For the initial OpenAI adapter, set `AI_PROVIDER=openai`, `AI_MODEL` to an explicitly selected model ID, and `OPENAI_API_KEY`. `OPENAI_BASE_URL` defaults to `https://api.openai.com/v1`. The adapter uses the Responses API, keeps remote storage disabled, preserves provider response state locally for tool rounds, and normalizes token usage and provider errors before returning control to Atlas.
 
 Other providers are registered through the same `AiProviderRegistry`; legal tools and workflows do not import or reference the OpenAI adapter.
+
+## AI accountability ledger
+
+Every assistant request receives a stable `runId`. Completed runs record the answer, source objects, tool count, provider/model identity, and normalized usage. Failed runs record the prompt, actor, timestamp, provider when known, and a sanitized Atlas error code. The ledger is workspace-scoped and append-only; PostgreSQL rejects updates and deletions.
+
+Authorized users can review recent execution records through `GET /v1/workspaces/:workspaceId/assistant/runs?limit=50`. Prompts and answers may contain privileged information, so production deployments must apply encryption, retention, export, and deletion policies consistent with legal and contractual obligations.
 
 ## Object mutation and audit
 

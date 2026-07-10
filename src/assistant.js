@@ -1,4 +1,5 @@
 import { AtlasError, required } from './errors.js';
+import { createId } from './ids.js';
 
 function boundedLimit(value, fallback = 10) {
   const limit = value ?? fallback;
@@ -77,9 +78,11 @@ export class AtlasAssistant {
     this.maxToolRounds = options.maxToolRounds ?? 4;
     this.maxToolCalls = options.maxToolCalls ?? 8;
     this.maxPromptCharacters = options.maxPromptCharacters ?? 8_000;
+    this.repository = options.repository ?? null;
+    this.clock = options.clock ?? (() => new Date().toISOString());
   }
 
-  async query({ workspaceId, userId, prompt }) {
+  async executeQuery({ workspaceId, userId, prompt }) {
     if (!this.model) throw new AtlasError('AI_NOT_CONFIGURED', 'Atlas AI provider is not configured', 503);
     const text = required(prompt, 'prompt').trim();
     if (text.length > this.maxPromptCharacters) throw new AtlasError('AI_PROMPT_TOO_LARGE', 'AI prompt is too large', 413);
@@ -115,5 +118,38 @@ export class AtlasAssistant {
       }
     }
     throw new AtlasError('AI_INVALID_RESPONSE', 'Atlas AI did not produce an answer', 502);
+  }
+
+  async query(input) {
+    const runId = createId('air');
+    const auditPrompt = String(input.prompt ?? '').slice(0, this.maxPromptCharacters);
+    try {
+      const result = await this.executeQuery(input);
+      if (this.repository) await this.repository.createAiRun({
+        id: runId, workspaceId: input.workspaceId, actorId: input.userId, status: 'completed',
+        prompt: auditPrompt, answer: result.answer, provider: result.provider ?? null, model: result.model ?? null,
+        sources: result.sources, toolCalls: result.toolCalls, usage: result.usage,
+        errorCode: null, createdAt: this.clock()
+      });
+      return { ...result, runId };
+    } catch (error) {
+      if (this.repository) {
+        try {
+          await this.repository.createAiRun({
+            id: runId, workspaceId: input.workspaceId, actorId: input.userId, status: 'failed',
+            prompt: auditPrompt, answer: null, provider: error.details?.provider ?? null, model: null,
+            sources: [], toolCalls: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+            errorCode: error instanceof AtlasError ? error.code : 'INTERNAL_ERROR', createdAt: this.clock()
+          });
+        } catch { /* Preserve the original execution failure. */ }
+      }
+      throw error;
+    }
+  }
+
+  async listRuns(workspaceId, limit = 50) {
+    if (!this.repository) throw new AtlasError('AI_AUDIT_NOT_CONFIGURED', 'AI audit repository is not configured', 503);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new AtlasError('VALIDATION_ERROR', 'limit must be between 1 and 100', 400);
+    return this.repository.listAiRuns(workspaceId, limit);
   }
 }
