@@ -1,8 +1,16 @@
-# Atlas Core 0.34.0 — CMS Tombstone Reconciliation Status
+# Atlas Core 0.35.0 — Digital Twin Command Surface Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.33.3`
+- Everything verified through Atlas Core `0.34.0`
+- Prominent connected `What do you need?` command surface on the authenticated homepage
+- Commands execute through the authorized digital-twin assistant endpoint
+- Persistent multi-turn conversation identity within the signed-in session
+- Twin responses display canonical source-object references
+- Tasks, email drafts, and legal-document drafts render inside the response that proposed them
+- Existing human approval and rejection controls reused without a parallel execution path
+- Explicit UI confirmation that proposals remain unsent and unfiled
+- Suggested commands for daily priorities, recent matters, motions to compel, and task preparation
 - Provider-neutral CMS deletion and archive normalization
 - Source tombstones preserve canonical Atlas objects instead of deleting them
 - Reconciliation state and source-deletion timestamps retained on durable CMS links

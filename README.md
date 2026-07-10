@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.34.0` adds safe CMS tombstone reconciliation: source deletions are preserved in Atlas, recorded canonically, deduplicated, and converted into reviewable retention work.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.35.0` makes “What do you need?” the connected command surface for the continuously aware firm twin, including sourced responses and reviewable task or draft proposals.
 
 ## Implemented
 

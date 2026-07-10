@@ -31,12 +31,12 @@ async function json(handler, url, options = {}) {
 
 async function raw(handler,url){const request=Readable.from([]);request.method='GET';request.url=url;request.headers={};return new Promise((resolve,reject)=>{const response={writeHead(status,headers){this.status=status;this.headers=headers;},end(body){resolve({status:this.status,headers:this.headers,body:Buffer.from(body).toString('utf8')});}};Promise.resolve(handler(request,response)).catch(reject);});}
 
-test('serves the connected phase-one client from the application origin',async()=>{const handler=fixture();const page=await raw(handler,'/');assert.equal(page.status,200);assert.match(page.headers['content-type'],/text\/html/);assert.match(page.body,/While You Were Gone/);const script=await raw(handler,'/app.js');assert.match(script.headers['content-type'],/javascript/);assert.match(script.body,/authorization:`Bearer/);assert.match(script.body,/assistant\/actions/);assert.match(script.body,/Approve draft/);assert.match(script.body,/intelligence\/observations/);assert.match(script.body,/Accept/);});
+test('serves the connected phase-one client from the application origin',async()=>{const handler=fixture();const page=await raw(handler,'/');assert.equal(page.status,200);assert.match(page.headers['content-type'],/text\/html/);assert.match(page.body,/While You Were Gone/);assert.match(page.body,/continuously aware digital twin/);assert.match(page.body,/commandForm/);const script=await raw(handler,'/app.js');assert.match(script.headers['content-type'],/javascript/);assert.match(script.body,/authorization:`Bearer/);assert.match(script.body,/assistant\/query/);assert.match(script.body,/conversationId/);assert.match(script.body,/actionProposals/);assert.match(script.body,/assistant\/actions/);assert.match(script.body,/Approve draft/);assert.match(script.body,/intelligence\/observations/);assert.match(script.body,/Accept/);});
 
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.34.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.35.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
