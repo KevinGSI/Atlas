@@ -60,6 +60,54 @@ export class AtlasService {
   async getObject(workspaceId, id) { return this.repository.getObject(workspaceId, id); }
   async listObjects(workspaceId, filters) { return this.repository.listObjects(workspaceId, filters); }
 
+  buildAudit(workspaceId, objectId, actorId, action, beforeSnapshot, afterSnapshot) {
+    return { id: createId('aud'), workspaceId, objectId, actorId, action, beforeSnapshot, afterSnapshot, createdAt: this.clock() };
+  }
+
+  validateVersion(version) {
+    if (!Number.isInteger(version) || version < 1) throw new AtlasError('VALIDATION_ERROR', 'version must be a positive integer', 400);
+    return version;
+  }
+
+  async updateObject(workspaceId, objectId, input, actorId = 'system') {
+    const version = this.validateVersion(input.version);
+    const changes = {};
+    if (input.title !== undefined) changes.title = required(input.title, 'title');
+    if (input.state !== undefined) changes.state = input.state;
+    if (!Object.keys(changes).length) throw new AtlasError('VALIDATION_ERROR', 'At least one editable field is required', 400);
+    return this.repository.transaction(async (repository) => {
+      const before = await repository.getObject(workspaceId, objectId);
+      const after = await repository.updateObject(workspaceId, objectId, version, changes, this.clock());
+      await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: objectId, type: 'object.updated', actorId, source: 'atlas', data: { version: after.version } }));
+      await repository.createAudit(this.buildAudit(workspaceId, objectId, actorId, 'object.updated', before, after));
+      return after;
+    });
+  }
+
+  async deleteObject(workspaceId, objectId, input, actorId = 'system') {
+    const version = this.validateVersion(input.version);
+    return this.repository.transaction(async (repository) => {
+      const before = await repository.getObject(workspaceId, objectId);
+      await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: objectId, type: 'object.deleted', actorId, source: 'atlas', data: { previousVersion: before.version } }));
+      const after = await repository.softDeleteObject(workspaceId, objectId, version, this.clock());
+      await repository.createAudit(this.buildAudit(workspaceId, objectId, actorId, 'object.deleted', before, after));
+      return after;
+    });
+  }
+
+  async restoreObject(workspaceId, objectId, input, actorId = 'system') {
+    const version = this.validateVersion(input.version);
+    return this.repository.transaction(async (repository) => {
+      const before = await repository.getObject(workspaceId, objectId, { includeDeleted: true });
+      const after = await repository.restoreObject(workspaceId, objectId, version, this.clock());
+      await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: objectId, type: 'object.restored', actorId, source: 'atlas', data: { version: after.version } }));
+      await repository.createAudit(this.buildAudit(workspaceId, objectId, actorId, 'object.restored', before, after));
+      return after;
+    });
+  }
+
+  async listAudits(workspaceId, objectId) { return this.repository.listAudits(workspaceId, objectId); }
+
   async createRelationship(workspaceId, input) {
     const fromObjectId = required(input.fromObjectId, 'fromObjectId');
     const toObjectId = required(input.toObjectId, 'toObjectId');

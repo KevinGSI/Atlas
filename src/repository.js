@@ -11,13 +11,14 @@ export class InMemoryRepository {
   #events = new Map();
   #users = new Map();
   #memberships = new Map();
+  #audits = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits] = snapshot;
       throw error;
     }
   }
@@ -40,12 +41,37 @@ export class InMemoryRepository {
     return clone(object);
   }
 
-  getObject(workspaceId, id) {
+  getObject(workspaceId, id, options = {}) {
     const object = this.#objects.get(id);
-    if (!object || object.workspaceId !== workspaceId || object.deletedAt) {
+    if (!object || object.workspaceId !== workspaceId || (object.deletedAt && !options.includeDeleted)) {
       throw new AtlasError('OBJECT_NOT_FOUND', 'Object not found', 404);
     }
     return clone(object);
+  }
+
+  updateObject(workspaceId, id, expectedVersion, changes, updatedAt) {
+    const current = this.getObject(workspaceId, id);
+    if (current.version !== expectedVersion) throw new AtlasError('VERSION_CONFLICT', 'Object version is stale', 409, { currentVersion: current.version });
+    const updated = { ...current, ...changes, state: changes.state ?? current.state, version: current.version + 1, updatedAt };
+    this.#objects.set(id, clone(updated));
+    return clone(updated);
+  }
+
+  softDeleteObject(workspaceId, id, expectedVersion, deletedAt) {
+    const current = this.getObject(workspaceId, id);
+    if (current.version !== expectedVersion) throw new AtlasError('VERSION_CONFLICT', 'Object version is stale', 409, { currentVersion: current.version });
+    const updated = { ...current, deletedAt, updatedAt: deletedAt, version: current.version + 1 };
+    this.#objects.set(id, clone(updated));
+    return clone(updated);
+  }
+
+  restoreObject(workspaceId, id, expectedVersion, updatedAt) {
+    const current = this.getObject(workspaceId, id, { includeDeleted: true });
+    if (!current.deletedAt) throw new AtlasError('OBJECT_NOT_DELETED', 'Object is not deleted', 409);
+    if (current.version !== expectedVersion) throw new AtlasError('VERSION_CONFLICT', 'Object version is stale', 409, { currentVersion: current.version });
+    const updated = { ...current, deletedAt: null, updatedAt, version: current.version + 1 };
+    this.#objects.set(id, clone(updated));
+    return clone(updated);
   }
 
   listObjects(workspaceId, filters = {}) {
@@ -129,5 +155,19 @@ export class InMemoryRepository {
 
   listMemberships(workspaceId) {
     return [...this.#memberships.values()].filter((item) => item.workspaceId === workspaceId).map(clone);
+  }
+
+  createAudit(audit) {
+    this.#audits.set(audit.id, clone(audit));
+    return clone(audit);
+  }
+
+  listAudits(workspaceId, objectId) {
+    this.getWorkspace(workspaceId);
+    return [...this.#audits.values()]
+      .filter((item) => item.workspaceId === workspaceId)
+      .filter((item) => !objectId || item.objectId === objectId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map(clone);
   }
 }

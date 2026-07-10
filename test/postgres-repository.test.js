@@ -69,3 +69,26 @@ test('PostgreSQL membership lookup is scoped by workspace and user', async () =>
   assert.match(calls[0].sql, /workspace_id = \$1 AND user_id = \$2/);
   assert.deepEqual(calls[0].values, ['wsp_1', 'usr_1']);
 });
+
+test('PostgreSQL optimistic update constrains workspace, id, version, and deletion state', async () => {
+  const calls = [];
+  const base = { id: 'obj_1', workspace_id: 'wsp_1', parent_object_id: null, dimension: 'matter', type: 'civil', title: 'Before', state: {}, version: 1, created_at: timestamp, updated_at: timestamp, deleted_at: null };
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rows: [sql.startsWith('SELECT') ? base : { ...base, title: 'After', version: 2 }] }; } };
+  const repository = new PostgresRepository(pool);
+  const updated = await repository.updateObject('wsp_1', 'obj_1', 1, { title: 'After' }, timestamp);
+  assert.equal(updated.version, 2);
+  assert.match(calls[1].sql, /version = \$3 AND deleted_at IS NULL/);
+  assert.deepEqual(calls[1].values.slice(0, 3), ['wsp_1', 'obj_1', 1]);
+});
+
+test('PostgreSQL audit adapter persists complete before and after snapshots', async () => {
+  const calls = [];
+  const value = { id: 'aud_1', workspaceId: 'wsp_1', objectId: 'obj_1', actorId: 'usr_1', action: 'object.updated', beforeSnapshot: { version: 1 }, afterSnapshot: { version: 2 }, createdAt: timestamp };
+  const row = { id: value.id, workspace_id: value.workspaceId, object_id: value.objectId, actor_id: value.actorId, action: value.action, before_snapshot: value.beforeSnapshot, after_snapshot: value.afterSnapshot, created_at: timestamp };
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rows: [row] }; } };
+  const repository = new PostgresRepository(pool);
+  const audit = await repository.createAudit(value);
+  assert.equal(audit.afterSnapshot.version, 2);
+  assert.match(calls[0].sql, /INSERT INTO atlas_audit_entry/);
+  assert.deepEqual(calls[0].values[5], { version: 1 });
+});

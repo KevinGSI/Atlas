@@ -95,3 +95,45 @@ test('rolls back object creation when its timeline event fails', async () => {
   );
   assert.deepEqual(await service.listObjects(workspace.id, {}), []);
 });
+
+test('updates objects with optimistic concurrency and append-only audit snapshots', async () => {
+  const { service, workspace } = await fixture();
+  const object = await service.createObject(workspace.id, { dimension: 'matter', type: 'civil', title: 'Original' });
+  const updated = await service.updateObject(workspace.id, object.id, { version: 1, title: 'Amended', state: { ownerId: 'usr_1' } }, 'usr_1');
+  assert.equal(updated.version, 2);
+  assert.equal(updated.title, 'Amended');
+  await assert.rejects(() => service.updateObject(workspace.id, object.id, { version: 1, title: 'Stale' }, 'usr_1'), (error) => error.code === 'VERSION_CONFLICT');
+  const audits = await service.listAudits(workspace.id, object.id);
+  assert.equal(audits.length, 1);
+  assert.equal(audits[0].action, 'object.updated');
+  assert.equal(audits[0].beforeSnapshot.title, 'Original');
+  assert.equal(audits[0].afterSnapshot.title, 'Amended');
+});
+
+test('soft deletes and restores objects with sequential versions and audit history', async () => {
+  const { service, workspace } = await fixture();
+  const object = await service.createObject(workspace.id, { dimension: 'evidence', type: 'video', title: 'BWC' });
+  const deleted = await service.deleteObject(workspace.id, object.id, { version: 1 }, 'usr_1');
+  assert.equal(deleted.version, 2);
+  assert.ok(deleted.deletedAt);
+  await assert.rejects(() => service.getObject(workspace.id, object.id), (error) => error.code === 'OBJECT_NOT_FOUND');
+  const restored = await service.restoreObject(workspace.id, object.id, { version: 2 }, 'usr_1');
+  assert.equal(restored.version, 3);
+  assert.equal(restored.deletedAt, null);
+  assert.deepEqual((await service.listAudits(workspace.id, object.id)).map((entry) => entry.action), ['object.deleted', 'object.restored']);
+});
+
+test('rolls back an object update when audit persistence fails', async () => {
+  class FailingAuditRepository extends InMemoryRepository {
+    async createAudit() { throw new Error('forced audit failure'); }
+  }
+  const repository = new FailingAuditRepository();
+  const service = new AtlasService(repository);
+  const workspace = await service.createWorkspace({ name: 'Audit Rollback' });
+  const object = await service.createObject(workspace.id, { dimension: 'matter', type: 'civil', title: 'Before' });
+  await assert.rejects(() => service.updateObject(workspace.id, object.id, { version: 1, title: 'After' }, 'usr_1'), /forced audit failure/);
+  const persisted = await service.getObject(workspace.id, object.id);
+  assert.equal(persisted.title, 'Before');
+  assert.equal(persisted.version, 1);
+  assert.equal((await service.listEvents(workspace.id, object.id)).filter((event) => event.type === 'object.updated').length, 0);
+});

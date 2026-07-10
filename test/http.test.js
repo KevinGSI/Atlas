@@ -30,7 +30,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.4.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.5.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -119,6 +119,28 @@ test('authenticated HTTP flow enforces workspace roles', async () => {
   assert.equal(deniedWrite.body.error.code, 'ACCESS_DENIED');
   const allowedRead = await json(handler, `/v1/workspaces/${workspaceId}/objects`, { headers: bearer(viewer.accessToken) });
   assert.equal(allowedRead.status, 200);
+  const created = await json(handler, `/v1/workspaces/${workspaceId}/objects`, {
+    method: 'POST', headers: bearer(owner.accessToken), body: JSON.stringify({ dimension: 'matter', type: 'civil', title: 'Versioned matter' })
+  });
+  const objectId = created.body.data.id;
+  const updated = await json(handler, `/v1/workspaces/${workspaceId}/objects/${objectId}`, {
+    method: 'PATCH', headers: bearer(owner.accessToken), body: JSON.stringify({ version: 1, title: 'Updated matter' })
+  });
+  assert.equal(updated.body.data.version, 2);
+  const stale = await json(handler, `/v1/workspaces/${workspaceId}/objects/${objectId}`, {
+    method: 'PATCH', headers: bearer(owner.accessToken), body: JSON.stringify({ version: 1, title: 'Stale update' })
+  });
+  assert.equal(stale.status, 409);
+  const deleted = await json(handler, `/v1/workspaces/${workspaceId}/objects/${objectId}`, {
+    method: 'DELETE', headers: bearer(owner.accessToken), body: JSON.stringify({ version: 2 })
+  });
+  assert.equal(deleted.body.data.version, 3);
+  const restored = await json(handler, `/v1/workspaces/${workspaceId}/objects/${objectId}/restore`, {
+    method: 'POST', headers: bearer(owner.accessToken), body: JSON.stringify({ version: 3 })
+  });
+  assert.equal(restored.body.data.version, 4);
+  const audits = await json(handler, `/v1/workspaces/${workspaceId}/audit?objectId=${objectId}`, { headers: bearer(owner.accessToken) });
+  assert.deepEqual(audits.body.data.map((entry) => entry.action), ['object.updated', 'object.deleted', 'object.restored']);
   const missingToken = await json(handler, `/v1/workspaces/${workspaceId}`);
   assert.equal(missingToken.status, 401);
   assert.equal(missingToken.body.error.code, 'AUTHENTICATION_REQUIRED');

@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.4.0` adds authenticated users and workspace role enforcement to the deployable staging foundation.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.5.0` adds optimistic object mutation, soft deletion/restoration, and an append-only audit ledger.
 
 ## Implemented
 
@@ -18,6 +18,8 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Scrypt password hashing and signed short-lived access tokens
 - Owner, admin, member, and viewer workspace roles
 - Protected workspace routes and membership administration
+- Version-checked object updates, soft deletion, and restoration
+- Atomic timeline and before/after audit records for every mutation
 
 ## Local development
 
@@ -77,6 +79,17 @@ Authorization: Bearer <accessToken>
 ```
 
 Creating a workspace atomically makes the authenticated creator its owner. Owners and admins can add memberships through `POST /v1/workspaces/:workspaceId/memberships`.
+
+## Object mutation and audit
+
+Updates, deletion, and restoration require the object's current `version`. Stale writes return `409 VERSION_CONFLICT` instead of overwriting newer work.
+
+```text
+PATCH  /v1/workspaces/:workspaceId/objects/:objectId
+DELETE /v1/workspaces/:workspaceId/objects/:objectId
+POST   /v1/workspaces/:workspaceId/objects/:objectId/restore
+GET    /v1/workspaces/:workspaceId/audit?objectId=:objectId
+```
 
 ## Verification
 

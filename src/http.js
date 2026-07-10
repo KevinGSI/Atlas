@@ -34,7 +34,7 @@ function corsHeaders(origin, config) {
   }
   return {
     'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
     'access-control-allow-headers': 'authorization,content-type,x-atlas-request-id',
     'access-control-max-age': '600',
     vary: 'Origin'
@@ -60,6 +60,10 @@ function route(method, pathname) {
     ['POST', /^\/v1\/workspaces\/([^/]+)\/objects$/, 'createObject'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/objects$/, 'listObjects'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)$/, 'getObject'],
+    ['PATCH', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)$/, 'updateObject'],
+    ['DELETE', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)$/, 'deleteObject'],
+    ['POST', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)\/restore$/, 'restoreObject'],
+    ['GET', /^\/v1\/workspaces\/([^/]+)\/audit$/, 'listAudits'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/relationships$/, 'createRelationship'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)\/graph$/, 'graph'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/events$/, 'createEvent'],
@@ -90,14 +94,14 @@ export function createAtlasHandler(service, options = {}) {
       const publicRoute = ['health', 'live', 'ready', 'register', 'login'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId) {
-        const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships'].includes(match.name)
+        const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits'].includes(match.name)
           ? 'workspace:read' : match.name === 'createMembership' ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
       let result;
       switch (match.name) {
-        case 'health': case 'live': result = { status: 'ok', version: '0.4.0' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.4.0' }; break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.5.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.5.0' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes)); break;
         case 'createWorkspace': result = await service.createWorkspace(await readJson(request, config.maxBodyBytes), user?.id); break;
@@ -107,6 +111,10 @@ export function createAtlasHandler(service, options = {}) {
         case 'createObject': result = await service.createObject(workspaceId, await readJson(request, config.maxBodyBytes)); break;
         case 'listObjects': result = await service.listObjects(workspaceId, { type: url.searchParams.get('type'), dimension: url.searchParams.get('dimension') }); break;
         case 'getObject': result = await service.getObject(workspaceId, objectId); break;
+        case 'updateObject': result = await service.updateObject(workspaceId, objectId, await readJson(request, config.maxBodyBytes), user?.id); break;
+        case 'deleteObject': result = await service.deleteObject(workspaceId, objectId, await readJson(request, config.maxBodyBytes), user?.id); break;
+        case 'restoreObject': result = await service.restoreObject(workspaceId, objectId, await readJson(request, config.maxBodyBytes), user?.id); break;
+        case 'listAudits': result = await service.listAudits(workspaceId, url.searchParams.get('objectId')); break;
         case 'createRelationship': result = await service.createRelationship(workspaceId, await readJson(request, config.maxBodyBytes)); break;
         case 'graph': result = await service.expandGraph(workspaceId, objectId); break;
         case 'createEvent': result = await service.createEvent(workspaceId, await readJson(request, config.maxBodyBytes)); break;

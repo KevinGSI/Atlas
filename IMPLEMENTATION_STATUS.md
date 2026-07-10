@@ -1,40 +1,45 @@
-# Atlas Core 0.4.0 — Implementation Status
+# Atlas Core 0.5.0 — Implementation Status
 
 ## Verified as implemented
 
-- Everything verified in Atlas Core `0.1.0` through `0.3.0`
-- User registration with normalized unique email addresses
-- Memory-hard `scrypt` password hashing with unique 128-bit salts
-- Constant-time password and token signature comparison
-- Signed HS256 bearer access tokens with issuance and expiration times
-- Token tamper and expiration rejection
-- Production enforcement of a 32-character minimum signing secret
-- Workspace memberships with `owner`, `admin`, `member`, and `viewer` roles
-- Permission enforcement for workspace reads, writes, and membership administration
-- Atomic workspace and owner-membership creation
-- Authentication on every workspace API route in the real application runtime
-- PostgreSQL user and membership schema, indexes, repository methods, and constraints
-- Password hashes excluded from API registration and login responses
+- Everything verified in Atlas Core `0.1.0` through `0.4.0`
+- `PATCH` updates for canonical workspace objects
+- Client-supplied expected versions and optimistic-concurrency enforcement
+- Stable `409 VERSION_CONFLICT` responses with the current version
+- Soft deletion that removes objects from normal reads without destroying records
+- Explicit restoration of soft-deleted objects
+- Sequential version increments across update, delete, and restore
+- Append-only audit entries with complete before/after snapshots
+- Actor, action, workspace, object, and timestamp audit metadata
+- Audit filtering by object
+- Atomic object mutation, timeline event, and audit persistence
+- Forced-failure rollback coverage proving object and event changes are reverted
+- PostgreSQL update/delete/restore queries constrained by workspace, object, version, and deletion state
+- PostgreSQL triggers rejecting audit updates and deletions
 
 ## Verification completed here
 
-- 37 canonical tests covering domain, HTTP, deployment, persistence, identity, tokens, and roles
-- Wrong-password, token-tamper, token-expiry, missing-token, and viewer-write-denial tests
-- Real-socket registration, workspace ownership, authenticated access, and `401` rejection smoke test
-- Real listener, readiness, and shutdown lifecycle smoke tests inherited from `0.3.0`
-- Fresh package installation, Git-bundle reconstruction, and ZIP reconstruction
+- 42 canonical tests covering domain, HTTP, authentication, authorization, persistence, concurrency, audit, deployment, and rollback
+- End-to-end authenticated HTTP update, stale-write rejection, delete, restore, and audit flow
+- In-memory and PostgreSQL adapter transaction behavior
+- Migration and append-only trigger static verification
+- Fresh package, Git-bundle, and ZIP reconstruction checks
 
-## Security limitations still remaining
+## Explicitly not verified in this environment
 
-- No refresh-token rotation, revocation list, password reset, email verification, or MFA
-- No account lockout or distributed login rate limiting
-- No invitation acceptance workflow
-- No matter-specific ethical-wall permissions
-- No external identity provider or SSO
+- Audit triggers executed against a live PostgreSQL server
+- Concurrent writes from multiple real database connections
+- Database persistence and audit survival across restarts
+- Managed backup restoration
+
+## Security and product limitations still remaining
+
+- No refresh-token rotation, revocation, password reset, email verification, or MFA
+- No distributed rate limiting or account lockout
 - No encrypted evidence/file storage
-- No complete append-only audit ledger
+- No matter-specific ethical walls
 - No external penetration test
 
 ## Data-safety boundary
 
-Version `0.4.0` establishes a tested identity and workspace authorization foundation, but it is not yet approved for confidential client data. Refresh-token security, account recovery, auditability, evidence storage, backup restoration, and external security assessment remain mandatory production milestones.
+Version `0.5.0` provides the mutation and audit foundation needed for accountable legal workflows, but live PostgreSQL trigger behavior, encrypted evidence storage, account recovery, backup restoration, and external security testing remain required before confidential client data is approved.

@@ -27,6 +27,7 @@ function event(row) {
 }
 function user(row) { return { id: row.id, email: row.email, name: row.name, passwordHash: row.password_hash, createdAt: iso(row.created_at) }; }
 function membership(row) { return { id: row.id, workspaceId: row.workspace_id, userId: row.user_id, role: row.role, createdAt: iso(row.created_at) }; }
+function audit(row) { return { id: row.id, workspaceId: row.workspace_id, objectId: row.object_id, actorId: row.actor_id, action: row.action, beforeSnapshot: row.before_snapshot, afterSnapshot: row.after_snapshot, createdAt: iso(row.created_at) }; }
 
 export class PostgresRepository {
   constructor(executor, pool = executor) {
@@ -73,10 +74,41 @@ export class PostgresRepository {
     return object(result.rows[0]);
   }
 
-  async getObject(workspaceId, id) {
+  async getObject(workspaceId, id, options = {}) {
     const result = await this.executor.query(
-      'SELECT * FROM atlas_object WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL', [workspaceId, id]);
+      `SELECT * FROM atlas_object WHERE workspace_id = $1 AND id = $2${options.includeDeleted ? '' : ' AND deleted_at IS NULL'}`, [workspaceId, id]);
     if (!result.rows[0]) throw new AtlasError('OBJECT_NOT_FOUND', 'Object not found', 404);
+    return object(result.rows[0]);
+  }
+
+  async updateObject(workspaceId, id, expectedVersion, changes, updatedAt) {
+    const current = await this.getObject(workspaceId, id);
+    const result = await this.executor.query(
+      `UPDATE atlas_object SET title = $4, state = $5, version = version + 1, updated_at = $6
+       WHERE workspace_id = $1 AND id = $2 AND version = $3 AND deleted_at IS NULL RETURNING *`,
+      [workspaceId, id, expectedVersion, changes.title ?? current.title, changes.state ?? current.state, updatedAt]);
+    if (!result.rows[0]) throw new AtlasError('VERSION_CONFLICT', 'Object version is stale', 409, { currentVersion: current.version });
+    return object(result.rows[0]);
+  }
+
+  async softDeleteObject(workspaceId, id, expectedVersion, deletedAt) {
+    const current = await this.getObject(workspaceId, id);
+    const result = await this.executor.query(
+      `UPDATE atlas_object SET deleted_at = $4, updated_at = $4, version = version + 1
+       WHERE workspace_id = $1 AND id = $2 AND version = $3 AND deleted_at IS NULL RETURNING *`,
+      [workspaceId, id, expectedVersion, deletedAt]);
+    if (!result.rows[0]) throw new AtlasError('VERSION_CONFLICT', 'Object version is stale', 409, { currentVersion: current.version });
+    return object(result.rows[0]);
+  }
+
+  async restoreObject(workspaceId, id, expectedVersion, updatedAt) {
+    const current = await this.getObject(workspaceId, id, { includeDeleted: true });
+    if (!current.deletedAt) throw new AtlasError('OBJECT_NOT_DELETED', 'Object is not deleted', 409);
+    const result = await this.executor.query(
+      `UPDATE atlas_object SET deleted_at = NULL, updated_at = $4, version = version + 1
+       WHERE workspace_id = $1 AND id = $2 AND version = $3 AND deleted_at IS NOT NULL RETURNING *`,
+      [workspaceId, id, expectedVersion, updatedAt]);
+    if (!result.rows[0]) throw new AtlasError('VERSION_CONFLICT', 'Object version is stale', 409, { currentVersion: current.version });
     return object(result.rows[0]);
   }
 
@@ -182,5 +214,22 @@ export class PostgresRepository {
     const result = await this.executor.query(
       'SELECT * FROM atlas_workspace_membership WHERE workspace_id = $1 ORDER BY created_at, id', [workspaceId]);
     return result.rows.map(membership);
+  }
+
+  async createAudit(value) {
+    const result = await this.executor.query(
+      `INSERT INTO atlas_audit_entry
+       (id, workspace_id, object_id, actor_id, action, before_snapshot, after_snapshot, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [value.id, value.workspaceId, value.objectId, value.actorId, value.action, value.beforeSnapshot, value.afterSnapshot, value.createdAt]);
+    return audit(result.rows[0]);
+  }
+
+  async listAudits(workspaceId, objectId) {
+    const values = [workspaceId];
+    let sql = 'SELECT * FROM atlas_audit_entry WHERE workspace_id = $1';
+    if (objectId) { values.push(objectId); sql += ' AND object_id = $2'; }
+    const result = await this.executor.query(`${sql} ORDER BY created_at, id`, values);
+    return result.rows.map(audit);
   }
 }
