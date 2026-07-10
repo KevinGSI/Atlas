@@ -15,6 +15,7 @@ test('Render Blueprint is valid and wires migrations, readiness, and PostgreSQL'
   assert.equal(service.envVars.find((item)=>item.key==='AI_MODEL').value,'gpt-5.6-sol');
   assert.equal(service.envVars.find((item)=>item.key==='OPENAI_API_KEY').sync,false);
   assert.equal(service.envVars.find((item)=>item.key==='AI_CONTENT_ENCRYPTION_KEY').sync,false);
+  assert.equal(service.envVars.find((item)=>item.key==='INGESTION_WEBHOOK_SECRETS').sync,false);
   assert.equal(blueprint.databases[0].name, 'atlas-postgres');
   const worker=blueprint.services.find((item)=>item.type==='worker');
   assert.equal(worker.dockerCommand,'node scripts/intelligence-worker.js');

@@ -1,8 +1,13 @@
-# Atlas Core 0.27.2 — GitHub OpenAI Evaluation Status
+# Atlas Core 0.28.0 — Secure Connector Webhook Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.27.1`
+- Everything verified through Atlas Core `0.27.2`
+- Workspace-scoped signed connector webhooks for email, calls, and documents
+- Exact-body HMAC-SHA256 signatures with constant-time verification
+- Timestamp freshness enforcement and five-minute replay window
+- Connector identity forced from the signed URL rather than untrusted payload data
+- Existing ingestion idempotency preventing duplicate intelligence work
 - Manual GitHub Actions OpenAI evaluation workflow
 - GitHub Secrets bindings for the OpenAI API and Atlas encryption keys
 - Secret-presence checks without value disclosure
@@ -71,7 +76,7 @@
 
 ## Verification completed here
 
-- 143 canonical tests passed locally across the complete non-live Atlas Core surface
+- 147 canonical tests passed locally across the complete non-live Atlas Core surface
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection
 - Live AI command environment and failure behavior verified locally
@@ -119,6 +124,7 @@
 - Execution of `pnpm test:ai` against a paid production model; no provider credentials were supplied here
 - OpenAI API authentication and model entitlement; `OPENAI_API_KEY` is not present in this workspace
 - Execution result of the GitHub OpenAI workflow; it will exist only after this commit is pushed and the workflow is manually run
+- Real vendor webhook delivery; no mailbox, telephony, or document vendor credentials were supplied here
 - A production KMS/HSM-backed vault, multi-instance scheduler locks, rate-limit behavior, or large-firm migration volumes
 - Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
 

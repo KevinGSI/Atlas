@@ -4,11 +4,11 @@ import { spawnSync } from 'node:child_process';
 const requiredFiles = [
   'package.json', 'pnpm-lock.yaml', 'README.md', 'IMPLEMENTATION_STATUS.md', '.env.example', 'docker-compose.yml',
   'Dockerfile', '.dockerignore', 'render.yaml', 'src/server.js', 'src/application.js', 'src/config.js',
-  'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js', 'src/ai-evaluation.js', 'src/content-security.js', 'src/ai-content-migration.js', 'src/intelligence.js', 'src/intelligence-projection.js', 'src/ingestion.js', 'src/resolution.js', 'src/cms-connectors.js', 'src/cms-provider-adapters.js', 'src/situational-awareness.js', 'src/phase-one-web.js', 'web/phase-one/index.html', 'web/phase-one/app.js', 'docs/NATIVE_INTELLIGENCE_CONSTITUTION.md', 'docs/NATIVE_INTELLIGENCE_VERIFICATION.md',
+  'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js', 'src/ai-evaluation.js', 'src/content-security.js', 'src/ai-content-migration.js', 'src/intelligence.js', 'src/intelligence-projection.js', 'src/ingestion.js', 'src/webhook-security.js', 'src/resolution.js', 'src/cms-connectors.js', 'src/cms-provider-adapters.js', 'src/situational-awareness.js', 'src/phase-one-web.js', 'web/phase-one/index.html', 'web/phase-one/app.js', 'docs/NATIVE_INTELLIGENCE_CONSTITUTION.md', 'docs/NATIVE_INTELLIGENCE_VERIFICATION.md',
   'src/postgres-repository.js', 'src/migrations.js', 'src/runtime.js',
   'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'db/migrations/0007_ai_run_ledger.sql', 'db/migrations/0008_ai_conversations.sql', 'db/migrations/0009_ai_action_proposals.sql', 'db/migrations/0010_ai_draft_actions.sql', 'db/migrations/0011_intelligence_jobs.sql', 'db/migrations/0012_intelligence_observations.sql', 'db/migrations/0013_ingestion_records.sql', 'db/migrations/0014_cms_coexistence.sql', 'db/migrations/0015_encrypted_secrets.sql', 'db/migrations/0016_situational_awareness.sql', 'test/service.test.js', 'test/http.test.js',
   'test/postgres-repository.test.js', 'test/migrations.test.js', 'test/config.test.js', 'test/runtime.test.js',
-  'test/deployment.test.js', 'test/live-postgres.test.js', 'test/identity.test.js', 'test/assistant.test.js', 'test/ai-providers.test.js', 'test/ai-evaluation.test.js', 'test/content-security.test.js', 'test/ai-content-migration.test.js', 'test/intelligence.test.js', 'test/ingestion.test.js', 'test/resolution.test.js', 'test/architecture.test.js', 'test/cms-connectors.test.js', 'test/situational-awareness.test.js', 'scripts/encrypt-ai-content.js', 'scripts/intelligence-worker.js', 'scripts/test-postgres.js', 'scripts/test-ai-provider.js', '.github/workflows/postgres-integration.yml', '.github/workflows/openai-evaluation.yml'
+  'test/deployment.test.js', 'test/live-postgres.test.js', 'test/identity.test.js', 'test/assistant.test.js', 'test/ai-providers.test.js', 'test/ai-evaluation.test.js', 'test/content-security.test.js', 'test/ai-content-migration.test.js', 'test/intelligence.test.js', 'test/ingestion.test.js', 'test/webhook-security.test.js', 'test/resolution.test.js', 'test/architecture.test.js', 'test/cms-connectors.test.js', 'test/situational-awareness.test.js', 'scripts/encrypt-ai-content.js', 'scripts/intelligence-worker.js', 'scripts/test-postgres.js', 'scripts/test-ai-provider.js', '.github/workflows/postgres-integration.yml', '.github/workflows/openai-evaluation.yml'
 ];
 
 const failures = [];
@@ -17,7 +17,7 @@ for (const file of requiredFiles) {
 }
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-if (pkg.version !== '0.27.2') failures.push(`expected version 0.27.2, got ${pkg.version}`);
+if (pkg.version !== '0.28.0') failures.push(`expected version 0.28.0, got ${pkg.version}`);
 
 const migration = await readFile('db/migrations/0001_initial.sql', 'utf8');
 for (const table of ['atlas_workspace', 'atlas_object', 'atlas_relationship', 'atlas_timeline_event']) {

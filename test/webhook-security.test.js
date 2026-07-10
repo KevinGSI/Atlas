@@ -1,0 +1,19 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import { Readable } from 'node:stream';
+import { IngestionWebhookVerifier } from '../src/webhook-security.js';
+import { InMemoryRepository } from '../src/repository.js';
+import { AtlasService } from '../src/service.js';
+import { AtlasIngestionService } from '../src/ingestion.js';
+import { createAtlasHandler } from '../src/http.js';
+
+const now=Date.parse('2026-07-10T12:00:00.000Z');const timestamp=Math.floor(now/1000);const secret='s'.repeat(32);
+function signed(body,workspaceId='wsp_1',connector='phone'){const raw=JSON.stringify(body);return {raw,headers:{'x-atlas-timestamp':String(timestamp),'x-atlas-signature':`sha256=${createHmac('sha256',secret).update(`${timestamp}.${raw}`).digest('hex')}`},workspaceId,connector};}
+async function call(handler,url,{raw,headers}){const request=Readable.from([Buffer.from(raw)]);request.method='POST';request.url=url;request.headers=headers;return new Promise((resolve)=>{const response={writeHead(status){this.status=status;},end(body){resolve({status:this.status,body:JSON.parse(body)})}};handler(request,response);});}
+
+test('signed connector webhook catalogs a phone call once without an attorney token',async()=>{const repository=new InMemoryRepository();const service=new AtlasService(repository,()=>new Date(now).toISOString());const workspace=await service.createWorkspace({name:'Webhook Firm'});const connector='phone';const verifier=new IngestionWebhookVerifier({[`${workspace.id}:${connector}`]:secret},{clock:()=>now});const handler=createAtlasHandler(service,{config:{maxBodyBytes:1_048_576,corsOrigins:[]},ingestion:new AtlasIngestionService(repository,()=>new Date(now).toISOString()),webhooks:verifier});const payload=signed({externalId:'call-hook-1',direction:'incoming',transcript:'Please return my call.'},workspace.id,connector);const url=`/v1/workspaces/${workspace.id}/webhooks/${connector}/phone-calls`;const first=await call(handler,url,payload);assert.equal(first.status,200);assert.equal(first.body.data.root.type,'phone_call');const duplicate=await call(handler,url,payload);assert.equal(duplicate.body.data.duplicate,true);assert.equal((await repository.listIntelligenceJobs(workspace.id)).filter((job)=>job.triggerType==='phone_call.received').length,1);});
+
+test('webhooks reject bad signatures stale timestamps and cross-workspace connector use',async()=>{const verifier=new IngestionWebhookVerifier({'wsp_1:phone':secret},{clock:()=>now});const valid=signed({externalId:'one'});const request=(headers)=>{const stream=Readable.from([Buffer.from(valid.raw)]);stream.headers=headers;return stream;};await assert.rejects(()=>verifier.verifyAndParse(request({...valid.headers,'x-atlas-signature':'sha256=bad'}),'wsp_1','phone',1000),(error)=>error.code==='WEBHOOK_SIGNATURE_INVALID');await assert.rejects(()=>verifier.verifyAndParse(request({...valid.headers,'x-atlas-timestamp':String(timestamp-301)}),'wsp_1','phone',1000),(error)=>error.code==='WEBHOOK_TIMESTAMP_INVALID');await assert.rejects(()=>verifier.verifyAndParse(request(valid.headers),'wsp_2','phone',1000),(error)=>error.code==='WEBHOOK_CONNECTOR_NOT_CONFIGURED');});
+
+test('webhook verification covers exact raw bytes and enforces payload limits',async()=>{const verifier=new IngestionWebhookVerifier({'wsp_1:phone':secret},{clock:()=>now});const valid=signed({externalId:'one'});const changed=Readable.from([Buffer.from(`${valid.raw} `)]);changed.headers=valid.headers;await assert.rejects(()=>verifier.verifyAndParse(changed,'wsp_1','phone',1000),(error)=>error.code==='WEBHOOK_SIGNATURE_INVALID');const oversized=Readable.from([Buffer.alloc(20)]);oversized.headers=valid.headers;await assert.rejects(()=>verifier.verifyAndParse(oversized,'wsp_1','phone',10),(error)=>error.code==='PAYLOAD_TOO_LARGE');});

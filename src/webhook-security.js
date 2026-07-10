@@ -1,0 +1,7 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import { AtlasError } from './errors.js';
+
+export class IngestionWebhookVerifier{
+  constructor(secrets={},options={}){this.secrets=secrets;this.maxSkewSeconds=options.maxSkewSeconds??300;this.clock=options.clock??(()=>Date.now());}
+  async verifyAndParse(request,workspaceId,connector,maxBodyBytes){const secret=this.secrets[`${workspaceId}:${connector}`];if(!secret)throw new AtlasError('WEBHOOK_CONNECTOR_NOT_CONFIGURED','Webhook connector is not configured',404);const timestamp=Number(request.headers?.['x-atlas-timestamp']);const supplied=String(request.headers?.['x-atlas-signature']??'').replace(/^sha256=/,'');if(!Number.isFinite(timestamp)||Math.abs(Math.floor(this.clock()/1000)-timestamp)>this.maxSkewSeconds)throw new AtlasError('WEBHOOK_TIMESTAMP_INVALID','Webhook timestamp is missing or stale',401);const chunks=[];let size=0;for await(const chunk of request){size+=chunk.length;if(size>maxBodyBytes)throw new AtlasError('PAYLOAD_TOO_LARGE','Request body is too large',413);chunks.push(chunk);}const body=Buffer.concat(chunks);const expected=createHmac('sha256',secret).update(`${timestamp}.`).update(body).digest('hex');const left=Buffer.from(expected);const right=Buffer.from(supplied);if(left.length!==right.length||!timingSafeEqual(left,right))throw new AtlasError('WEBHOOK_SIGNATURE_INVALID','Webhook signature is invalid',401);try{return JSON.parse(body.toString('utf8'));}catch{throw new AtlasError('INVALID_JSON','Request body must be valid JSON',400);}}
+}

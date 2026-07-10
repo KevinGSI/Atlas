@@ -92,6 +92,7 @@ function route(method, pathname) {
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/ingestions\/email$/, 'ingestEmail']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/ingestions\/phone-calls$/, 'ingestPhoneCall']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/ingestions\/documents$/, 'ingestDocument']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/webhooks\/([^/]+)\/(email|phone-calls|documents)$/, 'ingestWebhook']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/intelligence\/search$/, 'searchTwin']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/intelligence\/observations\/([^/]+)\/decision$/, 'decideIntelligenceObservation']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/cms\/([^/]+)\/authorize$/, 'beginCmsAuthorization']
@@ -114,6 +115,7 @@ export function createAtlasHandler(service, options = {}) {
   const identity = options.identity;
   const assistant = options.assistant;
   const ingestion = options.ingestion;
+  const webhooks = options.webhooks;
   const cms = options.cms;
   return async (request, response) => {
     const requestId = request.headers?.['x-atlas-request-id'] || randomUUID();
@@ -125,9 +127,9 @@ export function createAtlasHandler(service, options = {}) {
       const match = route(request.method, url.pathname);
       if (!match) throw new AtlasError('ROUTE_NOT_FOUND', 'Route not found', 404);
       const [workspaceId, objectId] = match.params;
-      const publicRoute = ['frontendIndex', 'frontendApp', 'health', 'live', 'ready', 'register', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'cmsOAuthCallback'].includes(match.name);
+      const publicRoute = ['frontendIndex', 'frontendApp', 'health', 'live', 'ready', 'register', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'cmsOAuthCallback', 'ingestWebhook'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
-      if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/')) {
+      if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/') && match.name!=='ingestWebhook') {
         const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsConnections', 'whileYouWereGone', 'updateAwarenessStatus'].includes(match.name)
           ? 'workspace:read' : match.name === 'createMembership' ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
@@ -135,8 +137,8 @@ export function createAtlasHandler(service, options = {}) {
       let result;
       switch (match.name) {
         case 'frontendIndex': case 'frontendApp': return sendAsset(response,await phaseOneAsset(match.name),headers);
-        case 'health': case 'live': result = { status: 'ok', version: '0.27.2' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.27.2' }; break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.28.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.28.0' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes)); break;
         case 'refresh': result = await identity.refresh(await readJson(request, config.maxBodyBytes)); break;
@@ -173,6 +175,7 @@ export function createAtlasHandler(service, options = {}) {
         case 'ingestEmail': result = await ingestion.ingestEmail(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'ingestPhoneCall': result = await ingestion.ingestPhoneCall(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'ingestDocument': result = await ingestion.ingestDocument(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
+        case 'ingestWebhook': {const connector=objectId;const kind=match.params[2];const input=await webhooks.verifyAndParse(request,workspaceId,connector,config.maxBodyBytes);const secured={...input,connector};result=kind==='email'?await ingestion.ingestEmail(workspaceId,secured,`connector:${connector}`):kind==='phone-calls'?await ingestion.ingestPhoneCall(workspaceId,secured,`connector:${connector}`):await ingestion.ingestDocument(workspaceId,secured,`connector:${connector}`);break;}
         case 'searchTwin': result = await service.searchTwin(workspaceId,url.searchParams.get('q')); break;
         case 'decideIntelligenceObservation': result = await service.decideIntelligenceObservation(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'beginCmsAuthorization': result = await cms.beginAuthorization(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;

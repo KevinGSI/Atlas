@@ -14,6 +14,7 @@ import { AtlasResolver } from './resolution.js';
 import { CmsCoexistenceService, CmsConnectorRegistry, InMemoryCredentialVault, RepositoryCredentialVault, runCmsSyncScheduler } from './cms-connectors.js';
 import { ClioManageConnector, MyCaseOpenApiConnector } from './cms-provider-adapters.js';
 import { SituationalPlaybookEngine, SituationalSweepService, runSituationalSweepScheduler } from './situational-awareness.js';
+import { IngestionWebhookVerifier } from './webhook-security.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -40,6 +41,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   if(selectedModel&&!dependencies.intelligenceProviders?.['configured-model'])intelligenceProviders.register('configured-model',new StructuredModelIntelligenceProvider(selectedModel));
   const intelligence = new AtlasIntelligenceRuntime(runtime.repository, intelligenceProviders, { providerName: config.intelligenceProvider, projector: new IntelligenceProjectionService(), resolver: new AtlasResolver(runtime.repository), playbooks:new SituationalPlaybookEngine() });
   const ingestion = new AtlasIngestionService(runtime.repository);
+  const webhooks = new IngestionWebhookVerifier(config.ingestionWebhookSecrets);
   const cmsConnectors=new CmsConnectorRegistry();
   for(const [name,connector] of Object.entries(dependencies.cmsConnectors??{}))cmsConnectors.register(name,connector);
   if(config.clioClientId&&!dependencies.cmsConnectors?.clio)cmsConnectors.register('clio',new ClioManageConnector({clientId:config.clioClientId,clientSecret:config.clioClientSecret,region:config.clioRegion,transport:dependencies.cmsTransport}));
@@ -51,7 +53,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     repository: runtime.repository,
     contentCipher: createContentCipher(config, dependencies)
   });
-  const server = createAtlasServer(service, { config, ready: runtime.ready, identity, assistant, ingestion, cms });
+  const server = createAtlasServer(service, { config, ready: runtime.ready, identity, assistant, ingestion, webhooks, cms });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, resolve);

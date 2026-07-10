@@ -38,6 +38,7 @@ export function loadConfig(env = process.env) {
   const cmsCredentialEncryptionKey=env.CMS_CREDENTIAL_ENCRYPTION_KEY||null;
   const cmsCredentialEncryptionKeyId=env.CMS_CREDENTIAL_ENCRYPTION_KEY_ID||'cms-primary';
   if(cmsCredentialEncryptionKey&&Buffer.from(cmsCredentialEncryptionKey,'base64').length!==32)throw new Error('CMS_CREDENTIAL_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
+  let ingestionWebhookSecrets={};if(env.INGESTION_WEBHOOK_SECRETS){try{ingestionWebhookSecrets=JSON.parse(env.INGESTION_WEBHOOK_SECRETS);}catch{throw new Error('INGESTION_WEBHOOK_SECRETS must be a JSON object');}if(!ingestionWebhookSecrets||Array.isArray(ingestionWebhookSecrets)||typeof ingestionWebhookSecrets!=='object')throw new Error('INGESTION_WEBHOOK_SECRETS must be a JSON object');for(const [name,secret] of Object.entries(ingestionWebhookSecrets))if(!name.includes(':')||typeof secret!=='string'||secret.length<32)throw new Error('Each ingestion webhook secret requires a workspace:connector key and at least 32 characters');}
   return {
     nodeEnv,
     production,
@@ -71,6 +72,7 @@ export function loadConfig(env = process.env) {
     cmsSyncIntervalMs: positiveInteger(env.CMS_SYNC_INTERVAL_MS, 300_000, 'CMS_SYNC_INTERVAL_MS'),
     cmsCredentialEncryptionKey,
     cmsCredentialEncryptionKeyId,
+    ingestionWebhookSecrets,
     situationalSweepEnabled: env.SITUATIONAL_SWEEP_ENABLED === 'true' || production,
     situationalSweepIntervalMs: positiveInteger(env.SITUATIONAL_SWEEP_INTERVAL_MS, 60_000, 'SITUATIONAL_SWEEP_INTERVAL_MS'),
     databasePoolSize: positiveInteger(env.DATABASE_POOL_SIZE, 10, 'DATABASE_POOL_SIZE'),

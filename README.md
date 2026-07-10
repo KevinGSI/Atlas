@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.27.2` connects GitHub Secrets to a manually triggered live OpenAI legal-evaluation workflow without exposing credentials or incurring automatic model charges.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.28.0` adds workspace-scoped HMAC-signed webhooks for external email, telephony, and document connectors to deliver events securely without attorney login tokens.
 
 ## Implemented
 
@@ -128,6 +128,11 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Manual GitHub Actions workflow consuming `OPENAI_API_KEY` and `AI_CONTENT_ENCRYPTION_KEY`
 - Secret-presence validation that never prints credential values
 - Live legal AI acceptance gate deliberately excluded from automatic push execution to control cost
+- HMAC-SHA256 verification over exact timestamped request bytes
+- Five-minute replay window with stale-delivery rejection
+- Workspace-and-connector scoped secrets preventing cross-firm submissions
+- Constant-time signature comparison, request-size limits, and signed connector identity
+- Public connector routes that bypass user login only after successful signature verification
 
 ## Local development
 
@@ -264,6 +269,8 @@ POST /v1/workspaces/:workspaceId/ingestions/documents
 ```
 
 Repeated connector deliveries return the already cataloged record and do not duplicate intelligence jobs. Phone calls queue `phone_call.received`; documents queue `attachment.received` for provider-neutral processing.
+
+Approved external connectors may instead use signed webhook routes ending in `email`, `phone-calls`, or `documents`. Sign the exact body with HMAC-SHA256 using the configured workspace/connector secret and the message `${timestamp}.${rawBody}`. Send Unix seconds in `x-atlas-timestamp` and `sha256=<hex digest>` in `x-atlas-signature`.
 
 Candidates remain noncanonical until reviewed. The homepage can consume `GET /v1/workspaces/:workspaceId/intelligence/review-inbox`; authorized reviewers accept or reject observations through `POST /v1/workspaces/:workspaceId/intelligence/observations/:observationId/decision`. Accepted knowledge becomes canonical twin objects or relationships. Both ordinary screens and Atlas chat search the same accepted state through `GET /v1/workspaces/:workspaceId/intelligence/search?q=...` and the `search_twin` tool.
 

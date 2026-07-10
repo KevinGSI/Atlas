@@ -50,6 +50,8 @@ test('CMS coexistence configuration validates encrypted credential custody',()=>
   assert.equal(config.cmsCredentialEncryptionKey,key);assert.equal(config.cmsSyncEnabled,true);assert.equal(config.cmsSyncIntervalMs,60000);
 });
 
+test('webhook connector secrets are workspace scoped and sufficiently strong',()=>{assert.throws(()=>loadConfig({INGESTION_WEBHOOK_SECRETS:'[]'}),/must be a JSON object/);assert.throws(()=>loadConfig({INGESTION_WEBHOOK_SECRETS:JSON.stringify({'wsp:phone':'short'})}),/at least 32 characters/);const config=loadConfig({INGESTION_WEBHOOK_SECRETS:JSON.stringify({'wsp_1:phone':'x'.repeat(32)})});assert.equal(config.ingestionWebhookSecrets['wsp_1:phone'].length,32);});
+
 test('production refuses to start without PostgreSQL', () => {
   assert.throws(() => loadConfig({ NODE_ENV: 'production' }), /DATABASE_URL is required/);
 });
