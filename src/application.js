@@ -15,7 +15,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     ? await createPostgresRuntime({ ...env, DATABASE_POOL_SIZE: String(config.databasePoolSize) })
     : memoryRuntime());
   const service = new AtlasService(runtime.repository);
-  const identity = new IdentityService(runtime.repository, new TokenService(config.tokenSecret, config.accessTokenTtlSeconds));
+  const identity = new IdentityService(runtime.repository, new TokenService(config.tokenSecret, config.accessTokenTtlSeconds), undefined, { refreshTokenTtlSeconds: config.refreshTokenTtlSeconds });
   const server = createAtlasServer(service, { config, ready: runtime.ready, identity });
   await new Promise((resolve, reject) => {
     server.once('error', reject);

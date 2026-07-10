@@ -53,6 +53,8 @@ function route(method, pathname) {
     ['GET', /^\/ready$/, 'ready'],
     ['POST', /^\/v1\/auth\/register$/, 'register'],
     ['POST', /^\/v1\/auth\/login$/, 'login'],
+    ['POST', /^\/v1\/auth\/refresh$/, 'refresh'],
+    ['POST', /^\/v1\/auth\/logout$/, 'logout'],
     ['POST', /^\/v1\/workspaces$/, 'createWorkspace'],
     ['GET', /^\/v1\/workspaces\/([^/]+)$/, 'getWorkspace'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/memberships$/, 'createMembership'],
@@ -91,7 +93,7 @@ export function createAtlasHandler(service, options = {}) {
       const match = route(request.method, url.pathname);
       if (!match) throw new AtlasError('ROUTE_NOT_FOUND', 'Route not found', 404);
       const [workspaceId, objectId] = match.params;
-      const publicRoute = ['health', 'live', 'ready', 'register', 'login'].includes(match.name);
+      const publicRoute = ['health', 'live', 'ready', 'register', 'login', 'refresh', 'logout'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId) {
         const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits'].includes(match.name)
@@ -100,10 +102,12 @@ export function createAtlasHandler(service, options = {}) {
       }
       let result;
       switch (match.name) {
-        case 'health': case 'live': result = { status: 'ok', version: '0.5.0' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.5.0' }; break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.6.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.6.0' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes)); break;
+        case 'refresh': result = await identity.refresh(await readJson(request, config.maxBodyBytes)); break;
+        case 'logout': result = await identity.logout(await readJson(request, config.maxBodyBytes)); break;
         case 'createWorkspace': result = await service.createWorkspace(await readJson(request, config.maxBodyBytes), user?.id); break;
         case 'getWorkspace': result = await service.getWorkspace(workspaceId); break;
         case 'createMembership': { const input = await readJson(request, config.maxBodyBytes); result = await identity.addMembership(workspaceId, input.userId, input.role); break; }

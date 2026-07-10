@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { AtlasError, required } from './errors.js';
 import { createId } from './ids.js';
@@ -13,6 +13,7 @@ const permissions = {
 };
 
 function encode(value) { return Buffer.from(JSON.stringify(value)).toString('base64url'); }
+function hashToken(value) { return createHash('sha256').update(value).digest('hex'); }
 
 export async function hashPassword(password) {
   if (typeof password !== 'string' || password.length < 12) throw new AtlasError('WEAK_PASSWORD', 'Password must contain at least 12 characters', 400);
@@ -54,22 +55,65 @@ export class TokenService {
 }
 
 export class IdentityService {
-  constructor(repository, tokenService, clock = () => new Date().toISOString()) {
+  constructor(repository, tokenService, clock = () => new Date().toISOString(), options = {}) {
     this.repository = repository; this.tokens = tokenService; this.clock = clock;
+    this.refreshTokenTtlSeconds = options.refreshTokenTtlSeconds ?? 2_592_000;
+    this.randomToken = options.randomToken ?? (() => randomBytes(32).toString('base64url'));
   }
   publicUser(user) { return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt }; }
+  async issueSession(user, repository = this.repository, familyId = createId('fam')) {
+    const refreshToken = this.randomToken();
+    const createdAt = this.clock();
+    const expiresAt = new Date(new Date(createdAt).getTime() + this.refreshTokenTtlSeconds * 1000).toISOString();
+    const session = await repository.createRefreshSession({
+      id: createId('ses'), userId: user.id, familyId, tokenHash: hashToken(refreshToken),
+      expiresAt, createdAt, usedAt: null, revokedAt: null, replacedBySessionId: null
+    });
+    return { ...this.tokens.issue(user), refreshToken, refreshTokenExpiresAt: session.expiresAt };
+  }
   async register(input) {
     const email = required(input.email, 'email').trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(email)) throw new AtlasError('INVALID_EMAIL', 'Email address is invalid', 400);
-    const user = await this.repository.createUser({ id: createId('usr'), email, name: required(input.name, 'name'), passwordHash: await hashPassword(input.password), createdAt: this.clock() });
-    return { user: this.publicUser(user), ...this.tokens.issue(user) };
+    const passwordHash = await hashPassword(input.password);
+    return this.repository.transaction(async (repository) => {
+      const user = await repository.createUser({ id: createId('usr'), email, name: required(input.name, 'name'), passwordHash, createdAt: this.clock() });
+      return { user: this.publicUser(user), ...(await this.issueSession(user, repository)) };
+    });
   }
   async login(input) {
     let user;
     try { user = await this.repository.getUserByEmail(required(input.email, 'email').trim().toLowerCase()); }
     catch { throw new AtlasError('INVALID_CREDENTIALS', 'Invalid email or password', 401); }
     if (!(await verifyPassword(input.password ?? '', user.passwordHash))) throw new AtlasError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
-    return { user: this.publicUser(user), ...this.tokens.issue(user) };
+    return { user: this.publicUser(user), ...(await this.issueSession(user)) };
+  }
+  async refresh(input) {
+    const refreshToken = required(input.refreshToken, 'refreshToken');
+    const result = await this.repository.transaction(async (repository) => {
+      const session = await repository.getRefreshSessionByHash(hashToken(refreshToken));
+      const now = this.clock();
+      if (session.revokedAt || session.usedAt) {
+        await repository.revokeRefreshFamily(session.familyId, now);
+        return { reuseDetected: true };
+      }
+      if (new Date(session.expiresAt).getTime() <= new Date(now).getTime()) {
+        await repository.revokeRefreshSession(session.id, now);
+        throw new AtlasError('REFRESH_TOKEN_EXPIRED', 'Refresh token expired', 401);
+      }
+      const user = await repository.getUser(session.userId);
+      const next = await this.issueSession(user, repository, session.familyId);
+      const replacement = await repository.getRefreshSessionByHash(hashToken(next.refreshToken));
+      await repository.consumeRefreshSession(session.id, now, replacement.id);
+      return { user: this.publicUser(user), ...next };
+    });
+    if (result.reuseDetected) throw new AtlasError('REFRESH_TOKEN_REUSED', 'Refresh token reuse detected; session family revoked', 401);
+    return result;
+  }
+  async logout(input) {
+    const refreshToken = required(input.refreshToken, 'refreshToken');
+    const session = await this.repository.getRefreshSessionByHash(hashToken(refreshToken));
+    if (!session.revokedAt) await this.repository.revokeRefreshSession(session.id, this.clock());
+    return { revoked: true };
   }
   async authenticate(header) {
     if (!header?.startsWith('Bearer ')) throw new AtlasError('AUTHENTICATION_REQUIRED', 'Bearer access token required', 401);

@@ -28,6 +28,13 @@ function event(row) {
 function user(row) { return { id: row.id, email: row.email, name: row.name, passwordHash: row.password_hash, createdAt: iso(row.created_at) }; }
 function membership(row) { return { id: row.id, workspaceId: row.workspace_id, userId: row.user_id, role: row.role, createdAt: iso(row.created_at) }; }
 function audit(row) { return { id: row.id, workspaceId: row.workspace_id, objectId: row.object_id, actorId: row.actor_id, action: row.action, beforeSnapshot: row.before_snapshot, afterSnapshot: row.after_snapshot, createdAt: iso(row.created_at) }; }
+function refreshSession(row) {
+  return {
+    id: row.id, userId: row.user_id, familyId: row.family_id, tokenHash: row.token_hash,
+    expiresAt: iso(row.expires_at), createdAt: iso(row.created_at), usedAt: iso(row.used_at),
+    revokedAt: iso(row.revoked_at), replacedBySessionId: row.replaced_by_session_id
+  };
+}
 
 export class PostgresRepository {
   constructor(executor, pool = executor) {
@@ -188,6 +195,42 @@ export class PostgresRepository {
     const result = await this.executor.query('SELECT * FROM atlas_user WHERE id = $1', [id]);
     if (!result.rows[0]) throw new AtlasError('USER_NOT_FOUND', 'User not found', 404);
     return user(result.rows[0]);
+  }
+
+  async createRefreshSession(value) {
+    const result = await this.executor.query(
+      `INSERT INTO atlas_refresh_session
+       (id, user_id, family_id, token_hash, expires_at, created_at, used_at, revoked_at, replaced_by_session_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [value.id, value.userId, value.familyId, value.tokenHash, value.expiresAt, value.createdAt,
+        value.usedAt, value.revokedAt, value.replacedBySessionId]);
+    return refreshSession(result.rows[0]);
+  }
+
+  async getRefreshSessionByHash(tokenHash) {
+    const result = await this.executor.query('SELECT * FROM atlas_refresh_session WHERE token_hash = $1 FOR UPDATE', [tokenHash]);
+    if (!result.rows[0]) throw new AtlasError('INVALID_REFRESH_TOKEN', 'Invalid refresh token', 401);
+    return refreshSession(result.rows[0]);
+  }
+
+  async consumeRefreshSession(id, usedAt, replacedBySessionId) {
+    const result = await this.executor.query(
+      `UPDATE atlas_refresh_session SET used_at = $2, replaced_by_session_id = $3
+       WHERE id = $1 AND used_at IS NULL AND revoked_at IS NULL RETURNING *`, [id, usedAt, replacedBySessionId]);
+    if (!result.rows[0]) throw new AtlasError('INVALID_REFRESH_TOKEN', 'Invalid refresh token', 401);
+    return refreshSession(result.rows[0]);
+  }
+
+  async revokeRefreshSession(id, revokedAt) {
+    const result = await this.executor.query(
+      'UPDATE atlas_refresh_session SET revoked_at = COALESCE(revoked_at, $2) WHERE id = $1 RETURNING *', [id, revokedAt]);
+    if (!result.rows[0]) throw new AtlasError('INVALID_REFRESH_TOKEN', 'Invalid refresh token', 401);
+    return refreshSession(result.rows[0]);
+  }
+
+  async revokeRefreshFamily(familyId, revokedAt) {
+    await this.executor.query(
+      'UPDATE atlas_refresh_session SET revoked_at = COALESCE(revoked_at, $2) WHERE family_id = $1', [familyId, revokedAt]);
   }
 
   async createMembership(value) {

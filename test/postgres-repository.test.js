@@ -92,3 +92,16 @@ test('PostgreSQL audit adapter persists complete before and after snapshots', as
   assert.match(calls[0].sql, /INSERT INTO atlas_audit_entry/);
   assert.deepEqual(calls[0].values[5], { version: 1 });
 });
+
+test('PostgreSQL refresh sessions store only token hashes and lock during rotation', async () => {
+  const calls = [];
+  const row = { id: 'ses_1', user_id: 'usr_1', family_id: 'fam_1', token_hash: 'hashed', expires_at: timestamp, created_at: timestamp, used_at: null, revoked_at: null, replaced_by_session_id: null };
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rows: [row] }; } };
+  const repository = new PostgresRepository(pool);
+  const session = await repository.createRefreshSession({ id: 'ses_1', userId: 'usr_1', familyId: 'fam_1', tokenHash: 'hashed', expiresAt: timestamp, createdAt: timestamp, usedAt: null, revokedAt: null, replacedBySessionId: null });
+  assert.equal(session.tokenHash, 'hashed');
+  assert.match(calls[0].sql, /INSERT INTO atlas_refresh_session/);
+  await repository.getRefreshSessionByHash('hashed');
+  assert.match(calls[1].sql, /FOR UPDATE/);
+  assert.deepEqual(calls[1].values, ['hashed']);
+});

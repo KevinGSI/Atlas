@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.5.0` adds optimistic object mutation, soft deletion/restoration, and an append-only audit ledger.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.6.0` adds persisted refresh sessions, one-time rotation, reuse detection, and logout revocation.
 
 ## Implemented
 
@@ -20,6 +20,9 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Protected workspace routes and membership administration
 - Version-checked object updates, soft deletion, and restoration
 - Atomic timeline and before/after audit records for every mutation
+- Opaque refresh tokens stored only as hashes
+- One-time refresh rotation with token-family reuse detection
+- Logout revocation and configurable refresh-session lifetimes
 
 ## Local development
 
@@ -72,13 +75,15 @@ pnpm start
 
 ## Authentication
 
-Register with `POST /v1/auth/register` or log in with `POST /v1/auth/login`. Send the returned token on workspace requests:
+Register with `POST /v1/auth/register` or log in with `POST /v1/auth/login`. Send the returned access token on workspace requests:
 
 ```text
 Authorization: Bearer <accessToken>
 ```
 
 Creating a workspace atomically makes the authenticated creator its owner. Owners and admins can add memberships through `POST /v1/workspaces/:workspaceId/memberships`.
+
+Access tokens are short-lived. Exchange each refresh token exactly once through `POST /v1/auth/refresh`; the response contains its replacement. Reusing an older token revokes the entire session family. `POST /v1/auth/logout` revokes the supplied refresh token.
 
 ## Object mutation and audit
 

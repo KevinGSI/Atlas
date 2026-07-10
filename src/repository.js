@@ -12,13 +12,14 @@ export class InMemoryRepository {
   #users = new Map();
   #memberships = new Map();
   #audits = new Map();
+  #refreshSessions = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions] = snapshot;
       throw error;
     }
   }
@@ -136,6 +137,39 @@ export class InMemoryRepository {
     const user = this.#users.get(id);
     if (!user) throw new AtlasError('USER_NOT_FOUND', 'User not found', 404);
     return clone(user);
+  }
+
+  createRefreshSession(session) {
+    this.#refreshSessions.set(session.id, clone(session));
+    return clone(session);
+  }
+
+  getRefreshSessionByHash(tokenHash) {
+    const session = [...this.#refreshSessions.values()].find((item) => item.tokenHash === tokenHash);
+    if (!session) throw new AtlasError('INVALID_REFRESH_TOKEN', 'Invalid refresh token', 401);
+    return clone(session);
+  }
+
+  consumeRefreshSession(id, usedAt, replacedBySessionId) {
+    const session = this.#refreshSessions.get(id);
+    if (!session || session.usedAt || session.revokedAt) throw new AtlasError('INVALID_REFRESH_TOKEN', 'Invalid refresh token', 401);
+    const updated = { ...session, usedAt, replacedBySessionId };
+    this.#refreshSessions.set(id, updated);
+    return clone(updated);
+  }
+
+  revokeRefreshSession(id, revokedAt) {
+    const session = this.#refreshSessions.get(id);
+    if (!session) throw new AtlasError('INVALID_REFRESH_TOKEN', 'Invalid refresh token', 401);
+    const updated = { ...session, revokedAt: session.revokedAt ?? revokedAt };
+    this.#refreshSessions.set(id, updated);
+    return clone(updated);
+  }
+
+  revokeRefreshFamily(familyId, revokedAt) {
+    for (const [id, session] of this.#refreshSessions) {
+      if (session.familyId === familyId && !session.revokedAt) this.#refreshSessions.set(id, { ...session, revokedAt });
+    }
   }
 
   createMembership(membership) {

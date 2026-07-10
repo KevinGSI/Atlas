@@ -30,7 +30,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.5.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.6.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -144,4 +144,29 @@ test('authenticated HTTP flow enforces workspace roles', async () => {
   const missingToken = await json(handler, `/v1/workspaces/${workspaceId}`);
   assert.equal(missingToken.status, 401);
   assert.equal(missingToken.body.error.code, 'AUTHENTICATION_REQUIRED');
+});
+
+test('HTTP refresh rotates sessions and logout prevents further refresh', async () => {
+  const repository = new InMemoryRepository();
+  const service = new AtlasService(repository);
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));
+  const handler = createAtlasHandler(service, {
+    config: { maxBodyBytes: 1_048_576, corsOrigins: [] }, ready: async () => true, identity
+  });
+  const registered = await json(handler, '/v1/auth/register', {
+    method: 'POST', body: JSON.stringify({ email: 'session@example.com', name: 'Session', password: 'correct horse battery staple' })
+  });
+  const original = registered.body.data.refreshToken;
+  const refreshed = await json(handler, '/v1/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: original }) });
+  assert.equal(refreshed.status, 200);
+  assert.notEqual(refreshed.body.data.refreshToken, original);
+  const logout = await json(handler, '/v1/auth/logout', {
+    method: 'POST', body: JSON.stringify({ refreshToken: refreshed.body.data.refreshToken })
+  });
+  assert.deepEqual(logout.body.data, { revoked: true });
+  const denied = await json(handler, '/v1/auth/refresh', {
+    method: 'POST', body: JSON.stringify({ refreshToken: refreshed.body.data.refreshToken })
+  });
+  assert.equal(denied.status, 401);
+  assert.equal(denied.body.error.code, 'REFRESH_TOKEN_REUSED');
 });

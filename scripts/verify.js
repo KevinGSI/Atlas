@@ -6,7 +6,7 @@ const requiredFiles = [
   'Dockerfile', '.dockerignore', 'render.yaml', 'src/server.js', 'src/application.js', 'src/config.js',
   'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js',
   'src/postgres-repository.js', 'src/migrations.js', 'src/runtime.js',
-  'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'test/service.test.js', 'test/http.test.js',
+  'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'test/service.test.js', 'test/http.test.js',
   'test/postgres-repository.test.js', 'test/migrations.test.js', 'test/config.test.js', 'test/runtime.test.js',
   'test/deployment.test.js', 'test/identity.test.js'
 ];
@@ -17,7 +17,7 @@ for (const file of requiredFiles) {
 }
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-if (pkg.version !== '0.5.0') failures.push(`expected version 0.5.0, got ${pkg.version}`);
+if (pkg.version !== '0.6.0') failures.push(`expected version 0.6.0, got ${pkg.version}`);
 
 const migration = await readFile('db/migrations/0001_initial.sql', 'utf8');
 for (const table of ['atlas_workspace', 'atlas_object', 'atlas_relationship', 'atlas_timeline_event']) {
@@ -30,6 +30,9 @@ for (const table of ['atlas_user', 'atlas_workspace_membership']) {
 const auditMigration = await readFile('db/migrations/0003_object_audit.sql', 'utf8');
 if (!auditMigration.includes('CREATE TABLE atlas_audit_entry')) failures.push('audit migration missing atlas_audit_entry');
 if (!auditMigration.includes('atlas_audit_no_update') || !auditMigration.includes('atlas_audit_no_delete')) failures.push('append-only audit triggers are missing');
+const sessionMigration = await readFile('db/migrations/0004_refresh_sessions.sql', 'utf8');
+if (!sessionMigration.includes('CREATE TABLE atlas_refresh_session')) failures.push('session migration missing atlas_refresh_session');
+if (!sessionMigration.includes('token_hash text NOT NULL UNIQUE')) failures.push('refresh token hash uniqueness is missing');
 if (!pkg.dependencies?.pg) failures.push('pg runtime dependency is missing');
 if (pkg.scripts?.migrate !== 'node scripts/migrate.js') failures.push('standalone migration command is missing');
 
@@ -54,4 +57,4 @@ if (failures.length) {
   console.error(`Verification failed:\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log(`Verification passed: version ${pkg.version}, ${requiredFiles.length} required files, ${sourceFiles} source modules, 7 database tables.`);
+console.log(`Verification passed: version ${pkg.version}, ${requiredFiles.length} required files, ${sourceFiles} source modules, 8 database tables.`);
