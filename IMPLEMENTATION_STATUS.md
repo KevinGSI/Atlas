@@ -1,8 +1,12 @@
-# Atlas Core 0.27.1 — OpenAI Deployment Configuration Status
+# Atlas Core 0.27.2 — GitHub OpenAI Evaluation Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.27.0`
+- Everything verified through Atlas Core `0.27.1`
+- Manual GitHub Actions OpenAI evaluation workflow
+- GitHub Secrets bindings for the OpenAI API and Atlas encryption keys
+- Secret-presence checks without value disclosure
+- Explicitly manual execution to prevent unintended API spend
 - OpenAI selected as the initial web and worker deployment provider
 - Explicit `gpt-5.6-sol` model configuration
 - Unsynchronized deployment secrets for OpenAI and Atlas AI-content encryption
@@ -67,7 +71,7 @@
 
 ## Verification completed here
 
-- 142 canonical tests passed locally across the complete non-live Atlas Core surface
+- 143 canonical tests passed locally across the complete non-live Atlas Core surface
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection
 - Live AI command environment and failure behavior verified locally
@@ -114,6 +118,7 @@
 - Execution of the new integration harness against a real PostgreSQL daemon; this workspace supplied neither `TEST_DATABASE_URL` nor a database service
 - Execution of `pnpm test:ai` against a paid production model; no provider credentials were supplied here
 - OpenAI API authentication and model entitlement; `OPENAI_API_KEY` is not present in this workspace
+- Execution result of the GitHub OpenAI workflow; it will exist only after this commit is pushed and the workflow is manually run
 - A production KMS/HSM-backed vault, multi-instance scheduler locks, rate-limit behavior, or large-firm migration volumes
 - Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
 

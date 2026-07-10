@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.27.1` selects OpenAI as the initial deployment provider using `gpt-5.6-sol`, while preserving the provider-neutral Atlas boundary and applying the same situational playbooks in the production intelligence worker.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.27.2` connects GitHub Secrets to a manually triggered live OpenAI legal-evaluation workflow without exposing credentials or incurring automatic model charges.
 
 ## Implemented
 
@@ -125,6 +125,9 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Current flagship `gpt-5.6-sol` model selected explicitly rather than hidden inside domain code
 - Secret placeholders for the API key and AI-content encryption key
 - Production worker corrected to load the deterministic situational playbook layer
+- Manual GitHub Actions workflow consuming `OPENAI_API_KEY` and `AI_CONTENT_ENCRYPTION_KEY`
+- Secret-presence validation that never prints credential values
+- Live legal AI acceptance gate deliberately excluded from automatic push execution to control cost
 
 ## Local development
 

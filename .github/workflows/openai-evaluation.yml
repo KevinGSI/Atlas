@@ -1,0 +1,29 @@
+name: Live OpenAI evaluation
+on:
+  workflow_dispatch:
+jobs:
+  evaluate-openai:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    env:
+      AI_PROVIDER: openai
+      AI_MODEL: gpt-5.6-sol
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      AI_CONTENT_ENCRYPTION_KEY: ${{ secrets.AI_CONTENT_ENCRYPTION_KEY }}
+      AI_CONTENT_ENCRYPTION_KEY_ID: primary
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify secret configuration without displaying values
+        run: test -n "$OPENAI_API_KEY" && test -n "$AI_CONTENT_ENCRYPTION_KEY"
+      - name: Run Atlas legal AI acceptance gate
+        run: pnpm test:ai
