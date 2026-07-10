@@ -9,6 +9,7 @@ import { createAiProviderRegistry } from './ai-providers.js';
 import { createContentCipher } from './content-security.js';
 import { AtlasIntelligenceRuntime, IntelligenceProviderRegistry } from './intelligence.js';
 import { IntelligenceProjectionService } from './intelligence-projection.js';
+import { AtlasIngestionService } from './ingestion.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -32,11 +33,12 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const intelligenceProviders = new IntelligenceProviderRegistry();
   for (const [name, provider] of Object.entries(dependencies.intelligenceProviders ?? {})) intelligenceProviders.register(name, provider);
   const intelligence = new AtlasIntelligenceRuntime(runtime.repository, intelligenceProviders, { providerName: config.intelligenceProvider, projector: new IntelligenceProjectionService() });
+  const ingestion = new AtlasIngestionService(runtime.repository);
   const assistant = new AtlasAssistant(dependencies.aiModel ?? providers.resolve(config.aiProvider), new AtlasToolRegistry(service), {
     repository: runtime.repository,
     contentCipher: createContentCipher(config, dependencies)
   });
-  const server = createAtlasServer(service, { config, ready: runtime.ready, identity, assistant });
+  const server = createAtlasServer(service, { config, ready: runtime.ready, identity, assistant, ingestion });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, resolve);

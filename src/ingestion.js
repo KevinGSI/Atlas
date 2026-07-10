@@ -1,0 +1,58 @@
+import { AtlasError, required } from './errors.js';
+import { createId } from './ids.js';
+
+function emailAddress(value, field) {
+  const text = required(value, field).trim().toLowerCase();
+  if (!text.includes('@') || text.length > 320) throw new AtlasError('INGESTION_INVALID', `${field} must be a valid email address`, 400);
+  return text;
+}
+
+export class IngestionConnectorRegistry {
+  #connectors = new Map();
+  register(name, connector) {
+    if (!name || typeof connector?.pull !== 'function' || typeof connector?.capabilities !== 'function') throw new AtlasError('INGESTION_CONNECTOR_INVALID','Ingestion connectors must implement pull and capabilities',500);
+    if (this.#connectors.has(name)) throw new AtlasError('INGESTION_CONNECTOR_EXISTS','Ingestion connector is already registered',409,{connector:name});
+    this.#connectors.set(name,connector); return this;
+  }
+  resolve(name) { const value=this.#connectors.get(name);if(!value)throw new AtlasError('INGESTION_CONNECTOR_NOT_FOUND','Ingestion connector is not registered',503,{connector:name});return value; }
+}
+
+export class ContentExtractorRegistry {
+  #extractors = new Map();
+  register(mediaType, extractor) {
+    if (!mediaType || typeof extractor?.extract !== 'function' || typeof extractor?.capabilities !== 'function') throw new AtlasError('CONTENT_EXTRACTOR_INVALID','Content extractors must implement extract and capabilities',500);
+    this.#extractors.set(mediaType,extractor); return this;
+  }
+  resolve(mediaType) { const value=this.#extractors.get(mediaType);if(!value)throw new AtlasError('CONTENT_EXTRACTOR_NOT_FOUND','No content extractor is registered for this media type',503,{mediaType});return value; }
+}
+
+export class AtlasIngestionService {
+  constructor(repository, clock = () => new Date().toISOString()) { this.repository=repository;this.clock=clock; }
+  async ingestEmail(workspaceId,input,actorId='system') {
+    const connector=required(input.connector,'connector'); const externalId=required(input.externalId,'externalId');
+    const sender=emailAddress(input.from,'from'); const recipients=(input.to??[]).map((value)=>emailAddress(value,'to'));
+    if (!recipients.length) throw new AtlasError('INGESTION_INVALID','At least one recipient is required',400);
+    const attachments=input.attachments??[];
+    for(const item of attachments) if(!item.storageRef||!item.sha256||!item.mediaType||!Number.isInteger(item.size)||item.size<0) throw new AtlasError('INGESTION_INVALID','Attachments require storageRef, sha256, mediaType, and size',400);
+    const now=this.clock();
+    return this.repository.transaction(async(repository)=>{
+      const existing=await repository.findIngestionRecord(workspaceId,connector,externalId);
+      if(existing)return { ingestion:existing,duplicate:true,root:await repository.getObject(workspaceId,existing.rootObjectId),attachments:[] };
+      if(input.matterId)await repository.getObject(workspaceId,input.matterId);
+      const email={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'operation',type:'incoming_email',title:input.subject?.trim()||'(no subject)',state:{from:sender,to:recipients,cc:input.cc??[],bodyText:input.bodyText??null,receivedAt:input.receivedAt??now,status:'received'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
+      await repository.createObject(email);
+      const event={id:createId('evt'),workspaceId,parentObjectId:email.id,type:'communication.received',actorId,source:`connector:${connector}`,confidence:1,visibility:'workspace',relatedObjectIds:input.matterId?[input.matterId]:[],data:{externalId,attachmentCount:attachments.length},occurredAt:input.receivedAt??now,createdAt:now};
+      await repository.createEvent(event);
+      const documents=[];
+      for(const item of attachments){
+        const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:'incoming_attachment',title:required(item.filename,'filename'),state:{storageRef:item.storageRef,sha256:item.sha256,mediaType:item.mediaType,size:item.size,extractionStatus:'pending'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
+        await repository.createObject(document); documents.push(document);
+        await repository.createRelationship({id:createId('rel'),workspaceId,fromObjectId:email.id,toObjectId:document.id,type:'has_attachment',attributes:{},createdAt:now});
+        await repository.createIntelligenceJob({id:createId('inj'),workspaceId,triggerType:'attachment.received',objectId:document.id,eventId:event.id,status:'pending',attempts:0,payload:{document,emailId:email.id,matterId:input.matterId??null},result:null,provider:null,errorCode:null,availableAt:now,lockedAt:null,createdAt:now,completedAt:null});
+      }
+      await repository.createIntelligenceJob({id:createId('inj'),workspaceId,triggerType:'email.received',objectId:email.id,eventId:event.id,status:'pending',attempts:0,payload:{email,attachmentIds:documents.map((x)=>x.id)},result:null,provider:null,errorCode:null,availableAt:now,lockedAt:null,createdAt:now,completedAt:null});
+      const ingestion=await repository.createIngestionRecord({id:createId('ing'),workspaceId,connector,externalId,kind:'email',status:'cataloged',rootObjectId:email.id,metadata:{attachmentCount:documents.length},errorCode:null,receivedAt:input.receivedAt??now,createdAt:now});
+      return {ingestion,duplicate:false,root:email,attachments:documents};
+    });
+  }
+}

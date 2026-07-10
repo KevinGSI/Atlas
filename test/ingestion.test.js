@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { AtlasIngestionService, ContentExtractorRegistry, IngestionConnectorRegistry } from '../src/ingestion.js';
+import { InMemoryRepository } from '../src/repository.js';
+import { AtlasService } from '../src/service.js';
+
+async function fixture() {
+  const repository=new InMemoryRepository(); const service=new AtlasService(repository,()=> '2026-07-10T12:00:00.000Z');
+  const workspace=await service.createWorkspace({name:'Ingestion Firm'}); const matter=await service.createObject(workspace.id,{dimension:'matter',type:'civil',title:'Reed v. Northline'});
+  return {repository,workspace,matter,ingestion:new AtlasIngestionService(repository,()=> '2026-07-10T13:00:00.000Z')};
+}
+
+test('incoming email and PDF attachment become canonical linked objects and intelligence work atomically', async()=>{
+  const {repository,workspace,matter,ingestion}=await fixture();
+  const result=await ingestion.ingestEmail(workspace.id,{connector:'test-mail',externalId:'msg-1',from:'counsel@example.com',to:['lawyer@example.com'],subject:'Discovery production',bodyText:'Attached production.',matterId:matter.id,attachments:[{filename:'production.pdf',storageRef:'blob://sha256/abc',sha256:'abc',mediaType:'application/pdf',size:1234}]},'usr_1');
+  assert.equal(result.root.type,'incoming_email'); assert.equal(result.attachments[0].state.extractionStatus,'pending');
+  const graph=await new AtlasService(repository).expandGraph(workspace.id,result.root.id);
+  assert.equal(graph.nodes[0].id,result.attachments[0].id); assert.equal(graph.relationships[0].type,'has_attachment');
+  assert.deepEqual((await repository.listIntelligenceJobs(workspace.id)).map((job)=>job.triggerType).slice(-2),['attachment.received','email.received']);
+});
+
+test('email ingestion is idempotent by workspace connector and external message ID',async()=>{
+  const {workspace,ingestion}=await fixture(); const input={connector:'mail',externalId:'same',from:'a@example.com',to:['b@example.com'],subject:'One'};
+  const first=await ingestion.ingestEmail(workspace.id,input); const second=await ingestion.ingestEmail(workspace.id,input);
+  assert.equal(first.duplicate,false);assert.equal(second.duplicate,true);assert.equal(second.root.id,first.root.id);
+});
+
+test('connector and extractor registries enforce interchangeable adapter contracts',()=>{
+  assert.throws(()=>new IngestionConnectorRegistry().register('bad',{}),(error)=>error.code==='INGESTION_CONNECTOR_INVALID');
+  const connectors=new IngestionConnectorRegistry().register('mail',{capabilities(){return {attachments:true};},async pull(){return [];}});assert.ok(connectors.resolve('mail'));
+  const extractors=new ContentExtractorRegistry().register('application/pdf',{capabilities(){return {ocrFallback:true};},async extract(){return {text:'PDF text'};}});assert.ok(extractors.resolve('application/pdf'));
+});
+
+test('invalid attachment metadata rolls back the entire ingestion',async()=>{
+  const {repository,workspace,ingestion}=await fixture();
+  await assert.rejects(()=>ingestion.ingestEmail(workspace.id,{connector:'mail',externalId:'bad',from:'a@example.com',to:['b@example.com'],attachments:[{filename:'bad.pdf'}]}),(error)=>error.code==='INGESTION_INVALID');
+  assert.equal((await repository.listObjects(workspace.id,{})).filter((object)=>object.type==='incoming_email').length,0);
+});

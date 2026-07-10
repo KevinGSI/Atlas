@@ -19,6 +19,7 @@ export class AtlasToolRegistry {
   definitions() {
     return [
       { name: 'search_objects', description: 'Search authorized workspace objects by title, type, dimension, or state text.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'integer' } }, required: ['query'] } },
+      { name: 'search_twin', description: 'Search shared accepted digital-twin objects and intelligence observations.', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
       { name: 'list_recent_matters', description: 'List the most recently opened matters in the authorized workspace.', inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } } },
       { name: 'get_object', description: 'Retrieve one object from the authorized workspace by object ID.', inputSchema: { type: 'object', properties: { objectId: { type: 'string' } }, required: ['objectId'] } },
       { name: 'get_matter_health', description: 'Get explainable health for one matter in the authorized workspace.', inputSchema: { type: 'object', properties: { matterId: { type: 'string' } }, required: ['matterId'] } },
@@ -38,6 +39,10 @@ export class AtlasToolRegistry {
           .filter((object) => `${object.title} ${object.type} ${object.dimension} ${JSON.stringify(object.state)}`.toLowerCase().includes(query))
           .slice(0, limit);
         return { data: objects, sources: objects.map(source) };
+      }
+      case 'search_twin': {
+        const result=await this.service.searchTwin(workspaceId,required(args.query,'query'));
+        return {data:result,sources:result.objects.map(source)};
       }
       case 'list_recent_matters': {
         const limit = boundedLimit(args.limit);

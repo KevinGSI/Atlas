@@ -76,6 +76,11 @@ test('normalized intelligence projects candidate twin observations and non-chat 
   assert.deepEqual(inbox.counts, { observations: 1, actions: 1, failures: 0 });
   assert.equal(inbox.observations[0].kind, 'deadline');
   assert.equal(inbox.actions[0].originType, 'intelligence');
+  const accepted=await service.decideIntelligenceObservation(workspace.id,observations[0].id,{decision:'accept'},'usr_reviewer');
+  assert.equal(accepted.observation.status,'accepted');assert.equal(accepted.result.type,'deadline');
+  const twin=await service.searchTwin(workspace.id,'response due');
+  assert.equal(twin.observations[0].id,observations[0].id);assert.equal(twin.objects.some((item)=>item.id===accepted.result.id),true);
+  await assert.rejects(()=>service.decideIntelligenceObservation(workspace.id,observations[0].id,{decision:'accept'},'usr_reviewer'),(error)=>error.code==='INTELLIGENCE_OBSERVATION_ALREADY_REVIEWED');
 });
 
 test('invalid provider observations roll back projection and job completion', async () => {

@@ -21,13 +21,14 @@ export class InMemoryRepository {
   #aiActionProposals = new Map();
   #intelligenceJobs = new Map();
   #intelligenceObservations = new Map();
+  #ingestionRecords = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords] = snapshot;
       throw error;
     }
   }
@@ -320,4 +321,8 @@ export class InMemoryRepository {
   failIntelligenceJob(id,errorCode,now,maxAttempts) { const value=this.#intelligenceJobs.get(id); const failed={...value,status:value.attempts>=maxAttempts?'failed':'pending',errorCode,lockedAt:null,availableAt:now}; this.#intelligenceJobs.set(id,failed); return clone(failed); }
   createIntelligenceObservation(value) { this.#intelligenceObservations.set(value.id,clone(value));return clone(value); }
   listIntelligenceObservations(workspaceId,status) { return [...this.#intelligenceObservations.values()].filter((x)=>x.workspaceId===workspaceId&&(!status||x.status===status)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(clone); }
+  getIntelligenceObservation(workspaceId,id) { const value=this.#intelligenceObservations.get(id);if(!value||value.workspaceId!==workspaceId)throw new AtlasError('INTELLIGENCE_OBSERVATION_NOT_FOUND','Intelligence observation not found',404);return clone(value); }
+  reviewIntelligenceObservation(workspaceId,id,status,reviewedBy,reviewedAt) { const value=this.getIntelligenceObservation(workspaceId,id);if(value.status!=='candidate')throw new AtlasError('INTELLIGENCE_OBSERVATION_ALREADY_REVIEWED','Intelligence observation has already been reviewed',409);const updated={...value,status,reviewedBy,reviewedAt};this.#intelligenceObservations.set(id,clone(updated));return clone(updated); }
+  findIngestionRecord(workspaceId,connector,externalId) { const value=this.#ingestionRecords.get(`${workspaceId}:${connector}:${externalId}`);return value?clone(value):null; }
+  createIngestionRecord(value) { const key=`${value.workspaceId}:${value.connector}:${value.externalId}`;if(this.#ingestionRecords.has(key))throw new AtlasError('INGESTION_EXISTS','Ingestion record already exists',409);this.#ingestionRecords.set(key,clone(value));return clone(value); }
 }
