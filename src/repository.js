@@ -16,13 +16,15 @@ export class InMemoryRepository {
   #passwordResets = new Map();
   #loginThrottles = new Map();
   #aiRuns = new Map();
+  #aiConversations = new Map();
+  #aiMessages = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages] = snapshot;
       throw error;
     }
   }
@@ -294,4 +296,14 @@ export class InMemoryRepository {
     return [...this.#aiRuns.values()].filter((run) => run.workspaceId === workspaceId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit).map(clone);
   }
+
+  createAiConversation(value) { this.getWorkspace(value.workspaceId); this.#aiConversations.set(value.id, clone(value)); return clone(value); }
+  getAiConversation(workspaceId, actorId, id) {
+    const value = this.#aiConversations.get(id);
+    if (!value || value.workspaceId !== workspaceId || value.actorId !== actorId) throw new AtlasError('AI_CONVERSATION_NOT_FOUND', 'AI conversation not found', 404);
+    return clone(value);
+  }
+  listAiConversations(workspaceId, actorId) { return [...this.#aiConversations.values()].filter((x) => x.workspaceId === workspaceId && x.actorId === actorId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(clone); }
+  createAiMessage(value) { this.getAiConversation(value.workspaceId, value.actorId, value.conversationId); this.#aiMessages.set(value.id, clone(value)); return clone(value); }
+  listAiMessages(workspaceId, actorId, conversationId) { this.getAiConversation(workspaceId, actorId, conversationId); return [...this.#aiMessages.values()].filter((x)=>x.conversationId===conversationId).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).map(clone); }
 }

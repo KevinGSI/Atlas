@@ -6,7 +6,7 @@ const requiredFiles = [
   'Dockerfile', '.dockerignore', 'render.yaml', 'src/server.js', 'src/application.js', 'src/config.js',
   'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js',
   'src/postgres-repository.js', 'src/migrations.js', 'src/runtime.js',
-  'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'db/migrations/0007_ai_run_ledger.sql', 'test/service.test.js', 'test/http.test.js',
+  'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'db/migrations/0007_ai_run_ledger.sql', 'db/migrations/0008_ai_conversations.sql', 'test/service.test.js', 'test/http.test.js',
   'test/postgres-repository.test.js', 'test/migrations.test.js', 'test/config.test.js', 'test/runtime.test.js',
   'test/deployment.test.js', 'test/identity.test.js', 'test/assistant.test.js', 'test/ai-providers.test.js'
 ];
@@ -17,7 +17,7 @@ for (const file of requiredFiles) {
 }
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-if (pkg.version !== '0.13.0') failures.push(`expected version 0.13.0, got ${pkg.version}`);
+if (pkg.version !== '0.14.0') failures.push(`expected version 0.14.0, got ${pkg.version}`);
 
 const migration = await readFile('db/migrations/0001_initial.sql', 'utf8');
 for (const table of ['atlas_workspace', 'atlas_object', 'atlas_relationship', 'atlas_timeline_event']) {
@@ -42,6 +42,9 @@ if (!throttleMigration.includes('principal_hash text PRIMARY KEY')) failures.pus
 const aiRunMigration = await readFile('db/migrations/0007_ai_run_ledger.sql', 'utf8');
 if (!aiRunMigration.includes('CREATE TABLE atlas_ai_run')) failures.push('AI run ledger migration is missing');
 if (!aiRunMigration.includes('atlas_ai_run_no_update') || !aiRunMigration.includes('atlas_ai_run_no_delete')) failures.push('AI run append-only triggers are missing');
+const conversationMigration = await readFile('db/migrations/0008_ai_conversations.sql', 'utf8');
+if (!conversationMigration.includes('CREATE TABLE atlas_ai_conversation') || !conversationMigration.includes('CREATE TABLE atlas_ai_message')) failures.push('AI conversation tables are missing');
+if (!conversationMigration.includes('atlas_ai_message_no_update') || !conversationMigration.includes('atlas_ai_message_no_delete')) failures.push('AI message append-only triggers are missing');
 if (!pkg.dependencies?.pg) failures.push('pg runtime dependency is missing');
 if (pkg.scripts?.migrate !== 'node scripts/migrate.js') failures.push('standalone migration command is missing');
 
@@ -66,4 +69,4 @@ if (failures.length) {
   console.error(`Verification failed:\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log(`Verification passed: version ${pkg.version}, ${requiredFiles.length} required files, ${sourceFiles} source modules, 11 database tables.`);
+console.log(`Verification passed: version ${pkg.version}, ${requiredFiles.length} required files, ${sourceFiles} source modules, 13 database tables.`);

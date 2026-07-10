@@ -82,11 +82,11 @@ export class AtlasAssistant {
     this.clock = options.clock ?? (() => new Date().toISOString());
   }
 
-  async executeQuery({ workspaceId, userId, prompt }) {
+  async executeQuery({ workspaceId, userId, prompt, history = [] }) {
     if (!this.model) throw new AtlasError('AI_NOT_CONFIGURED', 'Atlas AI provider is not configured', 503);
     const text = required(prompt, 'prompt').trim();
     if (text.length > this.maxPromptCharacters) throw new AtlasError('AI_PROMPT_TOO_LARGE', 'AI prompt is too large', 413);
-    const messages = [{ role: 'user', content: text }];
+    const messages = [...history.map((message) => ({ role: message.role, content: message.content })), { role: 'user', content: text }];
     const sources = new Map();
     const usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
     let state;
@@ -123,15 +123,24 @@ export class AtlasAssistant {
   async query(input) {
     const runId = createId('air');
     const auditPrompt = String(input.prompt ?? '').slice(0, this.maxPromptCharacters);
+    const conversationId = input.conversationId ?? createId('aic');
     try {
-      const result = await this.executeQuery(input);
+      let history = [];
+      if (this.repository) {
+        if (input.conversationId) await this.repository.getAiConversation(input.workspaceId, input.userId, conversationId);
+        else await this.repository.createAiConversation({ id: conversationId, workspaceId: input.workspaceId, actorId: input.userId, title: auditPrompt.slice(0, 120) || 'New conversation', createdAt: this.clock() });
+        history = await this.repository.listAiMessages(input.workspaceId, input.userId, conversationId);
+        await this.repository.createAiMessage({ id: createId('aim'), conversationId, workspaceId: input.workspaceId, actorId: input.userId, runId: null, role: 'user', content: auditPrompt, sources: [], createdAt: this.clock() });
+      }
+      const result = await this.executeQuery({ ...input, history });
       if (this.repository) await this.repository.createAiRun({
         id: runId, workspaceId: input.workspaceId, actorId: input.userId, status: 'completed',
         prompt: auditPrompt, answer: result.answer, provider: result.provider ?? null, model: result.model ?? null,
         sources: result.sources, toolCalls: result.toolCalls, usage: result.usage,
         errorCode: null, createdAt: this.clock()
       });
-      return { ...result, runId };
+      if (this.repository) await this.repository.createAiMessage({ id: createId('aim'), conversationId, workspaceId: input.workspaceId, actorId: input.userId, runId, role: 'assistant', content: result.answer, sources: result.sources, createdAt: this.clock() });
+      return { ...result, runId, conversationId };
     } catch (error) {
       if (this.repository) {
         try {
@@ -152,4 +161,6 @@ export class AtlasAssistant {
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new AtlasError('VALIDATION_ERROR', 'limit must be between 1 and 100', 400);
     return this.repository.listAiRuns(workspaceId, limit);
   }
+  async listConversations(workspaceId,userId) { if(!this.repository) throw new AtlasError('AI_AUDIT_NOT_CONFIGURED','AI repository is not configured',503); return this.repository.listAiConversations(workspaceId,userId); }
+  async listMessages(workspaceId,userId,conversationId) { if(!this.repository) throw new AtlasError('AI_AUDIT_NOT_CONFIGURED','AI repository is not configured',503); return this.repository.listAiMessages(workspaceId,userId,conversationId); }
 }

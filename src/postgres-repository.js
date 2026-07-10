@@ -49,6 +49,8 @@ function aiRun(row) {
     errorCode: row.error_code, createdAt: iso(row.created_at)
   };
 }
+function aiConversation(row) { return { id: row.id, workspaceId: row.workspace_id, actorId: row.actor_id, title: row.title, createdAt: iso(row.created_at) }; }
+function aiMessage(row) { return { id: row.id, conversationId: row.conversation_id, workspaceId: row.workspace_id, actorId: row.actor_id, runId: row.run_id, role: row.role, content: row.content, sources: row.sources, createdAt: iso(row.created_at) }; }
 
 export class PostgresRepository {
   constructor(executor, pool = executor) {
@@ -383,4 +385,10 @@ export class PostgresRepository {
       'SELECT * FROM atlas_ai_run WHERE workspace_id = $1 ORDER BY created_at DESC, id LIMIT $2', [workspaceId, limit]);
     return result.rows.map(aiRun);
   }
+
+  async createAiConversation(v) { const r=await this.executor.query('INSERT INTO atlas_ai_conversation (id,workspace_id,actor_id,title,created_at) VALUES ($1,$2,$3,$4,$5) RETURNING *',[v.id,v.workspaceId,v.actorId,v.title,v.createdAt]); return aiConversation(r.rows[0]); }
+  async getAiConversation(workspaceId,actorId,id) { const r=await this.executor.query('SELECT * FROM atlas_ai_conversation WHERE workspace_id=$1 AND actor_id=$2 AND id=$3',[workspaceId,actorId,id]); if(!r.rows[0]) throw new AtlasError('AI_CONVERSATION_NOT_FOUND','AI conversation not found',404); return aiConversation(r.rows[0]); }
+  async listAiConversations(workspaceId,actorId) { const r=await this.executor.query('SELECT * FROM atlas_ai_conversation WHERE workspace_id=$1 AND actor_id=$2 ORDER BY created_at DESC,id',[workspaceId,actorId]); return r.rows.map(aiConversation); }
+  async createAiMessage(v) { const r=await this.executor.query('INSERT INTO atlas_ai_message (id,conversation_id,workspace_id,actor_id,run_id,role,content,sources,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',[v.id,v.conversationId,v.workspaceId,v.actorId,v.runId,v.role,v.content,v.sources,v.createdAt]); return aiMessage(r.rows[0]); }
+  async listAiMessages(workspaceId,actorId,conversationId) { await this.getAiConversation(workspaceId,actorId,conversationId); const r=await this.executor.query('SELECT * FROM atlas_ai_message WHERE conversation_id=$1 ORDER BY created_at,id',[conversationId]); return r.rows.map(aiMessage); }
 }

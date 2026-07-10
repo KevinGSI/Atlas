@@ -23,7 +23,7 @@ export class AiProviderRegistry {
 
 function openAiInput(messages, state) {
   if (!state?.output) {
-    return messages.filter((message) => message.role === 'user').map((message) => ({ role: 'user', content: message.content }));
+    return messages.filter((message) => message.role === 'user' || (message.role === 'assistant' && typeof message.content === 'string')).map((message) => ({ role: message.role, content: message.content }));
   }
   const lastAssistant = messages.map((message) => message.role).lastIndexOf('assistant');
   const toolOutputs = messages.slice(lastAssistant + 1).filter((message) => message.role === 'tool').map((message) => ({

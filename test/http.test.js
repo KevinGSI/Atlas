@@ -31,7 +31,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.13.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.14.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -256,11 +256,16 @@ test('authenticated assistant endpoint is workspace-scoped and source-aware', as
   });
   assert.equal(response.status, 200);
   assert.equal(response.body.data.answer, 'Your highest-priority matter is ready for review.');
+  assert.match(response.body.data.conversationId, /^aic_/);
   const history = await json(handler, `/v1/workspaces/${workspace.id}/assistant/runs`, { headers });
   assert.equal(history.status, 200);
   assert.equal(history.body.data.length, 1);
   assert.equal(history.body.data[0].status, 'completed');
   assert.equal(history.body.data[0].prompt, 'What matters today?');
+  const conversations = await json(handler, `/v1/workspaces/${workspace.id}/assistant/conversations`, { headers });
+  assert.equal(conversations.body.data.length, 1);
+  const messages = await json(handler, `/v1/workspaces/${workspace.id}/assistant/conversations/${response.body.data.conversationId}/messages`, { headers });
+  assert.deepEqual(messages.body.data.map((message) => message.role), ['user', 'assistant']);
 });
 
 test('assistant endpoint reports unavailable providers without pretending AI ran', async () => {

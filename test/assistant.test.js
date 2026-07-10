@@ -99,3 +99,19 @@ test('assistant records immutable-shaped completed and failed run records', asyn
   assert.equal(runs[0].errorCode, 'AI_PROVIDER_ERROR');
   assert.equal(runs[0].answer, null);
 });
+
+test('assistant persists private conversations and continues with prior messages', async () => {
+  const { service, tools, workspace } = await fixture();
+  const seen = [];
+  const model = { async complete(input) { seen.push(input.messages.map((m) => `${m.role}:${m.content}`)); return { text: `Answer ${seen.length}` }; } };
+  const assistant = new AtlasAssistant(model, tools, { repository: service.repository });
+  const first = await assistant.query({ workspaceId: workspace.id, userId: 'usr_owner', prompt: 'First question' });
+  const second = await assistant.query({ workspaceId: workspace.id, userId: 'usr_owner', conversationId: first.conversationId, prompt: 'Follow up' });
+  assert.equal(second.conversationId, first.conversationId);
+  assert.deepEqual(seen[1], ['user:First question', 'assistant:Answer 1', 'user:Follow up']);
+  const conversations = await assistant.listConversations(workspace.id, 'usr_owner');
+  assert.equal(conversations.length, 1);
+  const messages = await assistant.listMessages(workspace.id, 'usr_owner', first.conversationId);
+  assert.deepEqual(messages.map((m) => m.role), ['user', 'assistant', 'user', 'assistant']);
+  await assert.rejects(() => assistant.listMessages(workspace.id, 'usr_other', first.conversationId), (error) => error.code === 'AI_CONVERSATION_NOT_FOUND');
+});

@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.13.0` adds an immutable, workspace-scoped AI execution ledger for completed and failed assistant runs.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.14.0` adds persistent, private AI conversations and append-only message history for the Atlas homepage chat.
 
 ## Implemented
 
@@ -49,6 +49,10 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Sanitized failed-run records without stack traces or credentials
 - Authorized `GET /v1/workspaces/:workspaceId/assistant/runs` history endpoint
 - PostgreSQL triggers rejecting AI-ledger updates and deletions
+- Persistent user-owned conversations inside an authorized workspace
+- Append-only user and assistant messages with source references and AI run linkage
+- Provider-neutral continuation using normalized prior message history
+- Authenticated conversation-list and message-history endpoints
 
 ## Local development
 
@@ -134,6 +138,8 @@ Other providers are registered through the same `AiProviderRegistry`; legal tool
 Every assistant request receives a stable `runId`. Completed runs record the answer, source objects, tool count, provider/model identity, and normalized usage. Failed runs record the prompt, actor, timestamp, provider when known, and a sanitized Atlas error code. The ledger is workspace-scoped and append-only; PostgreSQL rejects updates and deletions.
 
 Authorized users can review recent execution records through `GET /v1/workspaces/:workspaceId/assistant/runs?limit=50`. Prompts and answers may contain privileged information, so production deployments must apply encryption, retention, export, and deletion policies consistent with legal and contractual obligations.
+
+Conversation queries accept an optional `conversationId`; omitting it creates a new private conversation. Users can list their conversations at `GET /v1/workspaces/:workspaceId/assistant/conversations` and retrieve messages at `GET /v1/workspaces/:workspaceId/assistant/conversations/:conversationId/messages`. Conversation ownership is enforced independently of workspace membership.
 
 ## Object mutation and audit
 
