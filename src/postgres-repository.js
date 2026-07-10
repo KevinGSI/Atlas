@@ -38,6 +38,9 @@ function refreshSession(row) {
 function passwordReset(row) {
   return { id: row.id, userId: row.user_id, tokenHash: row.token_hash, expiresAt: iso(row.expires_at), createdAt: iso(row.created_at), usedAt: iso(row.used_at) };
 }
+function loginThrottle(row) {
+  return { principalHash: row.principal_hash, failedCount: row.failed_count, windowStartedAt: iso(row.window_started_at), lockedUntil: iso(row.locked_until), updatedAt: iso(row.updated_at) };
+}
 
 export class PostgresRepository {
   constructor(executor, pool = executor) {
@@ -198,6 +201,33 @@ export class PostgresRepository {
     const result = await this.executor.query('SELECT * FROM atlas_user WHERE id = $1', [id]);
     if (!result.rows[0]) throw new AtlasError('USER_NOT_FOUND', 'User not found', 404);
     return user(result.rows[0]);
+  }
+
+  async getLoginThrottle(principalHash) {
+    const result = await this.executor.query(
+      'SELECT * FROM atlas_login_throttle WHERE principal_hash = $1', [principalHash]);
+    return result.rows[0] ? loginThrottle(result.rows[0]) : null;
+  }
+
+  async recordLoginFailure(principalHash, now, windowSeconds, threshold, lockSeconds) {
+    const reset = `(atlas_login_throttle.window_started_at <= $2::timestamptz - $3 * interval '1 second'
+      OR (atlas_login_throttle.locked_until IS NOT NULL AND atlas_login_throttle.locked_until <= $2))`;
+    const nextCount = `(CASE WHEN ${reset} THEN 1 ELSE atlas_login_throttle.failed_count + 1 END)`;
+    const result = await this.executor.query(
+      `INSERT INTO atlas_login_throttle
+       (principal_hash, failed_count, window_started_at, locked_until, updated_at)
+       VALUES ($1, 1, $2, CASE WHEN 1 >= $4 THEN $2::timestamptz + $5 * interval '1 second' ELSE NULL END, $2)
+       ON CONFLICT (principal_hash) DO UPDATE SET
+         failed_count = ${nextCount},
+         window_started_at = CASE WHEN ${reset} THEN $2 ELSE atlas_login_throttle.window_started_at END,
+         locked_until = CASE WHEN ${nextCount} >= $4 THEN $2::timestamptz + $5 * interval '1 second' ELSE NULL END,
+         updated_at = $2
+       RETURNING *`, [principalHash, now, windowSeconds, threshold, lockSeconds]);
+    return loginThrottle(result.rows[0]);
+  }
+
+  async clearLoginThrottle(principalHash) {
+    await this.executor.query('DELETE FROM atlas_login_throttle WHERE principal_hash = $1', [principalHash]);
   }
 
   async updateUserPassword(id, passwordHash) {

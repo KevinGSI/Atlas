@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.9.0` adds immediate access-token revocation through issuing-session validation on every protected request.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.10.0` adds persistent login throttling, timed lockout, and anti-enumeration password verification.
 
 ## Implemented
 
@@ -32,6 +32,10 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Issuing-session validation on every authenticated request
 - Immediate access-token rejection after rotation, logout, global logout, password reset, or session expiration
 - Rejection of legacy access tokens without a session binding
+- Hashed-principal failed-login tracking without storing raw login emails
+- Configurable rolling failure windows, thresholds, and timed lockouts
+- Equivalent password-verification work and response sequencing for known and unknown accounts
+- Atomic PostgreSQL failure counting and successful-login reset
 
 ## Local development
 
@@ -99,6 +103,8 @@ Password recovery begins with `POST /v1/auth/password-reset/request`, which alwa
 Authenticated users can inspect their login history with `GET /v1/auth/sessions`, revoke one session with `DELETE /v1/auth/sessions/:sessionId`, or revoke every refresh session with `DELETE /v1/auth/sessions`. Session responses expose status and timestamps but never stored token hashes or internal token-family identifiers.
 
 Every protected request verifies both the access-token signature and its persisted issuing session. Rotated, revoked, expired, missing, and cross-user sessions receive `401 ACCESS_TOKEN_REVOKED`; tokens without a session claim receive `401 ACCESS_TOKEN_SESSION_REQUIRED`.
+
+Login failures are tracked by a normalized email hash. The defaults lock a principal for 15 minutes after five failures within 15 minutes. Configure `LOGIN_FAILURE_THRESHOLD`, `LOGIN_FAILURE_WINDOW_SECONDS`, and `LOGIN_LOCK_SECONDS` as positive integers. Locked requests return `429 ACCOUNT_LOCKED` with the expiration time.
 
 ## Object mutation and audit
 

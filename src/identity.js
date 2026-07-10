@@ -4,6 +4,7 @@ import { AtlasError, required } from './errors.js';
 import { createId } from './ids.js';
 
 const scrypt = promisify(scryptCallback);
+const dummyPasswordHash = 'scrypt$16384$8$1$YXRsYXMtZHVtbXktc2FsdA$MTFgp77CaO1lpwhhuy-VhvfjmeBI4xBJgoDlcoruvkl5v05ss7zox1IMCOQx1JBIlCS264VtylZK8HzFwo76Jw';
 const roles = new Set(['owner', 'admin', 'member', 'viewer']);
 const permissions = {
   owner: new Set(['workspace:read', 'workspace:write', 'members:admin']),
@@ -59,6 +60,9 @@ export class IdentityService {
     this.repository = repository; this.tokens = tokenService; this.clock = clock;
     this.refreshTokenTtlSeconds = options.refreshTokenTtlSeconds ?? 2_592_000;
     this.passwordResetTtlSeconds = options.passwordResetTtlSeconds ?? 900;
+    this.loginFailureThreshold = options.loginFailureThreshold ?? 5;
+    this.loginFailureWindowSeconds = options.loginFailureWindowSeconds ?? 900;
+    this.loginLockSeconds = options.loginLockSeconds ?? 900;
     this.randomToken = options.randomToken ?? (() => randomBytes(32).toString('base64url'));
     this.deliverPasswordReset = options.deliverPasswordReset ?? (async () => {});
   }
@@ -83,10 +87,22 @@ export class IdentityService {
     });
   }
   async login(input) {
+    const email = required(input.email, 'email').trim().toLowerCase();
+    const principalHash = hashToken(email);
+    const now = this.clock();
+    const throttle = await this.repository.getLoginThrottle(principalHash);
+    if (throttle?.lockedUntil && new Date(throttle.lockedUntil).getTime() > new Date(now).getTime()) {
+      throw new AtlasError('ACCOUNT_LOCKED', 'Too many failed login attempts; try again later', 429, { lockedUntil: throttle.lockedUntil });
+    }
     let user;
-    try { user = await this.repository.getUserByEmail(required(input.email, 'email').trim().toLowerCase()); }
-    catch { throw new AtlasError('INVALID_CREDENTIALS', 'Invalid email or password', 401); }
-    if (!(await verifyPassword(input.password ?? '', user.passwordHash))) throw new AtlasError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+    try { user = await this.repository.getUserByEmail(email); } catch { user = null; }
+    const valid = await verifyPassword(input.password ?? '', user?.passwordHash ?? dummyPasswordHash);
+    if (!user || !valid) {
+      const failure = await this.repository.recordLoginFailure(principalHash, now, this.loginFailureWindowSeconds, this.loginFailureThreshold, this.loginLockSeconds);
+      if (failure.lockedUntil) throw new AtlasError('ACCOUNT_LOCKED', 'Too many failed login attempts; try again later', 429, { lockedUntil: failure.lockedUntil });
+      throw new AtlasError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
+    }
+    await this.repository.clearLoginThrottle(principalHash);
     return { user: this.publicUser(user), ...(await this.issueSession(user)) };
   }
   async refresh(input) {

@@ -30,7 +30,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.9.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.10.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -216,4 +216,21 @@ test('HTTP session inventory supports individual and global logout', async () =>
   assert.equal(globallyDenied.body.error.code, 'ACCESS_TOKEN_REVOKED');
   const denied = await json(handler, '/v1/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: registered.refreshToken }) });
   assert.equal(denied.body.error.code, 'REFRESH_TOKEN_REUSED');
+});
+
+test('HTTP login throttling returns a stable timed-lockout response', async () => {
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)), undefined, {
+    loginFailureThreshold: 2, loginFailureWindowSeconds: 300, loginLockSeconds: 60
+  });
+  const handler = createAtlasHandler(new AtlasService(repository), {
+    config: { maxBodyBytes: 1_048_576, corsOrigins: [] }, ready: async () => true, identity
+  });
+  await json(handler, '/v1/auth/register', { method: 'POST', body: JSON.stringify({ email: 'locked-http@example.com', name: 'Locked', password: 'correct password long enough' }) });
+  const fail = () => json(handler, '/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'locked-http@example.com', password: 'wrong password' }) });
+  assert.equal((await fail()).body.error.code, 'INVALID_CREDENTIALS');
+  const locked = await fail();
+  assert.equal(locked.status, 429);
+  assert.equal(locked.body.error.code, 'ACCOUNT_LOCKED');
+  assert.ok(locked.body.error.details.lockedUntil);
 });

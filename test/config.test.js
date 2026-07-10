@@ -9,6 +9,9 @@ test('production defaults to a cloud-compatible listener', () => {
   assert.equal(config.maxBodyBytes, 1_048_576);
   assert.equal(config.refreshTokenTtlSeconds, 2_592_000);
   assert.equal(config.passwordResetTtlSeconds, 900);
+  assert.equal(config.loginFailureThreshold, 5);
+  assert.equal(config.loginFailureWindowSeconds, 900);
+  assert.equal(config.loginLockSeconds, 900);
 });
 
 test('production refuses to start without PostgreSQL', () => {
@@ -28,4 +31,5 @@ test('configuration validates positive numeric limits', () => {
   assert.throws(() => loadConfig({ MAX_BODY_BYTES: 'lots' }), /MAX_BODY_BYTES must be a positive integer/);
   assert.throws(() => loadConfig({ REFRESH_TOKEN_TTL_SECONDS: '0' }), /REFRESH_TOKEN_TTL_SECONDS must be a positive integer/);
   assert.throws(() => loadConfig({ PASSWORD_RESET_TTL_SECONDS: '0' }), /PASSWORD_RESET_TTL_SECONDS must be a positive integer/);
+  assert.throws(() => loadConfig({ LOGIN_FAILURE_THRESHOLD: '0' }), /LOGIN_FAILURE_THRESHOLD must be a positive integer/);
 });

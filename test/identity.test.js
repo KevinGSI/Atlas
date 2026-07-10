@@ -194,6 +194,35 @@ test('authentication rejects unbound and refresh-expired session access tokens',
   await assert.rejects(() => identity.authenticate(`Bearer ${unbound.accessToken}`), (error) => error.code === 'ACCESS_TOKEN_SESSION_REQUIRED');
 });
 
+test('failed logins trigger timed lockout and successful login clears failures', async () => {
+  let now = new Date('2026-07-10T12:00:00.000Z');
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)), () => now.toISOString(), {
+    loginFailureThreshold: 3, loginFailureWindowSeconds: 300, loginLockSeconds: 60
+  });
+  await identity.register({ email: 'lockout@example.com', name: 'Lockout', password: 'correct password long enough' });
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    await assert.rejects(() => identity.login({ email: 'lockout@example.com', password: 'wrong password' }), (error) => error.code === 'INVALID_CREDENTIALS');
+  }
+  await assert.rejects(() => identity.login({ email: 'lockout@example.com', password: 'wrong password' }), (error) => error.code === 'ACCOUNT_LOCKED' && error.status === 429);
+  await assert.rejects(() => identity.login({ email: 'lockout@example.com', password: 'correct password long enough' }), (error) => error.code === 'ACCOUNT_LOCKED');
+  now = new Date('2026-07-10T12:01:01.000Z');
+  assert.equal((await identity.login({ email: 'lockout@example.com', password: 'correct password long enough' })).user.email, 'lockout@example.com');
+  await assert.rejects(() => identity.login({ email: 'lockout@example.com', password: 'wrong password' }), (error) => error.code === 'INVALID_CREDENTIALS');
+});
+
+test('unknown and known principals receive the same throttling response sequence', async () => {
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)), undefined, {
+    loginFailureThreshold: 2, loginFailureWindowSeconds: 300, loginLockSeconds: 60
+  });
+  await identity.register({ email: 'known@example.com', name: 'Known', password: 'correct password long enough' });
+  for (const email of ['known@example.com', 'missing@example.com']) {
+    await assert.rejects(() => identity.login({ email, password: 'wrong password' }), (error) => error.code === 'INVALID_CREDENTIALS');
+    await assert.rejects(() => identity.login({ email, password: 'wrong password' }), (error) => error.code === 'ACCOUNT_LOCKED');
+  }
+});
+
 test('password replacement rolls back if reset consumption fails', async () => {
   let delivered;
   const repository = new InMemoryRepository();

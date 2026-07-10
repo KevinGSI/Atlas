@@ -18,6 +18,9 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const identity = new IdentityService(runtime.repository, new TokenService(config.tokenSecret, config.accessTokenTtlSeconds), undefined, {
     refreshTokenTtlSeconds: config.refreshTokenTtlSeconds,
     passwordResetTtlSeconds: config.passwordResetTtlSeconds,
+    loginFailureThreshold: config.loginFailureThreshold,
+    loginFailureWindowSeconds: config.loginFailureWindowSeconds,
+    loginLockSeconds: config.loginLockSeconds,
     deliverPasswordReset: dependencies.deliverPasswordReset
   });
   const server = createAtlasServer(service, { config, ready: runtime.ready, identity });

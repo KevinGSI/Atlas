@@ -119,6 +119,20 @@ test('PostgreSQL session inventory and lookup are always scoped to the owning us
   assert.match(calls[1].sql, /ORDER BY created_at DESC/);
 });
 
+test('PostgreSQL login throttling atomically increments a hashed principal', async () => {
+  const calls = [];
+  const row = { principal_hash: 'hashed-email', failed_count: 2, window_started_at: timestamp, locked_until: null, updated_at: timestamp };
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rows: sql.startsWith('DELETE') ? [] : [row] }; } };
+  const repository = new PostgresRepository(pool);
+  const throttle = await repository.recordLoginFailure('hashed-email', timestamp, 900, 5, 900);
+  assert.equal(throttle.failedCount, 2);
+  assert.match(calls[0].sql, /ON CONFLICT \(principal_hash\) DO UPDATE/);
+  assert.match(calls[0].sql, /failed_count \+ 1/);
+  assert.deepEqual(calls[0].values, ['hashed-email', timestamp, 900, 5, 900]);
+  await repository.clearLoginThrottle('hashed-email');
+  assert.match(calls[1].sql, /DELETE FROM atlas_login_throttle/);
+});
+
 test('PostgreSQL password reset stores only hashes and locks tokens before consumption', async () => {
   const calls = [];
   const row = { id: 'rst_1', user_id: 'usr_1', token_hash: 'hashed-reset', expires_at: timestamp, created_at: timestamp, used_at: null };

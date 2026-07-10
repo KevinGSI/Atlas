@@ -14,13 +14,14 @@ export class InMemoryRepository {
   #audits = new Map();
   #refreshSessions = new Map();
   #passwordResets = new Map();
+  #loginThrottles = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles] = snapshot;
       throw error;
     }
   }
@@ -138,6 +139,30 @@ export class InMemoryRepository {
     const user = this.#users.get(id);
     if (!user) throw new AtlasError('USER_NOT_FOUND', 'User not found', 404);
     return clone(user);
+  }
+
+  getLoginThrottle(principalHash) {
+    const throttle = this.#loginThrottles.get(principalHash);
+    return throttle ? clone(throttle) : null;
+  }
+
+  recordLoginFailure(principalHash, now, windowSeconds, threshold, lockSeconds) {
+    const current = this.#loginThrottles.get(principalHash);
+    const nowMs = new Date(now).getTime();
+    const reset = !current || nowMs - new Date(current.windowStartedAt).getTime() >= windowSeconds * 1000
+      || (current.lockedUntil && new Date(current.lockedUntil).getTime() <= nowMs);
+    const failedCount = reset ? 1 : current.failedCount + 1;
+    const throttle = {
+      principalHash, failedCount, windowStartedAt: reset ? now : current.windowStartedAt,
+      lockedUntil: failedCount >= threshold ? new Date(nowMs + lockSeconds * 1000).toISOString() : null,
+      updatedAt: now
+    };
+    this.#loginThrottles.set(principalHash, throttle);
+    return clone(throttle);
+  }
+
+  clearLoginThrottle(principalHash) {
+    this.#loginThrottles.delete(principalHash);
   }
 
   updateUserPassword(id, passwordHash) {
