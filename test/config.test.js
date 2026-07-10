@@ -13,6 +13,8 @@ test('production defaults to a cloud-compatible listener', () => {
   assert.equal(config.loginFailureWindowSeconds, 900);
   assert.equal(config.loginLockSeconds, 900);
   assert.equal(config.aiProvider, null);
+  assert.equal(config.cmsSyncEnabled, false);
+  assert.equal(config.cmsSyncIntervalMs, 300_000);
   assert.equal(config.openAiBaseUrl, 'https://api.openai.com/v1');
 });
 
@@ -40,6 +42,12 @@ test('AI encryption keyring configuration supports controlled rotation', () => {
   assert.throws(() => loadConfig({ AI_CONTENT_ENCRYPTION_KEYS: '{bad json' }), /must be a JSON object/);
 });
 
+test('CMS coexistence configuration validates encrypted credential custody',()=>{
+  assert.throws(()=>loadConfig({CMS_CREDENTIAL_ENCRYPTION_KEY:'short'}),/CMS_CREDENTIAL_ENCRYPTION_KEY must be a base64-encoded 32-byte key/);
+  const key=Buffer.alloc(32,4).toString('base64');const config=loadConfig({CMS_CREDENTIAL_ENCRYPTION_KEY:key,CMS_SYNC_ENABLED:'true',CMS_SYNC_INTERVAL_MS:'60000'});
+  assert.equal(config.cmsCredentialEncryptionKey,key);assert.equal(config.cmsSyncEnabled,true);assert.equal(config.cmsSyncIntervalMs,60000);
+});
+
 test('production refuses to start without PostgreSQL', () => {
   assert.throws(() => loadConfig({ NODE_ENV: 'production' }), /DATABASE_URL is required/);
 });
@@ -58,4 +66,5 @@ test('configuration validates positive numeric limits', () => {
   assert.throws(() => loadConfig({ REFRESH_TOKEN_TTL_SECONDS: '0' }), /REFRESH_TOKEN_TTL_SECONDS must be a positive integer/);
   assert.throws(() => loadConfig({ PASSWORD_RESET_TTL_SECONDS: '0' }), /PASSWORD_RESET_TTL_SECONDS must be a positive integer/);
   assert.throws(() => loadConfig({ LOGIN_FAILURE_THRESHOLD: '0' }), /LOGIN_FAILURE_THRESHOLD must be a positive integer/);
+  assert.throws(() => loadConfig({ CMS_SYNC_INTERVAL_MS: '0' }), /CMS_SYNC_INTERVAL_MS must be a positive integer/);
 });

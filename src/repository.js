@@ -22,13 +22,17 @@ export class InMemoryRepository {
   #intelligenceJobs = new Map();
   #intelligenceObservations = new Map();
   #ingestionRecords = new Map();
+  #cmsAuthorizations = new Map();
+  #cmsConnections = new Map();
+  #cmsRecordLinks = new Map();
+  #encryptedSecrets = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets] = snapshot;
       throw error;
     }
   }
@@ -325,4 +329,17 @@ export class InMemoryRepository {
   reviewIntelligenceObservation(workspaceId,id,status,reviewedBy,reviewedAt) { const value=this.getIntelligenceObservation(workspaceId,id);if(value.status!=='candidate')throw new AtlasError('INTELLIGENCE_OBSERVATION_ALREADY_REVIEWED','Intelligence observation has already been reviewed',409);const updated={...value,status,reviewedBy,reviewedAt};this.#intelligenceObservations.set(id,clone(updated));return clone(updated); }
   findIngestionRecord(workspaceId,connector,externalId) { const value=this.#ingestionRecords.get(`${workspaceId}:${connector}:${externalId}`);return value?clone(value):null; }
   createIngestionRecord(value) { const key=`${value.workspaceId}:${value.connector}:${value.externalId}`;if(this.#ingestionRecords.has(key))throw new AtlasError('INGESTION_EXISTS','Ingestion record already exists',409);this.#ingestionRecords.set(key,clone(value));return clone(value); }
+  createCmsAuthorization(value){this.#cmsAuthorizations.set(value.stateHash,clone(value));return clone(value);}
+  consumeCmsAuthorization(stateHash,usedAt){const value=this.#cmsAuthorizations.get(stateHash);if(!value||value.usedAt)throw new AtlasError('CMS_AUTHORIZATION_INVALID','CMS authorization is invalid or already used',400);const updated={...value,usedAt};this.#cmsAuthorizations.set(stateHash,updated);return clone(updated);}
+  createCmsConnection(value){if([...this.#cmsConnections.values()].some((x)=>x.workspaceId===value.workspaceId&&x.provider===value.provider))throw new AtlasError('CMS_CONNECTION_EXISTS','CMS provider is already connected',409);this.#cmsConnections.set(value.id,clone(value));return clone(value);}
+  getCmsConnection(workspaceId,id){const value=this.#cmsConnections.get(id);if(!value||value.workspaceId!==workspaceId)throw new AtlasError('CMS_CONNECTION_NOT_FOUND','CMS connection not found',404);return clone(value);}
+  listCmsConnections(workspaceId){return [...this.#cmsConnections.values()].filter((x)=>x.workspaceId===workspaceId).map(clone);}
+  listActiveCmsConnections(){return [...this.#cmsConnections.values()].filter((x)=>x.status==='connected'||x.status==='error').map(clone);}
+  updateCmsConnection(id,changes){const value=this.#cmsConnections.get(id);if(!value)throw new AtlasError('CMS_CONNECTION_NOT_FOUND','CMS connection not found',404);const updated={...value,...changes};this.#cmsConnections.set(id,clone(updated));return clone(updated);}
+  findCmsRecordLink(connectionId,externalType,externalId){const value=this.#cmsRecordLinks.get(`${connectionId}:${externalType}:${externalId}`);return value?clone(value):null;}
+  createCmsRecordLink(value){this.#cmsRecordLinks.set(`${value.connectionId}:${value.externalType}:${value.externalId}`,clone(value));return clone(value);}
+  updateCmsRecordLink(id,changes){const entry=[...this.#cmsRecordLinks.entries()].find(([,value])=>value.id===id);if(!entry)throw new AtlasError('CMS_RECORD_LINK_NOT_FOUND','CMS record link not found',404);const updated={...entry[1],...changes};this.#cmsRecordLinks.set(entry[0],clone(updated));return clone(updated);}
+  createEncryptedSecret(value){this.#encryptedSecrets.set(value.id,clone(value));return clone(value);}
+  getEncryptedSecret(id){const value=this.#encryptedSecrets.get(id);if(!value)throw new AtlasError('CMS_CREDENTIAL_UNAVAILABLE','CMS credential is unavailable',503);return clone(value);}
+  deleteEncryptedSecret(id){this.#encryptedSecrets.delete(id);return {deleted:true};}
 }

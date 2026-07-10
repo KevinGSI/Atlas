@@ -1,57 +1,51 @@
-# Atlas Core 0.20.0 — Native Intelligence Correction Status
+# Atlas Core 0.21.0 — CMS Coexistence Status
 
-## Corrected architecture verified in code
+## Verified as implemented
 
-- Chat is one consumer of shared Atlas intelligence, not the owner of firm intelligence
-- All material object, timeline, ingestion, and approved-action activity enters a durable native intelligence queue
-- Provider-specific APIs are confined to composition/adapters; domain modules use normalized contracts
-- Capability routing selects interchangeable analysis, extraction, OCR, or model-backed providers by event type
-- A deployable background worker claims jobs safely, retries failures, records provenance, and shuts down gracefully
-- Incoming email and attachments become canonical, matter-linkable objects with timeline and graph relationships
-- Connector delivery is idempotent by workspace, connector, and external message identifier
-- Attachment content is accessed through blob-storage and media-type extraction boundaries
-- Provider output is validated before it can affect the digital twin
-- Candidate classifications, entities, matter matches, facts, deadlines, duties, conflicts, risks, and recommendations preserve source, location, confidence, job, and provider provenance
-- Candidate knowledge requires authorized acceptance or rejection
-- Accepted knowledge becomes canonical objects or graph relationships shared by all platform surfaces
-- Deterministic entity/matter candidate scoring remains workspace-scoped and Atlas-owned
-- The unified review inbox combines candidate observations, proposed actions, and terminal processing failures
-- Platform search and chat both query the shared twin
-- Matter health consumes accepted twin deadlines, risks, and conflicts with explainable object links
-- Consequential task/document/email actions retain human approval; email drafts remain unsent and documents remain unfiled
-- Direct workflows continue when intelligence providers are absent or unavailable
-- The native intelligence constitution and architecture regression tests make these invariants enforceable
+- Everything verified through Atlas Core `0.20.0`
+- Provider-neutral CMS connector registry and capability discovery
+- OAuth 2.0 authorization-code flow with PKCE state, verifier, expiration, and single use
+- No CMS username/password fields, endpoints, or schema columns
+- Durable AES-256-GCM credential vault storing only ciphertext and opaque references
+- Production refusal when a configured connector lacks a managed vault or encryption key
+- Clio Manage regional OAuth endpoints, bearer access, pagination, and read-only resource configuration
+- MyCase Open API adapter boundary requiring provider-issued endpoint/API access configuration
+- Read-only-by-default connections and explicit disconnect/revocation
+- Incremental cursors, source timestamps, checksums, stable provider record IDs, and idempotent Atlas links
+- Canonical mappings for matters, contacts, accounting, tasks, calendars, documents, and communications
+- Import/update timeline events and native-intelligence jobs for digital-twin learning
+- Continuous scheduled synchronization with isolated per-connection failures
+- Authenticated connection, authorization, callback, list, sync, and disconnect HTTP routes
 
 ## Verification completed here
 
-- Full canonical Node test suite, architecture tests, and repository verifier
-- Ordinary non-chat activity entering the shared pipeline
-- Provider interchangeability, capability routing, structured-model adapter, and invalid-output rollback
-- Worker draining, bounded retries, and terminal failure behavior
-- Email/PDF metadata ingestion, idempotency, graph linkage, and atomic rollback
-- Replaceable blob/extraction/OCR boundary behavior
-- Workspace-isolated entity and matter resolution
-- Candidate projection, review inbox aggregation, acceptance, rejection, canonicalization, and duplicate-review prevention
-- Shared twin retrieval from chat and platform services
-- Matter-health changes driven by accepted twin knowledge
+- 125 canonical tests across the complete Atlas Core surface
+- PKCE authorization and single-use state
+- Proof that returned connections never expose access tokens
+- Proof that the durable repository contains authenticated ciphertext, not token plaintext
+- Incremental matter/contact/accounting import with external provenance
+- Canonical object and intelligence-job creation
+- Clio OAuth/token/bearer request translation using a simulated official API transport
+- MyCase configuration fail-closed behavior
+- Scheduler repetition and graceful shutdown
+- Full native-intelligence, identity, authorization, migration, PostgreSQL adapter, and deployment regression suite
 
-## External capabilities not live-verified in this environment
+## Explicitly not live-verified here
 
-- A real Microsoft 365, Gmail, IMAP, or court-notification mailbox connector
-- Binary object storage and malware scanning
-- A production PDF parser or OCR engine processing real files
-- Live model-backed structured extraction
-- Live PostgreSQL migrations, concurrent workers, and production-sized queue behavior
-- Managed secrets/KMS, observability, backup recovery, penetration testing, and provider privacy certification
+- Clio developer application approval, real user authorization, or production API data
+- MyCase Advanced Tier/Open API enablement, issued endpoints, or real API data
+- Other CMS vendors not yet supplied as adapters
+- Live PostgreSQL execution of migrations `0014` and `0015`
+- A production KMS/HSM-backed vault, multi-instance scheduler locks, rate-limit behavior, or large-firm migration volumes
+- Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
 
-These are adapter and infrastructure verification boundaries, not hidden claims of completed third-party integration. Synthetic adapters prove the Atlas contracts and workflow behavior; production readiness requires connecting and testing selected services.
+## Security and transition boundary
 
-## Remaining product expansion, not architectural correction
+Atlas must not ask customers to submit their Clio or MyCase password. Users authenticate on the provider's own authorization page. Atlas stores only encrypted OAuth/API credentials or a managed-vault reference. Imported records retain their source identity so users can continue working in the existing CMS while Atlas synchronizes and builds its authorized digital twin.
 
-- Additional connector implementations and provider adapters
-- Document templates, citation checking, redlining, email delivery, filing, signatures, and calendar synchronization
-- Ethical-wall policy administration, retention/legal-hold workflows, operational dashboards, and independent legal-quality evaluation
+## Product limitations remaining
 
-## Completion boundary
-
-Version `0.20.0` completes the requested architectural correction: native provider-interchangeable intelligence now powers a common digital-twin pipeline across ingestion, extraction contracts, resolution, provenance, review, platform behavior, and chat. It does not claim that unavailable external services were executed live or that the broader Atlas product is finished.
+- Provider field mappings require certification against each vendor account and enabled API surface
+- Deletion/tombstone reconciliation, attachment binary transfer, trust-account migration controls, and conflict-resolution UI need additional releases
+- A production multi-instance scheduler should use a dedicated distributed lease
+- Final cutover tooling and write-back require separate explicit authorization and reconciliation policies

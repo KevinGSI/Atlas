@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.20.0` completes the architectural correction that makes provider-interchangeable native intelligence a shared digital-twin layer beneath platform workflows and chat.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.21.0` adds secure CMS coexistence so firms can connect an existing practice-management system, synchronize into Atlas incrementally, and transition without an immediate cutover.
 
 ## Implemented
 
@@ -82,6 +82,13 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Unified intelligence review inbox for candidates, actions, and processing failures
 - Shared twin search used by platform APIs and the chat tool registry
 - Matter health consuming accepted twin deadlines, risks, and conflicts
+- OAuth 2.0 + PKCE CMS connection flow without collecting provider passwords
+- Clio Manage OAuth and paginated read-only resource adapter
+- MyCase Open API adapter boundary for provider-issued access
+- Incremental matter, contact, accounting, task, calendar, document, and communication sync
+- Stable external-record links, cursors, checksums, source timestamps, and timeline provenance
+- Scheduled coexistence sync while the external CMS remains active
+- Encrypted durable OAuth-token vault with production fail-closed configuration
 
 ## Local development
 
@@ -175,6 +182,14 @@ Native intelligence runs beneath chat and direct platform workflows. Material ob
 Incoming connector emails enter through `POST /v1/workspaces/:workspaceId/ingestions/email`. Attachment metadata points to an external blob reference; binary storage, malware scanning, PDF parsing, and OCR are replaceable adapters rather than database blobs or vendor-specific domain code.
 
 Candidates remain noncanonical until reviewed. The homepage can consume `GET /v1/workspaces/:workspaceId/intelligence/review-inbox`; authorized reviewers accept or reject observations through `POST /v1/workspaces/:workspaceId/intelligence/observations/:observationId/decision`. Accepted knowledge becomes canonical twin objects or relationships. Both ordinary screens and Atlas chat search the same accepted state through `GET /v1/workspaces/:workspaceId/intelligence/search?q=...` and the `search_twin` tool.
+
+## CMS coexistence and transition
+
+Atlas never asks a customer to enter a Clio or MyCase password. Start a provider authorization with `POST /v1/workspaces/:workspaceId/cms/:provider/authorize`; Atlas generates OAuth state and PKCE values, and the user signs in on the provider's own site. The provider redirects to `GET /v1/cms/oauth/callback`. Connections can be inspected, synchronized, and disconnected through the workspace CMS endpoints.
+
+Connections are read-only by default. Incremental sync maps supported provider records into canonical Atlas objects, keeps stable external IDs and cursors, and emits timeline/intelligence events. Set `CMS_SYNC_ENABLED=true` to run continuous sync and configure `CMS_SYNC_INTERVAL_MS`. Production connectors require either an injected managed `credentialVault` or `CMS_CREDENTIAL_ENCRYPTION_KEY` containing a base64-encoded 32-byte key.
+
+Clio requires `CLIO_CLIENT_ID`, `CLIO_CLIENT_SECRET`, and optionally `CLIO_REGION`. MyCase Open API availability and endpoints must be enabled/issued for the firm; configure `MYCASE_CLIENT_ID`, `MYCASE_CLIENT_SECRET`, `MYCASE_AUTHORIZE_ENDPOINT`, `MYCASE_TOKEN_ENDPOINT`, and `MYCASE_API_BASE`. Vendor APIs, scopes, tiers, and field availability must be verified before enabling a production connection.
 
 ## AI accountability ledger
 
