@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.10.0` adds persistent login throttling, timed lockout, and anti-enumeration password verification.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.11.0` adds the authenticated, permission-scoped Atlas AI orchestration and tool-execution foundation.
 
 ## Implemented
 
@@ -36,6 +36,11 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Configurable rolling failure windows, thresholds, and timed lockouts
 - Equivalent password-verification work and response sequencing for known and unknown accounts
 - Atomic PostgreSQL failure counting and successful-login reset
+- Provider-neutral AI orchestration with bounded prompt and tool execution
+- Authenticated `POST /v1/workspaces/:workspaceId/assistant/query` endpoint
+- Read-only tools for workspace search, recent matters, object retrieval, matter health, and daily priorities
+- Workspace-pinned tool execution and deduplicated source-object references
+- Explicit `503 AI_NOT_CONFIGURED` behavior until a real model adapter is supplied
 
 ## Local development
 
@@ -105,6 +110,12 @@ Authenticated users can inspect their login history with `GET /v1/auth/sessions`
 Every protected request verifies both the access-token signature and its persisted issuing session. Rotated, revoked, expired, missing, and cross-user sessions receive `401 ACCESS_TOKEN_REVOKED`; tokens without a session claim receive `401 ACCESS_TOKEN_SESSION_REQUIRED`.
 
 Login failures are tracked by a normalized email hash. The defaults lock a principal for 15 minutes after five failures within 15 minutes. Configure `LOGIN_FAILURE_THRESHOLD`, `LOGIN_FAILURE_WINDOW_SECONDS`, and `LOGIN_LOCK_SECONDS` as positive integers. Locked requests return `429 ACCOUNT_LOCKED` with the expiration time.
+
+## Atlas AI orchestration
+
+The assistant endpoint authenticates the user, checks `workspace:read`, and pins every model-requested tool to that authorized workspace. The model cannot supply or change the workspace ID. Version `0.11.0` exposes only read-only tools and returns source-object references with the final answer.
+
+The runtime accepts an injected `aiModel` implementing `complete({ messages, tools, context })`. No provider or API key is bundled. Without one, the endpoint returns `503 AI_NOT_CONFIGURED` rather than generating a scripted response or claiming AI work occurred.
 
 ## Object mutation and audit
 

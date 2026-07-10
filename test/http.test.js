@@ -5,6 +5,7 @@ import { createAtlasHandler } from '../src/http.js';
 import { InMemoryRepository } from '../src/repository.js';
 import { AtlasService } from '../src/service.js';
 import { IdentityService, TokenService } from '../src/identity.js';
+import { AtlasAssistant, AtlasToolRegistry } from '../src/assistant.js';
 
 function fixture() {
   return createAtlasHandler(new AtlasService(new InMemoryRepository()), {
@@ -30,7 +31,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.10.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.11.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -233,4 +234,42 @@ test('HTTP login throttling returns a stable timed-lockout response', async () =
   assert.equal(locked.status, 429);
   assert.equal(locked.body.error.code, 'ACCOUNT_LOCKED');
   assert.ok(locked.body.error.details.lockedUntil);
+});
+
+test('authenticated assistant endpoint is workspace-scoped and source-aware', async () => {
+  const repository = new InMemoryRepository();
+  const service = new AtlasService(repository);
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));
+  const model = { async complete(input) {
+    assert.equal(input.context.userId.startsWith('usr_'), true);
+    return { text: 'Your highest-priority matter is ready for review.' };
+  } };
+  const assistant = new AtlasAssistant(model, new AtlasToolRegistry(service));
+  const handler = createAtlasHandler(service, {
+    config: { maxBodyBytes: 1_048_576, corsOrigins: [] }, ready: async () => true, identity, assistant
+  });
+  const registered = (await json(handler, '/v1/auth/register', { method: 'POST', body: JSON.stringify({ email: 'ai@example.com', name: 'AI User', password: 'correct password long enough' }) })).body.data;
+  const headers = { authorization: `Bearer ${registered.accessToken}` };
+  const workspace = (await json(handler, '/v1/workspaces', { method: 'POST', headers, body: JSON.stringify({ name: 'AI Firm' }) })).body.data;
+  const response = await json(handler, `/v1/workspaces/${workspace.id}/assistant/query`, {
+    method: 'POST', headers, body: JSON.stringify({ prompt: 'What matters today?' })
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.answer, 'Your highest-priority matter is ready for review.');
+});
+
+test('assistant endpoint reports unavailable providers without pretending AI ran', async () => {
+  const repository = new InMemoryRepository();
+  const service = new AtlasService(repository);
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));
+  const handler = createAtlasHandler(service, {
+    config: { maxBodyBytes: 1_048_576, corsOrigins: [] }, ready: async () => true, identity,
+    assistant: new AtlasAssistant(null, new AtlasToolRegistry(service))
+  });
+  const registered = (await json(handler, '/v1/auth/register', { method: 'POST', body: JSON.stringify({ email: 'no-ai@example.com', name: 'No AI', password: 'correct password long enough' }) })).body.data;
+  const headers = { authorization: `Bearer ${registered.accessToken}` };
+  const workspace = (await json(handler, '/v1/workspaces', { method: 'POST', headers, body: JSON.stringify({ name: 'No AI Firm' }) })).body.data;
+  const response = await json(handler, `/v1/workspaces/${workspace.id}/assistant/query`, { method: 'POST', headers, body: JSON.stringify({ prompt: 'Help' }) });
+  assert.equal(response.status, 503);
+  assert.equal(response.body.error.code, 'AI_NOT_CONFIGURED');
 });

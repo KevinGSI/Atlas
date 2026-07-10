@@ -75,7 +75,8 @@ function route(method, pathname) {
     ['GET', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)\/graph$/, 'graph'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/events$/, 'createEvent'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/events$/, 'listEvents'],
-    ['GET', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/health$/, 'matterHealth']
+    ['GET', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/health$/, 'matterHealth'],
+    ['POST', /^\/v1\/workspaces\/([^/]+)\/assistant\/query$/, 'assistantQuery']
   ];
   for (const [expectedMethod, regex, name] of patterns) {
     const match = pathname.match(regex);
@@ -88,6 +89,7 @@ export function createAtlasHandler(service, options = {}) {
   const config = options.config ?? { maxBodyBytes: 1_048_576, corsOrigins: [] };
   const ready = options.ready ?? (async () => true);
   const identity = options.identity;
+  const assistant = options.assistant;
   return async (request, response) => {
     const requestId = request.headers?.['x-atlas-request-id'] || randomUUID();
     let headers = securityHeaders(requestId);
@@ -101,14 +103,14 @@ export function createAtlasHandler(service, options = {}) {
       const publicRoute = ['health', 'live', 'ready', 'register', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/')) {
-        const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits'].includes(match.name)
+        const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery'].includes(match.name)
           ? 'workspace:read' : match.name === 'createMembership' ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
       let result;
       switch (match.name) {
-        case 'health': case 'live': result = { status: 'ok', version: '0.10.0' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.10.0' }; break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.11.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.11.0' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes)); break;
         case 'refresh': result = await identity.refresh(await readJson(request, config.maxBodyBytes)); break;
@@ -134,6 +136,7 @@ export function createAtlasHandler(service, options = {}) {
         case 'createEvent': result = await service.createEvent(workspaceId, await readJson(request, config.maxBodyBytes)); break;
         case 'listEvents': result = await service.listEvents(workspaceId, url.searchParams.get('parentObjectId')); break;
         case 'matterHealth': result = await service.matterHealth(workspaceId, objectId); break;
+        case 'assistantQuery': { const input = await readJson(request, config.maxBodyBytes); result = await assistant.query({ workspaceId, userId: user.id, prompt: input.prompt }); break; }
       }
       send(response, match.name.startsWith('create') ? 201 : 200, { data: result }, headers);
     } catch (error) {

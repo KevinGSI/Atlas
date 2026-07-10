@@ -4,11 +4,11 @@ import { spawnSync } from 'node:child_process';
 const requiredFiles = [
   'package.json', 'pnpm-lock.yaml', 'README.md', 'IMPLEMENTATION_STATUS.md', 'docker-compose.yml',
   'Dockerfile', '.dockerignore', 'render.yaml', 'src/server.js', 'src/application.js', 'src/config.js',
-  'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js',
+  'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js',
   'src/postgres-repository.js', 'src/migrations.js', 'src/runtime.js',
   'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'test/service.test.js', 'test/http.test.js',
   'test/postgres-repository.test.js', 'test/migrations.test.js', 'test/config.test.js', 'test/runtime.test.js',
-  'test/deployment.test.js', 'test/identity.test.js'
+  'test/deployment.test.js', 'test/identity.test.js', 'test/assistant.test.js'
 ];
 
 const failures = [];
@@ -17,7 +17,7 @@ for (const file of requiredFiles) {
 }
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-if (pkg.version !== '0.10.0') failures.push(`expected version 0.10.0, got ${pkg.version}`);
+if (pkg.version !== '0.11.0') failures.push(`expected version 0.11.0, got ${pkg.version}`);
 
 const migration = await readFile('db/migrations/0001_initial.sql', 'utf8');
 for (const table of ['atlas_workspace', 'atlas_object', 'atlas_relationship', 'atlas_timeline_event']) {

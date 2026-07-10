@@ -4,6 +4,7 @@ import { AtlasService } from './service.js';
 import { loadConfig } from './config.js';
 import { createPostgresRuntime } from './runtime.js';
 import { IdentityService, TokenService } from './identity.js';
+import { AtlasAssistant, AtlasToolRegistry } from './assistant.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -23,7 +24,8 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     loginLockSeconds: config.loginLockSeconds,
     deliverPasswordReset: dependencies.deliverPasswordReset
   });
-  const server = createAtlasServer(service, { config, ready: runtime.ready, identity });
+  const assistant = new AtlasAssistant(dependencies.aiModel ?? null, new AtlasToolRegistry(service));
+  const server = createAtlasServer(service, { config, ready: runtime.ready, identity, assistant });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, resolve);
