@@ -1,8 +1,13 @@
-# Atlas Core 0.29.0 — Pilot Deployment Verification Status
+# Atlas Core 0.29.1 — Native Intelligence Duty Preparation Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.28.0`
+- Everything verified through Atlas Core `0.29.0`
+- Explicit email response requests require an unsent email draft proposal for attorney review
+- Callback and follow-up duties require an internal task proposal
+- Source-supported deadlines and response dates require an internal task proposal
+- Native intelligence receives the canonical trigger type in provider context
+- Safe-work instructions preserve the prohibition on autonomous sending, filing, publishing, deletion, and external consequential action
 - Fail-closed HTTPS staging smoke-test harness
 - Connected homepage, readiness, registration, authentication, workspace, and awareness checks
 - Synthetic identity and workspace creation with no reusable test credentials

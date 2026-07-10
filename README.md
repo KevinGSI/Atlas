@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.29.0` adds a fail-closed staging smoke test and manual GitHub workflow for verifying the complete connected pilot path against a real HTTPS deployment.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.29.1` strengthens native situational intelligence so explicit response requests, callbacks, follow-ups, and deadlines produce the appropriate safe internal drafts or tasks for attorney review.
 
 ## Implemented
 
