@@ -1,8 +1,14 @@
-# Atlas Core 0.26.0 — PostgreSQL Integration Readiness Status
+# Atlas Core 0.27.0 — Production AI Readiness Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.25.0`
+- Everything verified through Atlas Core `0.26.0`
+- Provider-neutral legal event evaluation framework
+- Four representative situational-awareness scenarios
+- Required observation and action scoring with configurable threshold
+- Prohibited consequential-action detection
+- Malformed provider-output failure handling
+- Fail-closed live provider command with JSON report
 - Disposable-schema live PostgreSQL integration harness
 - All 16 migrations applied in order and verified idempotent on rerun
 - Live checks for 24 tables, canonical persistence, awareness receipts, transactional rollback, and immutable timeline triggers
@@ -56,8 +62,10 @@
 
 ## Verification completed here
 
-- 139 canonical tests passed locally across the complete non-live Atlas Core surface
+- 142 canonical tests passed locally across the complete non-live Atlas Core surface
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
+- Deterministic provider evaluation and unsafe/malformed provider rejection
+- Live AI command environment and failure behavior verified locally
 - CI workflow and fail-closed environment guard verified locally
 - End-to-end candidate observation acceptance and rejection over HTTP
 - Proof that acceptance creates canonical risk knowledge
@@ -99,6 +107,7 @@
 - Deployment of the connected homepage against a public production environment
 - Live local network-listener execution in this restricted workspace (`listen EPERM`)
 - Execution of the new integration harness against a real PostgreSQL daemon; this workspace supplied neither `TEST_DATABASE_URL` nor a database service
+- Execution of `pnpm test:ai` against a paid production model; no provider credentials were supplied here
 - A production KMS/HSM-backed vault, multi-instance scheduler locks, rate-limit behavior, or large-firm migration volumes
 - Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
 

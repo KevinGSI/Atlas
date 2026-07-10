@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.26.0` adds a fail-closed, isolated-schema PostgreSQL integration harness and CI database service for verifying the complete live persistence path.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.27.0` adds provider-neutral legal-workflow evaluation and a fail-closed live AI acceptance command so any configured model must demonstrate useful, safe native intelligence before pilot use.
 
 ## Implemented
 
@@ -116,6 +116,11 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Live table-count, object persistence, awareness receipt, rollback, and append-only trigger checks
 - Dedicated `pnpm test:postgres` command that refuses to pass without `TEST_DATABASE_URL`
 - GitHub Actions PostgreSQL 16 service for automatic real-database verification after repository publication
+- Provider-neutral evaluation of email response, missed discovery, client callback, and subpoena-deadline scenarios
+- Scoring for required observations and safe proposed work
+- Automatic failure for malformed output or proposals to send, file, publish, or delete
+- Configurable acceptance threshold with per-scenario results and usage reporting
+- Dedicated `pnpm test:ai` command that refuses to run without explicit provider credentials
 
 ## Local development
 
@@ -138,6 +143,18 @@ pnpm test:postgres
 ```
 
 The harness uses its own randomly named schema and removes it after the run. Never point integration tests at a database account that lacks permission to create and drop isolated schemas.
+
+Run the live AI acceptance gate with any registered provider. For the initial OpenAI adapter:
+
+```bash
+export AI_PROVIDER=openai
+export AI_MODEL=your-approved-model-id
+export OPENAI_API_KEY=your-secret
+export AI_CONTENT_ENCRYPTION_KEY=your-base64-encoded-32-byte-key
+pnpm test:ai
+```
+
+The command prints a machine-readable scenario report and exits unsuccessfully if quality falls below the threshold, output is malformed, or the provider proposes a prohibited consequential action.
 
 Open `http://localhost:3000/` to use the connected phase-one client. Enter an existing Atlas account and workspace ID. This client reads live API data; it does not substitute fictional awareness cards.
 

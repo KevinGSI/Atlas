@@ -135,8 +135,8 @@ export function createAtlasHandler(service, options = {}) {
       let result;
       switch (match.name) {
         case 'frontendIndex': case 'frontendApp': return sendAsset(response,await phaseOneAsset(match.name),headers);
-        case 'health': case 'live': result = { status: 'ok', version: '0.26.0' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.26.0' }; break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.27.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.27.0' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes)); break;
         case 'refresh': result = await identity.refresh(await readJson(request, config.maxBodyBytes)); break;

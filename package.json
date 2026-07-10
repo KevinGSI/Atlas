@@ -1,6 +1,6 @@
 {
   "name": "atlas-core",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "type": "module",
@@ -12,6 +12,7 @@
     "worker:intelligence": "node scripts/intelligence-worker.js",
     "test": "node --test test/*.test.js",
     "test:postgres": "node scripts/test-postgres.js",
+    "test:ai": "node scripts/test-ai-provider.js",
     "verify": "node scripts/verify.js"
   },
   "engines": {
