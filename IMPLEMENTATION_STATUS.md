@@ -1,8 +1,12 @@
-# Atlas Core 0.33.0 — Canonical Awareness Enforcement Status
+# Atlas Core 0.33.1 — Live PostgreSQL Verification Correction Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.32.0`
+- Everything verified through Atlas Core `0.33.0`
+- Corrected the live awareness fixture to create its foreign-key source intelligence job
+- Added live PostgreSQL assertions for canonical event correlation and affected-object links
+- Added live rollback proof for uncovered canonical mutations
+- GitHub workflow preserves the complete PostgreSQL test output in the run summary
 - Commit-time enforcement requiring event coverage for every canonical object mutation
 - Commit-time enforcement requiring both endpoints of new graph relationships to be affected
 - Equivalent enforcement in the in-memory and PostgreSQL repositories

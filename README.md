@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.33.0` enforces the continuously aware digital-twin contract at transaction commit: canonical object and graph mutations without complete event coverage fail and roll back.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.33.1` corrects the live PostgreSQL fixture, verifies canonical-ledger persistence and commit enforcement against PostgreSQL, and preserves readable failure output in GitHub summaries.
 
 ## Implemented
 

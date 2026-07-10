@@ -32,4 +32,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:postgres
+      - name: Run live PostgreSQL integration
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm test:postgres 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
