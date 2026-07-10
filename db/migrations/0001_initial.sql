@@ -1,5 +1,3 @@
-BEGIN;
-
 CREATE TABLE atlas_workspace (
   id text PRIMARY KEY,
   name text NOT NULL,
@@ -58,5 +56,3 @@ CREATE TABLE atlas_timeline_event (
 
 CREATE INDEX atlas_timeline_workspace_time_idx ON atlas_timeline_event(workspace_id, occurred_at DESC);
 CREATE INDEX atlas_timeline_parent_time_idx ON atlas_timeline_event(parent_object_id, occurred_at DESC);
-
-COMMIT;

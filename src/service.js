@@ -9,7 +9,7 @@ export class AtlasService {
     this.clock = clock;
   }
 
-  createWorkspace(input) {
+  async createWorkspace(input) {
     const now = this.clock();
     return this.repository.createWorkspace({
       id: createId('wsp'),
@@ -20,43 +20,45 @@ export class AtlasService {
     });
   }
 
-  getWorkspace(id) { return this.repository.getWorkspace(id); }
+  async getWorkspace(id) { return this.repository.getWorkspace(id); }
 
-  createObject(workspaceId, input) {
+  async createObject(workspaceId, input) {
     const dimension = required(input.dimension, 'dimension');
     if (!dimensions.has(dimension)) {
       throw new AtlasError('VALIDATION_ERROR', 'Unsupported dimension', 400, { dimension });
     }
     const now = this.clock();
-    const object = this.repository.createObject({
-      id: createId('obj'),
-      workspaceId,
-      parentObjectId: input.parentObjectId ?? null,
-      dimension,
-      type: required(input.type, 'type'),
-      title: required(input.title, 'title'),
-      state: input.state ?? {},
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-      version: 1
+    return this.repository.transaction(async (repository) => {
+      const object = await repository.createObject({
+        id: createId('obj'),
+        workspaceId,
+        parentObjectId: input.parentObjectId ?? null,
+        dimension,
+        type: required(input.type, 'type'),
+        title: required(input.title, 'title'),
+        state: input.state ?? {},
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+        version: 1
+      });
+      await repository.createEvent(this.buildEvent(workspaceId, {
+        parentObjectId: object.id,
+        type: 'object.created',
+        actorId: input.actorId ?? 'system',
+        source: 'atlas',
+        confidence: 1,
+        visibility: 'workspace',
+        data: { objectType: object.type }
+      }));
+      return object;
     });
-    this.createEvent(workspaceId, {
-      parentObjectId: object.id,
-      type: 'object.created',
-      actorId: input.actorId ?? 'system',
-      source: 'atlas',
-      confidence: 1,
-      visibility: 'workspace',
-      data: { objectType: object.type }
-    });
-    return object;
   }
 
-  getObject(workspaceId, id) { return this.repository.getObject(workspaceId, id); }
-  listObjects(workspaceId, filters) { return this.repository.listObjects(workspaceId, filters); }
+  async getObject(workspaceId, id) { return this.repository.getObject(workspaceId, id); }
+  async listObjects(workspaceId, filters) { return this.repository.listObjects(workspaceId, filters); }
 
-  createRelationship(workspaceId, input) {
+  async createRelationship(workspaceId, input) {
     const fromObjectId = required(input.fromObjectId, 'fromObjectId');
     const toObjectId = required(input.toObjectId, 'toObjectId');
     if (fromObjectId === toObjectId) {
@@ -73,12 +75,12 @@ export class AtlasService {
     });
   }
 
-  createEvent(workspaceId, input) {
+  buildEvent(workspaceId, input) {
     const confidence = input.confidence ?? 1;
     if (typeof confidence !== 'number' || confidence < 0 || confidence > 1) {
       throw new AtlasError('VALIDATION_ERROR', 'confidence must be between 0 and 1', 400);
     }
-    return this.repository.createEvent({
+    return {
       id: createId('evt'),
       workspaceId,
       parentObjectId: input.parentObjectId ?? null,
@@ -91,28 +93,32 @@ export class AtlasService {
       data: input.data ?? {},
       occurredAt: input.occurredAt ?? this.clock(),
       createdAt: this.clock()
-    });
+    };
   }
 
-  listEvents(workspaceId, parentObjectId) {
+  async createEvent(workspaceId, input) {
+    return this.repository.createEvent(this.buildEvent(workspaceId, input));
+  }
+
+  async listEvents(workspaceId, parentObjectId) {
     return this.repository.listEvents(workspaceId, parentObjectId);
   }
 
-  expandGraph(workspaceId, objectId) {
-    const root = this.repository.getObject(workspaceId, objectId);
-    const relationships = this.repository.listRelationships(workspaceId)
+  async expandGraph(workspaceId, objectId) {
+    const root = await this.repository.getObject(workspaceId, objectId);
+    const relationships = (await this.repository.listRelationships(workspaceId))
       .filter((item) => item.fromObjectId === objectId || item.toObjectId === objectId);
     const ids = new Set(relationships.flatMap((item) => [item.fromObjectId, item.toObjectId]));
     ids.delete(objectId);
     return {
       root,
-      nodes: [...ids].map((id) => this.repository.getObject(workspaceId, id)),
+      nodes: await Promise.all([...ids].map((id) => this.repository.getObject(workspaceId, id))),
       relationships
     };
   }
 
-  matterHealth(workspaceId, matterId) {
-    const matter = this.repository.getObject(workspaceId, matterId);
+  async matterHealth(workspaceId, matterId) {
+    const matter = await this.repository.getObject(workspaceId, matterId);
     if (matter.dimension !== 'matter') throw new AtlasError('NOT_A_MATTER', 'Object is not a matter', 400);
     const reasons = [];
     if (!matter.state.clientId) reasons.push({ code: 'MISSING_CLIENT', deduction: 15 });

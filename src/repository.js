@@ -10,6 +10,16 @@ export class InMemoryRepository {
   #relationships = new Map();
   #events = new Map();
 
+  async transaction(work) {
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events]
+      .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
+    try { return await work(this); }
+    catch (error) {
+      [this.#workspaces, this.#objects, this.#relationships, this.#events] = snapshot;
+      throw error;
+    }
+  }
+
   createWorkspace(workspace) {
     this.#workspaces.set(workspace.id, clone(workspace));
     return clone(workspace);

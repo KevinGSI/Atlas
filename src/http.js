@@ -44,17 +44,17 @@ export function createAtlasHandler(service) {
       const [workspaceId, objectId] = match.params;
       let result;
       switch (match.name) {
-        case 'health': result = { status: 'ok', version: '0.1.0' }; break;
-        case 'createWorkspace': result = service.createWorkspace(await readJson(request)); break;
-        case 'getWorkspace': result = service.getWorkspace(workspaceId); break;
-        case 'createObject': result = service.createObject(workspaceId, await readJson(request)); break;
-        case 'listObjects': result = service.listObjects(workspaceId, { type: url.searchParams.get('type'), dimension: url.searchParams.get('dimension') }); break;
-        case 'getObject': result = service.getObject(workspaceId, objectId); break;
-        case 'createRelationship': result = service.createRelationship(workspaceId, await readJson(request)); break;
-        case 'graph': result = service.expandGraph(workspaceId, objectId); break;
-        case 'createEvent': result = service.createEvent(workspaceId, await readJson(request)); break;
-        case 'listEvents': result = service.listEvents(workspaceId, url.searchParams.get('parentObjectId')); break;
-        case 'matterHealth': result = service.matterHealth(workspaceId, objectId); break;
+        case 'health': result = { status: 'ok', version: '0.2.0' }; break;
+        case 'createWorkspace': result = await service.createWorkspace(await readJson(request)); break;
+        case 'getWorkspace': result = await service.getWorkspace(workspaceId); break;
+        case 'createObject': result = await service.createObject(workspaceId, await readJson(request)); break;
+        case 'listObjects': result = await service.listObjects(workspaceId, { type: url.searchParams.get('type'), dimension: url.searchParams.get('dimension') }); break;
+        case 'getObject': result = await service.getObject(workspaceId, objectId); break;
+        case 'createRelationship': result = await service.createRelationship(workspaceId, await readJson(request)); break;
+        case 'graph': result = await service.expandGraph(workspaceId, objectId); break;
+        case 'createEvent': result = await service.createEvent(workspaceId, await readJson(request)); break;
+        case 'listEvents': result = await service.listEvents(workspaceId, url.searchParams.get('parentObjectId')); break;
+        case 'matterHealth': result = await service.matterHealth(workspaceId, objectId); break;
       }
       send(response, match.name.startsWith('create') ? 201 : 200, { data: result });
     } catch (error) {

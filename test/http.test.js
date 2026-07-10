@@ -25,7 +25,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.1.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.2.0' } });
 });
 
 test('HTTP vertical slice creates workspace, matter, evidence, graph, timeline, and health', async () => {

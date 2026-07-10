@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is a clean, verified rebuild of the Atlas legal intelligence platform. Version `0.1.0` is the first implementation whose source and tests exist in this workspace.
+Atlas Core is a clean, verified rebuild of the Atlas legal intelligence platform. Version `0.2.0` adds the first PostgreSQL runtime adapter to the verified `0.1.0` baseline.
 
 ## Implemented vertical slice
 
@@ -13,10 +13,14 @@ Atlas Core is a clean, verified rebuild of the Atlas legal intelligence platform
 - Structured JSON errors
 - PostgreSQL 16 initial schema
 - Dependency-free HTTP runtime and automated tests
+- PostgreSQL repository with parameterized queries and transaction support
+- Ordered migration runner with SHA-256 checksum protection
+- Atomic object and timeline-event creation
+- Runtime repository selection through `DATABASE_URL`
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 20 or newer and `npm install`
 - Docker only if you want to start PostgreSQL (the runtime adapter is not part of `0.1.0`)
 
 ## Run
@@ -34,7 +38,7 @@ npm test
 npm run verify
 ```
 
-The verification command reruns the complete tests and checks release-critical files, the package version, and all four initial database tables.
+The verification command reruns the complete tests and checks release-critical files, the package version, the PostgreSQL dependency, and all four initial database tables.
 
 ## API routes
 
@@ -54,4 +58,4 @@ GET  /v1/workspaces/:workspaceId/matters/:matterId/health
 
 ## PostgreSQL schema
 
-Start PostgreSQL with `docker compose up -d postgres`, then apply `db/migrations/0001_initial.sql` using your preferred migration runner. The current API intentionally uses the in-memory repository; see `IMPLEMENTATION_STATUS.md` for the exact boundary.
+Start PostgreSQL with `docker compose up -d postgres`, run `npm install`, and launch with `DATABASE_URL=postgresql://atlas:atlas@localhost:5432/atlas npm start`. Atlas validates the connection and applies ordered migrations before listening. Without `DATABASE_URL`, it uses the in-memory repository.
