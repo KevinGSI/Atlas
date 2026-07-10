@@ -19,8 +19,8 @@ test('production defaults to a cloud-compatible listener', () => {
 test('AI provider configuration is explicit and provider-specific credentials stay isolated', () => {
   assert.throws(() => loadConfig({ AI_PROVIDER: 'openai' }), /AI_MODEL is required/);
   assert.throws(() => loadConfig({ AI_PROVIDER: 'openai', AI_MODEL: 'model-a' }), /OPENAI_API_KEY is required/);
-  assert.throws(() => loadConfig({ AI_PROVIDER: 'openai', AI_MODEL: 'model-a', OPENAI_API_KEY: 'test-key' }), /AI_CONTENT_ENCRYPTION_KEY is required/);
-  assert.throws(() => loadConfig({ AI_PROVIDER: 'openai', AI_MODEL: 'model-a', OPENAI_API_KEY: 'test-key', AI_CONTENT_ENCRYPTION_KEY: 'short' }), /base64-encoded 32-byte key/);
+  assert.throws(() => loadConfig({ AI_PROVIDER: 'openai', AI_MODEL: 'model-a', OPENAI_API_KEY: 'test-key' }), /AI_CONTENT_ENCRYPTION_KEY or AI_CONTENT_ENCRYPTION_KEYS is required/);
+  assert.throws(() => loadConfig({ AI_PROVIDER: 'openai', AI_MODEL: 'model-a', OPENAI_API_KEY: 'test-key', AI_CONTENT_ENCRYPTION_KEY: 'short' }), /base64-encoded 32-byte keys/);
   const encryptionKey = Buffer.alloc(32, 9).toString('base64');
   const config = loadConfig({ AI_PROVIDER: 'openai', AI_MODEL: 'model-a', OPENAI_API_KEY: 'test-key', AI_CONTENT_ENCRYPTION_KEY: encryptionKey, AI_CONTENT_ENCRYPTION_KEY_ID: 'key-2026' });
   assert.equal(config.aiProvider, 'openai');
@@ -28,6 +28,16 @@ test('AI provider configuration is explicit and provider-specific credentials st
   assert.equal(config.openAiApiKey, 'test-key');
   assert.equal(config.aiContentEncryptionKey, encryptionKey);
   assert.equal(config.aiContentEncryptionKeyId, 'key-2026');
+});
+
+test('AI encryption keyring configuration supports controlled rotation', () => {
+  const oldKey = Buffer.alloc(32, 2).toString('base64');
+  const currentKey = Buffer.alloc(32, 3).toString('base64');
+  const config = loadConfig({ AI_CONTENT_ENCRYPTION_KEYS: JSON.stringify({ old: oldKey, current: currentKey }), AI_CONTENT_ENCRYPTION_KEY_ID: 'current' });
+  assert.deepEqual(config.aiContentEncryptionKeys, { old: oldKey, current: currentKey });
+  assert.equal(config.aiContentEncryptionKeyId, 'current');
+  assert.throws(() => loadConfig({ AI_CONTENT_ENCRYPTION_KEYS: '{}', AI_CONTENT_ENCRYPTION_KEY_ID: 'missing' }), /must identify a configured key/);
+  assert.throws(() => loadConfig({ AI_CONTENT_ENCRYPTION_KEYS: '{bad json' }), /must be a JSON object/);
 });
 
 test('production refuses to start without PostgreSQL', () => {

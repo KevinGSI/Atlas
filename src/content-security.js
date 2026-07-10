@@ -3,6 +3,8 @@ import { AtlasError } from './errors.js';
 
 const PREFIX = 'atlas:v1:';
 
+export function isEncryptedContent(value) { return typeof value === 'string' && value.startsWith(PREFIX); }
+
 function decodeKey(value) {
   const key = Buffer.isBuffer(value) ? value : Buffer.from(value, 'base64');
   if (key.length !== 32) throw new Error('AI_CONTENT_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
@@ -55,7 +57,7 @@ export function createContentCipher(config, dependencies = {}) {
   if (dependencies.contentCipher) return dependencies.contentCipher;
   if (!config.aiContentEncryptionKey) return new PlaintextContentCipher();
   return new AesGcmContentCipher({
-    keys: { [config.aiContentEncryptionKeyId]: config.aiContentEncryptionKey },
+    keys: config.aiContentEncryptionKeys ?? { [config.aiContentEncryptionKeyId]: config.aiContentEncryptionKey },
     activeKeyId: config.aiContentEncryptionKeyId
   });
 }

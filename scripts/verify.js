@@ -4,11 +4,11 @@ import { spawnSync } from 'node:child_process';
 const requiredFiles = [
   'package.json', 'pnpm-lock.yaml', 'README.md', 'IMPLEMENTATION_STATUS.md', 'docker-compose.yml',
   'Dockerfile', '.dockerignore', 'render.yaml', 'src/server.js', 'src/application.js', 'src/config.js',
-  'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js', 'src/content-security.js',
+  'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js', 'src/content-security.js', 'src/ai-content-migration.js',
   'src/postgres-repository.js', 'src/migrations.js', 'src/runtime.js',
   'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'db/migrations/0007_ai_run_ledger.sql', 'db/migrations/0008_ai_conversations.sql', 'test/service.test.js', 'test/http.test.js',
   'test/postgres-repository.test.js', 'test/migrations.test.js', 'test/config.test.js', 'test/runtime.test.js',
-  'test/deployment.test.js', 'test/identity.test.js', 'test/assistant.test.js', 'test/ai-providers.test.js', 'test/content-security.test.js'
+  'test/deployment.test.js', 'test/identity.test.js', 'test/assistant.test.js', 'test/ai-providers.test.js', 'test/content-security.test.js', 'test/ai-content-migration.test.js', 'scripts/encrypt-ai-content.js'
 ];
 
 const failures = [];
@@ -17,7 +17,7 @@ for (const file of requiredFiles) {
 }
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-if (pkg.version !== '0.15.0') failures.push(`expected version 0.15.0, got ${pkg.version}`);
+if (pkg.version !== '0.16.0') failures.push(`expected version 0.16.0, got ${pkg.version}`);
 
 const migration = await readFile('db/migrations/0001_initial.sql', 'utf8');
 for (const table of ['atlas_workspace', 'atlas_object', 'atlas_relationship', 'atlas_timeline_event']) {
@@ -47,6 +47,7 @@ if (!conversationMigration.includes('CREATE TABLE atlas_ai_conversation') || !co
 if (!conversationMigration.includes('atlas_ai_message_no_update') || !conversationMigration.includes('atlas_ai_message_no_delete')) failures.push('AI message append-only triggers are missing');
 if (!pkg.dependencies?.pg) failures.push('pg runtime dependency is missing');
 if (pkg.scripts?.migrate !== 'node scripts/migrate.js') failures.push('standalone migration command is missing');
+if (pkg.scripts?.['encrypt-ai-content'] !== 'node scripts/encrypt-ai-content.js') failures.push('AI content encryption migration command is missing');
 
 const dockerfile = await readFile('Dockerfile', 'utf8');
 if (!dockerfile.includes('USER node')) failures.push('container does not run as non-root');

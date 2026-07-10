@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.15.0` adds authenticated application-layer encryption for stored AI conversations, messages, prompts, and answers.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.16.0` adds controlled key rotation and a transactional migration for AI content created before encryption was enabled.
 
 ## Implemented
 
@@ -57,6 +57,9 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Encryption-key identifiers for controlled rotation and historical-key decryption
 - Transparent decryption only after existing workspace and conversation authorization
 - Startup refusal when an AI provider is enabled without a valid 32-byte content key
+- Multi-key environment configuration for retaining historical decryption keys during rotation
+- Dry-run-first, resumable migration of legacy plaintext AI content
+- Exclusive-lock and all-or-nothing migration safeguards for append-only AI tables
 
 ## Local development
 
@@ -136,6 +139,10 @@ The runtime accepts providers implementing `complete({ messages, tools, context,
 For the initial OpenAI adapter, set `AI_PROVIDER=openai`, `AI_MODEL` to an explicitly selected model ID, and `OPENAI_API_KEY`. `OPENAI_BASE_URL` defaults to `https://api.openai.com/v1`. The adapter uses the Responses API, keeps remote storage disabled, preserves provider response state locally for tool rounds, and normalizes token usage and provider errors before returning control to Atlas.
 
 Any configured AI provider also requires `AI_CONTENT_ENCRYPTION_KEY`, a base64-encoded 32-byte secret, and accepts `AI_CONTENT_ENCRYPTION_KEY_ID` (default `primary`). Generate a development key with `openssl rand -base64 32`. Keep production keys in the deployment platform's secret manager, never in Git. Losing a key makes its encrypted content unrecoverable.
+
+For rotation, set `AI_CONTENT_ENCRYPTION_KEYS` to a JSON object containing the old and new base64 keys, and set `AI_CONTENT_ENCRYPTION_KEY_ID` to the new active ID. Atlas encrypts new values with the active key while retaining the ability to decrypt older envelopes. Key IDs cannot contain colons.
+
+Before enabling confidential data, back up PostgreSQL and inventory legacy rows with `pnpm encrypt-ai-content`. This is a dry run. During an approved maintenance window, stop application traffic and run `pnpm encrypt-ai-content -- --apply`. The apply mode obtains an exclusive lock and commits all conversions together; rerunning safely skips encrypted values. Do not remove an old key until the inventory and backup recovery procedure prove that no retained envelope needs it.
 
 Other providers are registered through the same `AiProviderRegistry`; legal tools and workflows do not import or reference the OpenAI adapter.
 

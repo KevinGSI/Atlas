@@ -1,46 +1,45 @@
-# Atlas Core 0.15.0 — Implementation Status
+# Atlas Core 0.16.0 — Implementation Status
 
 ## Verified as implemented
 
-- Everything verified in Atlas Core `0.1.0` through `0.14.0`
-- AES-256-GCM encryption for stored conversation titles, messages, AI-run prompts, and answers
-- A fresh 96-bit nonce for every encrypted value
-- Authenticated additional data binding ciphertext to its record ID and field
-- Stable versioned content envelopes carrying non-secret key identifiers
-- Keyring support for decrypting historical content during controlled key rotation
-- Explicit errors for unavailable keys, malformed envelopes, authentication failure, and tampering
-- Transparent decryption after existing workspace and conversation authorization checks
-- Backward-compatible reads of pre-encryption plaintext rows for a controlled migration
-- Provider-neutral encryption beneath the AI adapter boundary
-- Configuration validation and startup refusal when a provider lacks a valid encryption key
+- Everything verified in Atlas Core `0.1.0` through `0.15.0`
+- JSON keyring configuration containing active and historical AES-256-GCM keys
+- Explicit active-key selection with key-ID validation
+- New writes use the active key while retained keys decrypt historical envelopes
+- Dry-run inventory of plaintext conversation titles, messages, prompts, and answers
+- Explicit `--apply` requirement before any legacy-data mutation
+- One-transaction legacy encryption under a PostgreSQL advisory and exclusive table lock
+- Parameterized compare-and-update statements protecting against unexpected row changes
+- Temporary append-only trigger suspension contained inside the migration transaction
+- Automatic rollback of content and trigger state after any failure
+- Idempotent reruns that skip versioned encrypted envelopes
 
 ## Verification completed here
 
-- 86 canonical tests across the full Atlas Core surface
-- Ciphertext differs across encryptions and does not expose the source text
-- Round-trip encryption and authorized API decryption
-- Authentication failure after ciphertext tampering or record-context substitution
-- Historical-key decryption after rotation to a new active key
-- Raw repository records remain encrypted while model history and API results are plaintext
-- Two-turn encrypted conversation continuation with exact prior-message assertions
+- 90 canonical tests across the full Atlas Core surface
+- Multi-key configuration, active-key validation, invalid JSON, and invalid key-ID tests
+- Legacy-row inventory with encrypted-row exclusion
+- Exact encrypted update counts and envelope assertions
+- Exclusive-lock, commit, and forced-failure rollback assertions
+- Clean regression verification of authentication, authorization, AI orchestration, persistence adapters, and deployment definitions
 
 ## Explicitly not verified in this environment
 
-- Encrypted persistence against a live PostgreSQL server
-- Live model execution or provider-side handling of privileged content
-- Deployment secret-manager integration or production key backup/recovery
-- Bulk encryption of plaintext rows created before `0.15.0`
-- Concurrent key rotation while live requests are running
+- Migration execution against live PostgreSQL data
+- Lock duration and operational impact on a production-sized dataset
+- Managed secret-store retrieval, key escrow, backup restoration, or disaster recovery
+- Live concurrent traffic shutdown during migration
+- Provider-side handling of decrypted privileged content
 
 ## Security and product limitations still remaining
 
-- Existing plaintext rows are readable but are not automatically rewritten; deployment requires a separately verified migration procedure
-- The default environment configuration exposes one active key; production rotation must retain prior keys through an injected keyring or a future secret-manager adapter
-- Encryption does not replace authorization, retention, legal hold, export, defensible deletion, audit review, or backups
+- The migration requires a planned maintenance window, verified database backup, table-owner permission, and post-run validation
+- Environment JSON is a deployment interface, not a managed KMS/HSM integration
+- Evidence/document blobs are not yet covered by the AI-content cipher
+- Encryption does not implement retention, legal hold, export, defensible deletion, or ethical walls
 - No context compaction, message pagination, streaming transport, cost budgets, write-capable AI tools, or approval workflow
-- Evidence/document blobs are not yet covered by this AI-content cipher
-- No ethical walls, provider privacy certification, external penetration test, or cryptographic implementation audit
+- No provider privacy certification, external penetration test, or independent cryptographic audit
 
 ## Data-safety boundary
 
-Version `0.15.0` encrypts newly stored AI content at the application layer and fails closed when authenticated decryption fails. It is not yet approved for confidential legal production use: live PostgreSQL verification, legacy-data migration, managed key custody, retention/legal-hold controls, provider review, backups, and independent security testing remain required.
+Version `0.16.0` supplies tested key rotation and a transactionally safe migration mechanism, but it has not run against live PostgreSQL here. It is not approved for confidential legal production use until migration rehearsals, managed key custody, backup recovery, retention/legal-hold controls, provider review, and independent security testing are completed.

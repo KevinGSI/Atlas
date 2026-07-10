@@ -19,10 +19,21 @@ export function loadConfig(env = process.env) {
   const openAiApiKey = env.OPENAI_API_KEY || null;
   const aiContentEncryptionKey = env.AI_CONTENT_ENCRYPTION_KEY || null;
   const aiContentEncryptionKeyId = env.AI_CONTENT_ENCRYPTION_KEY_ID || 'primary';
+  let aiContentEncryptionKeys = null;
+  if (env.AI_CONTENT_ENCRYPTION_KEYS) {
+    try { aiContentEncryptionKeys = JSON.parse(env.AI_CONTENT_ENCRYPTION_KEYS); }
+    catch { throw new Error('AI_CONTENT_ENCRYPTION_KEYS must be a JSON object'); }
+    if (!aiContentEncryptionKeys || Array.isArray(aiContentEncryptionKeys) || typeof aiContentEncryptionKeys !== 'object') throw new Error('AI_CONTENT_ENCRYPTION_KEYS must be a JSON object');
+  } else if (aiContentEncryptionKey) aiContentEncryptionKeys = { [aiContentEncryptionKeyId]: aiContentEncryptionKey };
   if (aiProvider && !aiModel) throw new Error('AI_MODEL is required when AI_PROVIDER is configured');
   if (aiProvider === 'openai' && !openAiApiKey) throw new Error('OPENAI_API_KEY is required when AI_PROVIDER=openai');
-  if (aiProvider && !aiContentEncryptionKey) throw new Error('AI_CONTENT_ENCRYPTION_KEY is required when AI_PROVIDER is configured');
-  if (aiContentEncryptionKey && Buffer.from(aiContentEncryptionKey, 'base64').length !== 32) throw new Error('AI_CONTENT_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
+  if (aiProvider && !aiContentEncryptionKeys) throw new Error('AI_CONTENT_ENCRYPTION_KEY or AI_CONTENT_ENCRYPTION_KEYS is required when AI_PROVIDER is configured');
+  if (aiContentEncryptionKeyId.includes(':')) throw new Error('AI_CONTENT_ENCRYPTION_KEY_ID cannot contain a colon');
+  for (const [keyId, keyValue] of Object.entries(aiContentEncryptionKeys ?? {})) {
+    if (!keyId || keyId.includes(':')) throw new Error('AI content encryption key IDs must be non-empty and cannot contain a colon');
+    if (typeof keyValue !== 'string' || Buffer.from(keyValue, 'base64').length !== 32) throw new Error('AI content encryption keys must be base64-encoded 32-byte keys');
+  }
+  if (aiContentEncryptionKeys && !aiContentEncryptionKeys[aiContentEncryptionKeyId]) throw new Error('AI_CONTENT_ENCRYPTION_KEY_ID must identify a configured key');
   return {
     nodeEnv,
     production,
@@ -41,6 +52,7 @@ export function loadConfig(env = process.env) {
     openAiApiKey,
     aiContentEncryptionKey,
     aiContentEncryptionKeyId,
+    aiContentEncryptionKeys,
     openAiBaseUrl: env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
     databasePoolSize: positiveInteger(env.DATABASE_POOL_SIZE, 10, 'DATABASE_POOL_SIZE'),
     maxBodyBytes: positiveInteger(env.MAX_BODY_BYTES, 1_048_576, 'MAX_BODY_BYTES'),
