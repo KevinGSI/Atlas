@@ -120,17 +120,23 @@ export class AtlasService {
     return this.repository.transaction(async (repository) => {
       const proposal = await repository.getAiActionProposal(workspaceId, proposalId);
       if (decision === 'reject') return repository.decideAiActionProposal(workspaceId, proposalId, version, 'rejected', actorId, null, this.clock());
-      if (proposal.actionType !== 'create_task') throw new AtlasError('AI_ACTION_TYPE_UNSUPPORTED', 'AI action type is not supported', 400);
       const now = this.clock();
-      const task = await repository.createObject({
+      const specifications = {
+        create_task: { dimension: 'operation', type: 'task', title: proposal.input.title, state: { description: proposal.input.description, dueDate: proposal.input.dueDate, status: 'open' } },
+        create_document: { dimension: 'document', type: proposal.input.documentType, title: proposal.input.title, state: { content: proposal.input.content, status: 'draft', filed: false } },
+        draft_email: { dimension: 'operation', type: 'email_draft', title: proposal.input.subject, state: { recipients: proposal.input.recipients, body: proposal.input.body, status: 'draft', sent: false } }
+      };
+      const specification = specifications[proposal.actionType];
+      if (!specification) throw new AtlasError('AI_ACTION_TYPE_UNSUPPORTED', 'AI action type is not supported', 400);
+      const created = await repository.createObject({
         id: createId('obj'), workspaceId, parentObjectId: proposal.input.matterId,
-        dimension: 'operation', type: 'task', title: proposal.input.title,
-        state: { description: proposal.input.description, dueDate: proposal.input.dueDate, status: 'open', createdFromAiProposalId: proposal.id },
+        dimension: specification.dimension, type: specification.type, title: specification.title,
+        state: { ...specification.state, createdFromAiProposalId: proposal.id },
         createdAt: now, updatedAt: now, deletedAt: null, version: 1
       });
-      await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: task.id, type: 'object.created', actorId, source: 'atlas.ai.approval', data: { objectType: 'task', proposalId } }));
-      const decided = await repository.decideAiActionProposal(workspaceId, proposalId, version, 'approved', actorId, task.id, now);
-      return { proposal: decided, result: task };
+      await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: created.id, type: 'object.created', actorId, source: 'atlas.ai.approval', data: { objectType: created.type, actionType: proposal.actionType, proposalId } }));
+      const decided = await repository.decideAiActionProposal(workspaceId, proposalId, version, 'approved', actorId, created.id, now);
+      return { proposal: decided, result: created };
     });
   }
 

@@ -22,8 +22,10 @@ export class AtlasToolRegistry {
       { name: 'list_recent_matters', description: 'List the most recently opened matters in the authorized workspace.', inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } } },
       { name: 'get_object', description: 'Retrieve one object from the authorized workspace by object ID.', inputSchema: { type: 'object', properties: { objectId: { type: 'string' } }, required: ['objectId'] } },
       { name: 'get_matter_health', description: 'Get explainable health for one matter in the authorized workspace.', inputSchema: { type: 'object', properties: { matterId: { type: 'string' } }, required: ['matterId'] } },
-      { name: 'list_daily_priorities', description: 'Derive priority matters from health, deadlines, and incomplete matter state.', inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } } }
-      ,{ name: 'propose_create_task', description: 'Propose a task for human approval. This never creates the task directly.', inputSchema: { type: 'object', properties: { title: { type: 'string' }, matterId: { type: 'string' }, dueDate: { type: 'string' }, description: { type: 'string' } }, required: ['title'] } }
+      { name: 'list_daily_priorities', description: 'Derive priority matters from health, deadlines, and incomplete matter state.', inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } } },
+      { name: 'propose_create_task', description: 'Propose a task for human approval. This never creates the task directly.', inputSchema: { type: 'object', properties: { title: { type: 'string' }, matterId: { type: 'string' }, dueDate: { type: 'string' }, description: { type: 'string' } }, required: ['title'] } },
+      { name: 'propose_create_document', description: 'Propose saving a legal-document draft for human approval. This never files or exports it.', inputSchema: { type: 'object', properties: { title: { type: 'string' }, documentType: { type: 'string' }, matterId: { type: 'string' }, content: { type: 'string' } }, required: ['title', 'documentType', 'content'] } },
+      { name: 'propose_draft_email', description: 'Propose saving an email draft for human approval. This never sends email.', inputSchema: { type: 'object', properties: { subject: { type: 'string' }, recipients: { type: 'array', items: { type: 'string' } }, matterId: { type: 'string' }, body: { type: 'string' } }, required: ['subject', 'recipients', 'body'] } }
     ];
   }
 
@@ -73,6 +75,18 @@ export class AtlasToolRegistry {
         const sources = [];
         if (input.matterId) sources.push(source(await this.service.getObject(workspaceId, input.matterId)));
         return { data: { proposed: true, actionType: 'create_task', input }, sources, actionProposal: { actionType: 'create_task', input } };
+      }
+      case 'propose_create_document': {
+        const input = { title: required(args.title, 'title').trim(), documentType: required(args.documentType, 'documentType').trim(), matterId: args.matterId ?? null, content: required(args.content, 'content') };
+        if (!input.title || input.title.length > 240 || !input.documentType || input.documentType.length > 120 || input.content.length > 100_000) throw new AtlasError('AI_TOOL_ARGUMENT_INVALID', 'document proposal fields are invalid or too large', 400);
+        const sources = input.matterId ? [source(await this.service.getObject(workspaceId, input.matterId))] : [];
+        return { data: { proposed: true, actionType: 'create_document', input }, sources, actionProposal: { actionType: 'create_document', input } };
+      }
+      case 'propose_draft_email': {
+        const input = { subject: required(args.subject, 'subject').trim(), recipients: args.recipients, matterId: args.matterId ?? null, body: required(args.body, 'body') };
+        if (!input.subject || input.subject.length > 240 || !Array.isArray(input.recipients) || input.recipients.length < 1 || input.recipients.length > 25 || input.recipients.some((value) => typeof value !== 'string' || !value.includes('@')) || input.body.length > 100_000) throw new AtlasError('AI_TOOL_ARGUMENT_INVALID', 'email draft fields are invalid or too large', 400);
+        const sources = input.matterId ? [source(await this.service.getObject(workspaceId, input.matterId))] : [];
+        return { data: { proposed: true, actionType: 'draft_email', input }, sources, actionProposal: { actionType: 'draft_email', input } };
       }
       default: throw new AtlasError('AI_TOOL_NOT_ALLOWED', 'Requested AI tool is not allowed', 400, { tool: name });
     }

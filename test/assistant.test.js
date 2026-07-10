@@ -143,3 +143,27 @@ test('rejected AI task proposals never create tasks', async () => {
   assert.equal(rejected.status, 'rejected');
   assert.equal((await service.listObjects(workspace.id, { dimension: 'operation' })).length, 0);
 });
+
+test('approved document and email actions create drafts but never file or send them', async () => {
+  const { service, tools, workspace, matter } = await fixture();
+  let turn = 0;
+  const model = { async complete() { turn += 1; return turn === 1 ? { toolCalls: [
+    { id: 'doc_1', name: 'propose_create_document', arguments: { title: 'Motion to Compel Draft', documentType: 'motion_to_compel', matterId: matter.id, content: 'Draft argument' } },
+    { id: 'email_1', name: 'propose_draft_email', arguments: { subject: 'Discovery follow-up', recipients: ['counsel@example.com'], matterId: matter.id, body: 'Draft email body' } }
+  ] } : { text: 'I prepared two drafts for approval.' }; } };
+  const assistant = new AtlasAssistant(model, tools, { repository: service.repository });
+  const response = await assistant.query({ workspaceId: workspace.id, userId: 'usr_1', prompt: 'Prepare the motion and email' });
+  assert.deepEqual(response.actionProposals.map((proposal) => proposal.actionType), ['create_document', 'draft_email']);
+  const document = await service.decideAiActionProposal(workspace.id, response.actionProposals[0].id, { version: 1, decision: 'approve' }, 'usr_1');
+  const email = await service.decideAiActionProposal(workspace.id, response.actionProposals[1].id, { version: 1, decision: 'approve' }, 'usr_1');
+  assert.deepEqual({ dimension: document.result.dimension, type: document.result.type, status: document.result.state.status, filed: document.result.state.filed }, { dimension: 'document', type: 'motion_to_compel', status: 'draft', filed: false });
+  assert.deepEqual({ type: email.result.type, status: email.result.state.status, sent: email.result.state.sent }, { type: 'email_draft', status: 'draft', sent: false });
+  assert.equal(document.result.parentObjectId, matter.id);
+  assert.equal(email.result.parentObjectId, matter.id);
+});
+
+test('draft proposal tools reject invalid recipients and oversized content', async () => {
+  const { tools, workspace } = await fixture();
+  await assert.rejects(() => tools.execute('propose_draft_email', workspace.id, { subject: 'Draft', recipients: ['not-an-email'], body: 'Body' }), (error) => error.code === 'AI_TOOL_ARGUMENT_INVALID');
+  await assert.rejects(() => tools.execute('propose_create_document', workspace.id, { title: 'Draft', documentType: 'motion', content: 'x'.repeat(100_001) }), (error) => error.code === 'AI_TOOL_ARGUMENT_INVALID');
+});

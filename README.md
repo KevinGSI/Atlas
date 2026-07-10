@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.17.0` adds human-approved AI action proposals, beginning with task creation.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.18.0` adds human-approved legal-document and email drafts without permitting automatic filing or sending.
 
 ## Implemented
 
@@ -64,6 +64,10 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Pending, approved, and rejected proposal lifecycle with optimistic concurrency
 - Authenticated action review and decision endpoints
 - Transactional approved-task creation with actor, source run, result object, and timeline linkage
+- Approval-gated legal-document draft creation linked to a matter
+- Approval-gated email draft creation with validated recipients
+- Hard `filed: false` and `sent: false` boundaries on AI-created drafts
+- Generated-content size limits and structured field validation
 
 ## Local development
 
