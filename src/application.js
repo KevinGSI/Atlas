@@ -40,7 +40,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const intelligenceProviders = new IntelligenceProviderRegistry();
   for (const [name, provider] of Object.entries(dependencies.intelligenceProviders ?? {})) intelligenceProviders.register(name, provider);
   if(selectedModel&&!dependencies.intelligenceProviders?.['configured-model'])intelligenceProviders.register('configured-model',new StructuredModelIntelligenceProvider(selectedModel));
-  const intelligence = new AtlasIntelligenceRuntime(runtime.repository, intelligenceProviders, { providerName: config.intelligenceProvider, projector: new IntelligenceProjectionService(), resolver: new AtlasResolver(runtime.repository), playbooks:new SituationalPlaybookEngine() });
+  const intelligence = new AtlasIntelligenceRuntime(runtime.repository, intelligenceProviders, { providerName: config.intelligenceProvider, projector: new IntelligenceProjectionService(), resolver: new AtlasResolver(runtime.repository), playbooks:new SituationalPlaybookEngine(dependencies.nativeCapabilities) });
   const ingestion = new AtlasIngestionService(runtime.repository);
   const webhooks = new IngestionWebhookVerifier(config.ingestionWebhookSecrets);
   const cmsConnectors=new CmsConnectorRegistry();

@@ -1,28 +1,12 @@
 import { createId } from './ids.js';
+import { createDefaultNativeCapabilities } from './native-capabilities.js';
 
 const category=(trigger)=>trigger==='email.received'?'incoming_email':trigger==='phone_call.received'?'phone_call':trigger==='attachment.received'?'document_upload':trigger==='deadline.missed'?'missed_deadline':trigger.startsWith('cms.')?'cms_activity':'firm_activity';
 
 export class SituationalPlaybookEngine {
+  constructor(capabilities=createDefaultNativeCapabilities()){this.capabilities=capabilities;}
   apply(job,result){const output={...result,observations:[...(result.observations??[])],actionProposals:[...(result.actionProposals??[])]};
-    const hasObservation=(kind)=>output.observations.some((item)=>item.kind===kind);
-    const hasAction=(actionType)=>output.actionProposals.some((item)=>item.actionType===actionType);
-    if(job.triggerType==='email.received'&&hasObservation('duty')&&!hasAction('draft_email')){
-      const email=job.payload?.email??{};const state=email.state??{};
-      output.actionProposals.push({actionType:'draft_email',input:{subject:`Re: ${email.title??'Response requested'}`,recipients:state.from?[state.from]:[],body:'Draft response for attorney review. Verify the requested position, supporting record, and deadline before sending.'}});
-    }
-    if(job.triggerType==='phone_call.received'&&hasObservation('duty')&&!hasAction('create_task')){
-      output.actionProposals.push({actionType:'create_task',input:{title:'Review and complete requested call follow-up',matterId:job.payload?.call?.parentObjectId??null,dueDate:null,description:'Review the incoming call and complete the extracted callback or follow-up duty.'}});
-    }
-    if(job.triggerType==='attachment.received'&&hasObservation('deadline')&&!hasAction('create_task')){
-      const deadline=output.observations.find((item)=>item.kind==='deadline')?.data??{};
-      output.actionProposals.push({actionType:'create_task',input:{title:`Review deadline: ${deadline.title??job.payload?.document?.title??'uploaded document'}`,matterId:job.payload?.document?.parentObjectId??null,dueDate:deadline.date??null,description:'Verify the extracted deadline and prepare the required response for attorney review.'}});
-    }
-    if(job.triggerType==='deadline.missed'&&job.payload?.deadline?.state?.deadlineType==='discovery'){
-      const deadline=job.payload.deadline;const matterId=deadline.parentObjectId??null;
-      if(!hasAction('create_document'))output.actionProposals.push({actionType:'create_document',input:{title:`Motion to Compel — ${job.payload.matterTitle??'Matter'}`,documentType:'motion_to_compel',matterId,content:`DRAFT FOR ATTORNEY REVIEW\n\nDiscovery deadline missed: ${deadline.title}.\n\nIssues and supporting record citations must be verified before filing.`}});
-      if(!hasAction('create_task'))output.actionProposals.push({actionType:'create_task',input:{title:`Review missed discovery deadline: ${deadline.title}`,matterId,dueDate:null,description:'Review discovery status and the automatically prepared motion-to-compel draft.'}});
-      output.observations.push({kind:'risk',data:{title:'Discovery deadline missed',description:deadline.title,matterId},confidence:1,sourceLocation:{objectId:deadline.id}});
-    }
+    this.capabilities.apply(job,output);
     const material=new Set(['email.received','phone_call.received','attachment.received','deadline.missed']);
     if(output.awareness||material.has(job.triggerType)||output.observations.length||output.actionProposals.length)output.awareness=output.awareness??{category:category(job.triggerType),priority:job.triggerType==='deadline.missed'?'urgent':output.actionProposals.length?'high':'normal',headline:job.triggerType==='deadline.missed'?'Missed deadline requires review':`Atlas processed ${category(job.triggerType).replaceAll('_',' ')}`,summary:`${output.observations.length} observation(s) and ${output.actionProposals.length} proposed action(s) are ready for review.`,targetUserId:job.payload?.assignedTo??null};return output;
   }

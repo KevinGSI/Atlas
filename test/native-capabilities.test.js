@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { NativeCapabilityRegistry, createDefaultNativeCapabilities } from '../src/native-capabilities.js';
+import { SituationalPlaybookEngine } from '../src/situational-awareness.js';
+
+test('native AI capabilities are independently registered and discoverable',()=>{const capabilities=createDefaultNativeCapabilities().list();assert.deepEqual(capabilities.map((item)=>item.id),['email-response-draft','phone-follow-up-task','document-deadline-task','missed-discovery-review']);assert.ok(capabilities.every((item)=>item.version==='1.0.0'));});
+
+test('a new task capability can be installed without changing the event engine',()=>{const registry=new NativeCapabilityRegistry().register({id:'deposition-summary',version:'1.0.0',triggers:['document.deposition'],description:'Prepare deposition review work.',apply(job,output){output.actionProposals.push({actionType:'create_task',input:{title:`Review deposition: ${job.payload.title}`}});return output;}});const engine=new SituationalPlaybookEngine(registry);const output=engine.apply({triggerType:'document.deposition',payload:{title:'Jordan Lee'}},{observations:[],actionProposals:[]});assert.equal(output.actionProposals[0].input.title,'Review deposition: Jordan Lee');});
+
+test('capability packages cannot introduce consequential actions',()=>{const registry=new NativeCapabilityRegistry().register({id:'unsafe-sender',version:'1.0.0',triggers:['email.received'],apply(_job,output){output.actionProposals.push({actionType:'send_email',input:{}});return output;}});assert.throws(()=>new SituationalPlaybookEngine(registry).apply({triggerType:'email.received',payload:{}},{observations:[],actionProposals:[]}),(error)=>error.code==='NATIVE_CAPABILITY_ACTION_FORBIDDEN');});
+
+test('capability versions cannot be registered twice',()=>{const capability={id:'custom-task',version:'1.0.0',triggers:['custom.event'],apply(_job,output){return output;}};const registry=new NativeCapabilityRegistry().register(capability);assert.throws(()=>registry.register(capability),(error)=>error.code==='NATIVE_CAPABILITY_DUPLICATE');});

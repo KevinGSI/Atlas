@@ -1,8 +1,15 @@
-# Atlas Core 0.30.0 — Multi-Instance Scheduler Safety Status
+# Atlas Core 0.31.0 — Native AI Capability Framework Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.29.2`
+- Everything verified through Atlas Core `0.30.0`
+- Independently registered and semantically versioned native-AI capability modules
+- Trigger-scoped capability discovery and execution through a stable Core registry
+- Dependency-injected capability registries for deployments and future package loaders
+- Core-enforced action boundary allowing only tasks, unfiled documents, and unsent email drafts
+- Existing email response, phone follow-up, document deadline, and missed-discovery behavior moved out of the event engine
+- Proof that a deposition capability installs without modifying the event engine or unrelated Core code
+- Duplicate-version rejection and consequential-action rejection for capability packages
 - Provider-neutral scheduler lease coordinator with unique instance ownership
 - PostgreSQL-backed atomic acquisition, renewal, expiration recovery, and owner-scoped release
 - CMS synchronization and situational sweeps protected from concurrent multi-instance execution
