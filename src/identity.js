@@ -177,7 +177,20 @@ export class IdentityService {
   async authenticate(header) {
     if (!header?.startsWith('Bearer ')) throw new AtlasError('AUTHENTICATION_REQUIRED', 'Bearer access token required', 401);
     const payload = this.tokens.verify(header.slice(7));
-    return { ...(await this.repository.getUser(payload.sub)), sessionId: payload.sid ?? null };
+    if (!payload.sid) throw new AtlasError('ACCESS_TOKEN_SESSION_REQUIRED', 'Access token is not bound to a session', 401);
+    let session;
+    try { session = await this.repository.getRefreshSession(payload.sub, payload.sid); }
+    catch (error) {
+      if (error instanceof AtlasError && error.code === 'SESSION_NOT_FOUND') {
+        throw new AtlasError('ACCESS_TOKEN_REVOKED', 'Access token session is no longer valid', 401);
+      }
+      throw error;
+    }
+    const expired = new Date(session.expiresAt).getTime() <= new Date(this.clock()).getTime();
+    if (session.revokedAt || session.usedAt || expired) {
+      throw new AtlasError('ACCESS_TOKEN_REVOKED', 'Access token session is no longer valid', 401);
+    }
+    return { ...(await this.repository.getUser(payload.sub)), sessionId: payload.sid };
   }
   async addOwner(workspaceId, userId) { return this.addMembership(workspaceId, userId, 'owner'); }
   async addMembership(workspaceId, userId, role) {

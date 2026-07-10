@@ -30,7 +30,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.8.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.9.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -207,8 +207,13 @@ test('HTTP session inventory supports individual and global logout', async () =>
   assert.ok(current);
   const revoked = await json(handler, `/v1/auth/sessions/${current.id}`, { method: 'DELETE', headers });
   assert.equal(revoked.body.data.sessionId, current.id);
-  const all = await json(handler, '/v1/auth/sessions', { method: 'DELETE', headers });
+  const immediatelyDenied = await json(handler, '/v1/auth/sessions', { headers });
+  assert.equal(immediatelyDenied.body.error.code, 'ACCESS_TOKEN_REVOKED');
+  const remainingHeaders = { authorization: `Bearer ${registered.accessToken}` };
+  const all = await json(handler, '/v1/auth/sessions', { method: 'DELETE', headers: remainingHeaders });
   assert.deepEqual(all.body.data, { revoked: true });
+  const globallyDenied = await json(handler, '/v1/auth/sessions', { headers: remainingHeaders });
+  assert.equal(globallyDenied.body.error.code, 'ACCESS_TOKEN_REVOKED');
   const denied = await json(handler, '/v1/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: registered.refreshToken }) });
   assert.equal(denied.body.error.code, 'REFRESH_TOKEN_REUSED');
 });

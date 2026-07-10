@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.8.0` adds user-controlled session inventory, individual device revocation, and global logout.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.9.0` adds immediate access-token revocation through issuing-session validation on every protected request.
 
 ## Implemented
 
@@ -29,6 +29,9 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Session-bound access-token claims identifying the issuing login
 - Safe session inventory without token hashes or family identifiers
 - User-scoped individual session revocation and global logout
+- Issuing-session validation on every authenticated request
+- Immediate access-token rejection after rotation, logout, global logout, password reset, or session expiration
+- Rejection of legacy access tokens without a session binding
 
 ## Local development
 
@@ -94,6 +97,8 @@ Access tokens are short-lived. Exchange each refresh token exactly once through 
 Password recovery begins with `POST /v1/auth/password-reset/request`, which always returns the same accepted response whether an account exists or delivery succeeds. A configured delivery provider receives the raw token; Atlas persists only its hash. Complete recovery through `POST /v1/auth/password-reset/complete`. The successful transaction replaces the password and invalidates all reset tokens and refresh sessions for the user.
 
 Authenticated users can inspect their login history with `GET /v1/auth/sessions`, revoke one session with `DELETE /v1/auth/sessions/:sessionId`, or revoke every refresh session with `DELETE /v1/auth/sessions`. Session responses expose status and timestamps but never stored token hashes or internal token-family identifiers.
+
+Every protected request verifies both the access-token signature and its persisted issuing session. Rotated, revoked, expired, missing, and cross-user sessions receive `401 ACCESS_TOKEN_REVOKED`; tokens without a session claim receive `401 ACCESS_TOKEN_SESSION_REQUIRED`.
 
 ## Object mutation and audit
 

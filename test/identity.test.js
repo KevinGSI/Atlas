@@ -170,6 +170,30 @@ test('global logout revokes every refresh session for the authenticated user', a
   await assert.rejects(() => identity.refresh({ refreshToken: second.refreshToken }), (error) => error.code === 'REFRESH_TOKEN_REUSED');
 });
 
+test('authentication immediately rejects access tokens from revoked and rotated sessions', async () => {
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));
+  const first = await identity.register({ email: 'immediate@example.com', name: 'Immediate', password: 'original password long enough' });
+  assert.equal((await identity.authenticate(`Bearer ${first.accessToken}`)).id, first.user.id);
+  const rotated = await identity.refresh({ refreshToken: first.refreshToken });
+  await assert.rejects(() => identity.authenticate(`Bearer ${first.accessToken}`), (error) => error.code === 'ACCESS_TOKEN_REVOKED');
+  assert.equal((await identity.authenticate(`Bearer ${rotated.accessToken}`)).id, first.user.id);
+  await identity.logout({ refreshToken: rotated.refreshToken });
+  await assert.rejects(() => identity.authenticate(`Bearer ${rotated.accessToken}`), (error) => error.code === 'ACCESS_TOKEN_REVOKED');
+});
+
+test('authentication rejects unbound and refresh-expired session access tokens', async () => {
+  let identityNow = new Date('2026-07-10T12:00:00.000Z');
+  const repository = new InMemoryRepository();
+  const tokens = new TokenService('a'.repeat(32), 3600, () => 1000);
+  const identity = new IdentityService(repository, tokens, () => identityNow.toISOString(), { refreshTokenTtlSeconds: 60 });
+  const registered = await identity.register({ email: 'session-expiry@example.com', name: 'Expiry', password: 'original password long enough' });
+  identityNow = new Date('2026-07-10T12:01:01.000Z');
+  await assert.rejects(() => identity.authenticate(`Bearer ${registered.accessToken}`), (error) => error.code === 'ACCESS_TOKEN_REVOKED');
+  const unbound = tokens.issue({ id: registered.user.id, email: registered.user.email });
+  await assert.rejects(() => identity.authenticate(`Bearer ${unbound.accessToken}`), (error) => error.code === 'ACCESS_TOKEN_SESSION_REQUIRED');
+});
+
 test('password replacement rolls back if reset consumption fails', async () => {
   let delivered;
   const repository = new InMemoryRepository();
