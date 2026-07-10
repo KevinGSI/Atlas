@@ -75,6 +75,78 @@ test('registration rolls back the user when refresh-session persistence fails', 
   assert.throws(() => repository.getUserByEmail('rollback@example.com'), (error) => error.code === 'INVALID_CREDENTIALS');
 });
 
+test('password reset is single-use, changes credentials, and revokes existing sessions', async () => {
+  let delivered;
+  let sequence = 0;
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)), () => '2026-07-10T12:00:00.000Z', {
+    randomToken: () => `secret-${++sequence}`,
+    deliverPasswordReset: async (message) => { delivered = message; }
+  });
+  const registered = await identity.register({ email: 'recover@example.com', name: 'Recover', password: 'original password long enough' });
+  assert.deepEqual(await identity.requestPasswordReset({ email: 'recover@example.com' }), { accepted: true });
+  assert.equal(delivered.email, 'recover@example.com');
+  assert.deepEqual(await identity.resetPassword({ resetToken: delivered.resetToken, password: 'replacement password long enough' }), { reset: true });
+  await assert.rejects(() => identity.login({ email: 'recover@example.com', password: 'original password long enough' }), (error) => error.code === 'INVALID_CREDENTIALS');
+  assert.equal((await identity.login({ email: 'recover@example.com', password: 'replacement password long enough' })).user.id, registered.user.id);
+  await assert.rejects(() => identity.refresh({ refreshToken: registered.refreshToken }), (error) => error.code === 'REFRESH_TOKEN_REUSED');
+  await assert.rejects(() => identity.resetPassword({ resetToken: delivered.resetToken, password: 'another replacement password' }), (error) => error.code === 'PASSWORD_RESET_USED');
+});
+
+test('password-reset requests do not reveal unknown accounts and expired tokens fail', async () => {
+  let delivered;
+  let now = new Date('2026-07-10T12:00:00.000Z');
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)), () => now.toISOString(), {
+    passwordResetTtlSeconds: 60, randomToken: () => 'expiring-secret',
+    deliverPasswordReset: async (message) => { delivered = message; }
+  });
+  assert.deepEqual(await identity.requestPasswordReset({ email: 'missing@example.com' }), { accepted: true });
+  assert.equal(delivered, undefined);
+  await identity.register({ email: 'expire@example.com', name: 'Expire', password: 'original password long enough' });
+  await identity.requestPasswordReset({ email: 'expire@example.com' });
+  now = new Date('2026-07-10T12:01:01.000Z');
+  await assert.rejects(() => identity.resetPassword({ resetToken: delivered.resetToken, password: 'replacement password long enough' }), (error) => error.code === 'PASSWORD_RESET_EXPIRED');
+});
+
+test('completing a reset invalidates every other outstanding reset token', async () => {
+  const delivered = [];
+  let sequence = 0;
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)), undefined, {
+    randomToken: () => `multi-reset-${++sequence}`,
+    deliverPasswordReset: async (message) => { delivered.push(message); }
+  });
+  await identity.register({ email: 'multiple@example.com', name: 'Multiple', password: 'original password long enough' });
+  await identity.requestPasswordReset({ email: 'multiple@example.com' });
+  await identity.requestPasswordReset({ email: 'multiple@example.com' });
+  await identity.resetPassword({ resetToken: delivered[1].resetToken, password: 'replacement password long enough' });
+  await assert.rejects(() => identity.resetPassword({ resetToken: delivered[0].resetToken, password: 'another replacement password' }), (error) => error.code === 'PASSWORD_RESET_USED');
+});
+
+test('password-reset delivery failure keeps the generic anti-enumeration response', async () => {
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)), undefined, {
+    deliverPasswordReset: async () => { throw new Error('mail unavailable'); }
+  });
+  await identity.register({ email: 'delivery@example.com', name: 'Delivery', password: 'original password long enough' });
+  assert.deepEqual(await identity.requestPasswordReset({ email: 'delivery@example.com' }), { accepted: true });
+  assert.deepEqual(await identity.requestPasswordReset({ email: 'missing@example.com' }), { accepted: true });
+});
+
+test('password replacement rolls back if reset consumption fails', async () => {
+  let delivered;
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)), undefined, {
+    randomToken: () => 'rollback-reset-secret', deliverPasswordReset: async (message) => { delivered = message; }
+  });
+  await identity.register({ email: 'reset-rollback@example.com', name: 'Rollback', password: 'original password long enough' });
+  await identity.requestPasswordReset({ email: 'reset-rollback@example.com' });
+  repository.consumePasswordReset = () => { throw new Error('forced reset failure'); };
+  await assert.rejects(() => identity.resetPassword({ resetToken: delivered.resetToken, password: 'replacement password long enough' }), /forced reset failure/);
+  assert.equal((await identity.login({ email: 'reset-rollback@example.com', password: 'original password long enough' })).user.email, 'reset-rollback@example.com');
+});
+
 test('workspace roles enforce read, write, and membership administration', async () => {
   const repository = new InMemoryRepository();
   const identity = new IdentityService(repository, new TokenService('a'.repeat(32)));

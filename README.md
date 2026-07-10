@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.6.0` adds persisted refresh sessions, one-time rotation, reuse detection, and logout revocation.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.7.0` adds secure, single-use password recovery and credential-wide session revocation.
 
 ## Implemented
 
@@ -23,6 +23,9 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Opaque refresh tokens stored only as hashes
 - One-time refresh rotation with token-family reuse detection
 - Logout revocation and configurable refresh-session lifetimes
+- Hashed, expiring, single-use password-reset tokens
+- Anti-enumeration reset requests and an injectable email-delivery boundary
+- Atomic password replacement with revocation of every existing refresh session and reset token
 
 ## Local development
 
@@ -84,6 +87,8 @@ Authorization: Bearer <accessToken>
 Creating a workspace atomically makes the authenticated creator its owner. Owners and admins can add memberships through `POST /v1/workspaces/:workspaceId/memberships`.
 
 Access tokens are short-lived. Exchange each refresh token exactly once through `POST /v1/auth/refresh`; the response contains its replacement. Reusing an older token revokes the entire session family. `POST /v1/auth/logout` revokes the supplied refresh token.
+
+Password recovery begins with `POST /v1/auth/password-reset/request`, which always returns the same accepted response whether an account exists or delivery succeeds. A configured delivery provider receives the raw token; Atlas persists only its hash. Complete recovery through `POST /v1/auth/password-reset/complete`. The successful transaction replaces the password and invalidates all reset tokens and refresh sessions for the user.
 
 ## Object mutation and audit
 

@@ -13,13 +13,14 @@ export class InMemoryRepository {
   #memberships = new Map();
   #audits = new Map();
   #refreshSessions = new Map();
+  #passwordResets = new Map();
 
   async transaction(work) {
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions]
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     try { return await work(this); }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions] = snapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#audits, this.#refreshSessions, this.#passwordResets] = snapshot;
       throw error;
     }
   }
@@ -139,6 +140,13 @@ export class InMemoryRepository {
     return clone(user);
   }
 
+  updateUserPassword(id, passwordHash) {
+    const user = this.getUser(id);
+    const updated = { ...user, passwordHash };
+    this.#users.set(id, updated);
+    return clone(updated);
+  }
+
   createRefreshSession(session) {
     this.#refreshSessions.set(session.id, clone(session));
     return clone(session);
@@ -169,6 +177,37 @@ export class InMemoryRepository {
   revokeRefreshFamily(familyId, revokedAt) {
     for (const [id, session] of this.#refreshSessions) {
       if (session.familyId === familyId && !session.revokedAt) this.#refreshSessions.set(id, { ...session, revokedAt });
+    }
+  }
+
+  revokeRefreshSessionsForUser(userId, revokedAt) {
+    for (const [id, session] of this.#refreshSessions) {
+      if (session.userId === userId && !session.revokedAt) this.#refreshSessions.set(id, { ...session, revokedAt });
+    }
+  }
+
+  createPasswordReset(reset) {
+    this.#passwordResets.set(reset.id, clone(reset));
+    return clone(reset);
+  }
+
+  getPasswordResetByHash(tokenHash) {
+    const reset = [...this.#passwordResets.values()].find((item) => item.tokenHash === tokenHash);
+    if (!reset) throw new AtlasError('INVALID_PASSWORD_RESET', 'Invalid password reset token', 401);
+    return clone(reset);
+  }
+
+  consumePasswordReset(id, usedAt) {
+    const reset = this.#passwordResets.get(id);
+    if (!reset || reset.usedAt) throw new AtlasError('INVALID_PASSWORD_RESET', 'Invalid password reset token', 401);
+    const updated = { ...reset, usedAt };
+    this.#passwordResets.set(id, updated);
+    return clone(updated);
+  }
+
+  invalidatePasswordResetsForUser(userId, usedAt) {
+    for (const [id, reset] of this.#passwordResets) {
+      if (reset.userId === userId && !reset.usedAt) this.#passwordResets.set(id, { ...reset, usedAt });
     }
   }
 

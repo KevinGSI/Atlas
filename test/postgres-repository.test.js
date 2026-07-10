@@ -105,3 +105,19 @@ test('PostgreSQL refresh sessions store only token hashes and lock during rotati
   assert.match(calls[1].sql, /FOR UPDATE/);
   assert.deepEqual(calls[1].values, ['hashed']);
 });
+
+test('PostgreSQL password reset stores only hashes and locks tokens before consumption', async () => {
+  const calls = [];
+  const row = { id: 'rst_1', user_id: 'usr_1', token_hash: 'hashed-reset', expires_at: timestamp, created_at: timestamp, used_at: null };
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rows: [row] }; } };
+  const repository = new PostgresRepository(pool);
+  const reset = await repository.createPasswordReset({ id: 'rst_1', userId: 'usr_1', tokenHash: 'hashed-reset', expiresAt: timestamp, createdAt: timestamp, usedAt: null });
+  assert.equal(reset.tokenHash, 'hashed-reset');
+  assert.match(calls[0].sql, /INSERT INTO atlas_password_reset/);
+  await repository.getPasswordResetByHash('hashed-reset');
+  assert.match(calls[1].sql, /FOR UPDATE/);
+  await repository.revokeRefreshSessionsForUser('usr_1', timestamp);
+  assert.match(calls[2].sql, /WHERE user_id = \$1/);
+  await repository.invalidatePasswordResetsForUser('usr_1', timestamp);
+  assert.match(calls[3].sql, /user_id = \$1 AND used_at IS NULL/);
+});

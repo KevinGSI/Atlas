@@ -30,7 +30,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.6.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.7.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -169,4 +169,23 @@ test('HTTP refresh rotates sessions and logout prevents further refresh', async 
   });
   assert.equal(denied.status, 401);
   assert.equal(denied.body.error.code, 'REFRESH_TOKEN_REUSED');
+});
+
+test('HTTP password recovery uses the delivery boundary and replaces credentials', async () => {
+  let delivered;
+  const repository = new InMemoryRepository();
+  const identity = new IdentityService(repository, new TokenService('a'.repeat(32)), undefined, {
+    deliverPasswordReset: async (message) => { delivered = message; }
+  });
+  const handler = createAtlasHandler(new AtlasService(repository), {
+    config: { maxBodyBytes: 1_048_576, corsOrigins: [] }, ready: async () => true, identity
+  });
+  await json(handler, '/v1/auth/register', { method: 'POST', body: JSON.stringify({ email: 'recover-http@example.com', name: 'Recover', password: 'original password long enough' }) });
+  const requested = await json(handler, '/v1/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email: 'recover-http@example.com' }) });
+  assert.deepEqual(requested.body.data, { accepted: true });
+  assert.ok(delivered.resetToken);
+  const completed = await json(handler, '/v1/auth/password-reset/complete', { method: 'POST', body: JSON.stringify({ resetToken: delivered.resetToken, password: 'replacement password long enough' }) });
+  assert.deepEqual(completed.body.data, { reset: true });
+  const login = await json(handler, '/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: 'recover-http@example.com', password: 'replacement password long enough' }) });
+  assert.equal(login.status, 200);
 });

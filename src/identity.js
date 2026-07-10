@@ -58,7 +58,9 @@ export class IdentityService {
   constructor(repository, tokenService, clock = () => new Date().toISOString(), options = {}) {
     this.repository = repository; this.tokens = tokenService; this.clock = clock;
     this.refreshTokenTtlSeconds = options.refreshTokenTtlSeconds ?? 2_592_000;
+    this.passwordResetTtlSeconds = options.passwordResetTtlSeconds ?? 900;
     this.randomToken = options.randomToken ?? (() => randomBytes(32).toString('base64url'));
+    this.deliverPasswordReset = options.deliverPasswordReset ?? (async () => {});
   }
   publicUser(user) { return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt }; }
   async issueSession(user, repository = this.repository, familyId = createId('fam')) {
@@ -114,6 +116,39 @@ export class IdentityService {
     const session = await this.repository.getRefreshSessionByHash(hashToken(refreshToken));
     if (!session.revokedAt) await this.repository.revokeRefreshSession(session.id, this.clock());
     return { revoked: true };
+  }
+  async requestPasswordReset(input) {
+    const email = required(input.email, 'email').trim().toLowerCase();
+    let user;
+    try { user = await this.repository.getUserByEmail(email); }
+    catch { return { accepted: true }; }
+    const resetToken = this.randomToken();
+    const createdAt = this.clock();
+    const expiresAt = new Date(new Date(createdAt).getTime() + this.passwordResetTtlSeconds * 1000).toISOString();
+    await this.repository.createPasswordReset({
+      id: createId('rst'), userId: user.id, tokenHash: hashToken(resetToken),
+      expiresAt, createdAt, usedAt: null
+    });
+    try { await this.deliverPasswordReset({ email: user.email, name: user.name, resetToken, expiresAt }); }
+    catch { /* Keep the public response indistinguishable from an unknown account. */ }
+    return { accepted: true };
+  }
+  async resetPassword(input) {
+    const resetToken = required(input.resetToken, 'resetToken');
+    const passwordHash = await hashPassword(input.password);
+    return this.repository.transaction(async (repository) => {
+      const reset = await repository.getPasswordResetByHash(hashToken(resetToken));
+      const now = this.clock();
+      if (reset.usedAt) throw new AtlasError('PASSWORD_RESET_USED', 'Password reset token has already been used', 401);
+      if (new Date(reset.expiresAt).getTime() <= new Date(now).getTime()) {
+        throw new AtlasError('PASSWORD_RESET_EXPIRED', 'Password reset token expired', 401);
+      }
+      await repository.updateUserPassword(reset.userId, passwordHash);
+      await repository.consumePasswordReset(reset.id, now);
+      await repository.invalidatePasswordResetsForUser(reset.userId, now);
+      await repository.revokeRefreshSessionsForUser(reset.userId, now);
+      return { reset: true };
+    });
   }
   async authenticate(header) {
     if (!header?.startsWith('Bearer ')) throw new AtlasError('AUTHENTICATION_REQUIRED', 'Bearer access token required', 401);

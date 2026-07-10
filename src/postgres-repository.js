@@ -35,6 +35,9 @@ function refreshSession(row) {
     revokedAt: iso(row.revoked_at), replacedBySessionId: row.replaced_by_session_id
   };
 }
+function passwordReset(row) {
+  return { id: row.id, userId: row.user_id, tokenHash: row.token_hash, expiresAt: iso(row.expires_at), createdAt: iso(row.created_at), usedAt: iso(row.used_at) };
+}
 
 export class PostgresRepository {
   constructor(executor, pool = executor) {
@@ -197,6 +200,13 @@ export class PostgresRepository {
     return user(result.rows[0]);
   }
 
+  async updateUserPassword(id, passwordHash) {
+    const result = await this.executor.query(
+      'UPDATE atlas_user SET password_hash = $2 WHERE id = $1 RETURNING *', [id, passwordHash]);
+    if (!result.rows[0]) throw new AtlasError('USER_NOT_FOUND', 'User not found', 404);
+    return user(result.rows[0]);
+  }
+
   async createRefreshSession(value) {
     const result = await this.executor.query(
       `INSERT INTO atlas_refresh_session
@@ -231,6 +241,37 @@ export class PostgresRepository {
   async revokeRefreshFamily(familyId, revokedAt) {
     await this.executor.query(
       'UPDATE atlas_refresh_session SET revoked_at = COALESCE(revoked_at, $2) WHERE family_id = $1', [familyId, revokedAt]);
+  }
+
+  async revokeRefreshSessionsForUser(userId, revokedAt) {
+    await this.executor.query(
+      'UPDATE atlas_refresh_session SET revoked_at = COALESCE(revoked_at, $2) WHERE user_id = $1', [userId, revokedAt]);
+  }
+
+  async createPasswordReset(value) {
+    const result = await this.executor.query(
+      `INSERT INTO atlas_password_reset (id, user_id, token_hash, expires_at, created_at, used_at)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [value.id, value.userId, value.tokenHash, value.expiresAt, value.createdAt, value.usedAt]);
+    return passwordReset(result.rows[0]);
+  }
+
+  async getPasswordResetByHash(tokenHash) {
+    const result = await this.executor.query('SELECT * FROM atlas_password_reset WHERE token_hash = $1 FOR UPDATE', [tokenHash]);
+    if (!result.rows[0]) throw new AtlasError('INVALID_PASSWORD_RESET', 'Invalid password reset token', 401);
+    return passwordReset(result.rows[0]);
+  }
+
+  async consumePasswordReset(id, usedAt) {
+    const result = await this.executor.query(
+      'UPDATE atlas_password_reset SET used_at = $2 WHERE id = $1 AND used_at IS NULL RETURNING *', [id, usedAt]);
+    if (!result.rows[0]) throw new AtlasError('INVALID_PASSWORD_RESET', 'Invalid password reset token', 401);
+    return passwordReset(result.rows[0]);
+  }
+
+  async invalidatePasswordResetsForUser(userId, usedAt) {
+    await this.executor.query(
+      'UPDATE atlas_password_reset SET used_at = $2 WHERE user_id = $1 AND used_at IS NULL', [userId, usedAt]);
   }
 
   async createMembership(value) {
