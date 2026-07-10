@@ -28,10 +28,14 @@ async function json(handler, url, options = {}) {
   });
 }
 
+async function raw(handler,url){const request=Readable.from([]);request.method='GET';request.url=url;request.headers={};return new Promise((resolve,reject)=>{const response={writeHead(status,headers){this.status=status;this.headers=headers;},end(body){resolve({status:this.status,headers:this.headers,body:Buffer.from(body).toString('utf8')});}};Promise.resolve(handler(request,response)).catch(reject);});}
+
+test('serves the connected phase-one client from the application origin',async()=>{const handler=fixture();const page=await raw(handler,'/');assert.equal(page.status,200);assert.match(page.headers['content-type'],/text\/html/);assert.match(page.body,/While You Were Gone/);const script=await raw(handler,'/app.js');assert.match(script.headers['content-type'],/javascript/);assert.match(script.body,/authorization:`Bearer/);});
+
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.22.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.22.1' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -151,6 +155,14 @@ test('authenticated HTTP flow enforces workspace roles', async () => {
   const missingToken = await json(handler, `/v1/workspaces/${workspaceId}`);
   assert.equal(missingToken.status, 401);
   assert.equal(missingToken.body.error.code, 'AUTHENTICATION_REQUIRED');
+});
+
+test('authenticated homepage loads and reviews attorney awareness through HTTP',async()=>{
+  const repository=new InMemoryRepository();const service=new AtlasService(repository);const identity=new IdentityService(repository,new TokenService('a'.repeat(32)));const handler=createAtlasHandler(service,{config:{maxBodyBytes:1_048_576,corsOrigins:[]},ready:async()=>true,identity});
+  const registered=(await json(handler,'/v1/auth/register',{method:'POST',body:JSON.stringify({email:'awareness@example.com',name:'Awareness Attorney',password:'correct password long enough'})})).body.data;const headers={authorization:`Bearer ${registered.accessToken}`};const workspace=(await json(handler,'/v1/workspaces',{method:'POST',headers,body:JSON.stringify({name:'Aware Firm'})})).body.data;
+  await repository.createAwarenessItem({id:'awi_http',workspaceId:workspace.id,targetUserId:registered.user.id,sourceJobId:'inj_http',sourceObjectId:null,category:'incoming_email',priority:'high',headline:'Response email prepared',summary:'An unsent response is ready for attorney review.',observationIds:[],actionProposalIds:[],createdAt:'2026-07-10T12:00:00.000Z'});
+  const feed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone`,{headers});assert.equal(feed.status,200);assert.equal(feed.body.data[0].reviewStatus,'unseen');assert.equal(feed.body.data[0].headline,'Response email prepared');
+  const reviewed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone/awi_http`,{method:'PATCH',headers,body:JSON.stringify({status:'reviewed'})});assert.equal(reviewed.status,200);assert.equal(reviewed.body.data.status,'reviewed');const refreshed=await json(handler,`/v1/workspaces/${workspace.id}/home/while-you-were-gone`,{headers});assert.equal(refreshed.body.data[0].reviewStatus,'reviewed');
 });
 
 test('HTTP refresh rotates sessions and logout prevents further refresh', async () => {

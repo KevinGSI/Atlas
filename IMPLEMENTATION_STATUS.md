@@ -1,8 +1,13 @@
-# Atlas Core 0.22.0 — Autonomous Situational Awareness Status
+# Atlas Core 0.22.1 — Connected Situational Awareness Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.21.0`
+- Everything verified through Atlas Core `0.22.0`
+- Application-served phase-one homepage with functional Atlas login
+- Same-origin authenticated API client with no hard-coded demo identity
+- Attorney-scoped `While You Were Gone` loading and review decisions
+- Browser-facing error states for authentication and API failures
+- Container packaging of the tracked frontend assets
 - Native event taxonomy for incoming email, phone calls, document uploads, missed deadlines, CMS activity, and other firm activity
 - Provider-neutral tandem analysis for classification, entity extraction, matter matching, facts, deadlines, duties, conflicts, risks, recommendations, and safe proposed work
 - Material-event playbooks independent of any one AI provider
@@ -28,7 +33,10 @@
 
 ## Verification completed here
 
-- 128 canonical tests across the complete Atlas Core surface
+- 131 canonical tests across the complete Atlas Core surface
+- Connected homepage asset delivery with restrictive security headers
+- Authenticated awareness retrieval and review through the HTTP boundary
+- PostgreSQL attorney-scoping and receipt-upsert query verification
 - Autonomous missed-deadline detection and duplicate suppression
 - Provider-neutral job processing with deterministic situational playbooks
 - Creation of an urgent awareness item, review task, and unfiled motion draft
@@ -52,7 +60,8 @@
 - Other CMS vendors not yet supplied as adapters
 - Live PostgreSQL execution of migrations `0014`, `0015`, and `0016`
 - A real mailbox, telephony provider, document store, or production AI model processing an event end to end
-- Browser-to-production API integration for the playable phase-one homepage
+- Deployment of the connected homepage against a public production environment
+- Live local network-listener execution in this restricted workspace (`listen EPERM`)
 - A production KMS/HSM-backed vault, multi-instance scheduler locks, rate-limit behavior, or large-firm migration volumes
 - Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
 
@@ -72,4 +81,4 @@ Atlas must not ask customers to submit their Clio or MyCase password. Users auth
 - Final cutover tooling and write-back require separate explicit authorization and reconciliation policies
 - Email and phone response drafting quality still depends on the configured interchangeable AI provider and connector-supplied content
 - The motion-to-compel output is a reviewable draft shell, not a jurisdiction-certified filing
-- The current playable homepage uses fictional local data; a production frontend still must authenticate and consume the new API
+- The separate design demo still uses fictional data; the tracked homepage at `/` uses authenticated API data

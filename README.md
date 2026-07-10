@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.22.0` adds autonomous situational awareness: native AI processes firm events without prompting, prepares safe work in tandem, and presents attorney review items through “While You Were Gone.”
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.22.1` completes the first connected situational-awareness workflow: the application serves a real sign-in homepage that consumes the authenticated “While You Were Gone” API and records attorney review decisions.
 
 ## Implemented
 
@@ -95,6 +95,9 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Automatic unfiled motion-to-compel draft and review-task proposals
 - Per-attorney While You Were Gone awareness items and review receipts
 - Noise suppression for events that produce no material finding or proposed action
+- Same-origin connected phase-one homepage served at `/`
+- Real Atlas authentication from the homepage without hard-coded demo credentials
+- Attorney-scoped awareness retrieval and review-state updates from the browser client
 
 ## Local development
 
@@ -108,6 +111,8 @@ pnpm start
 ```
 
 Without `DATABASE_URL`, development uses the in-memory repository.
+
+Open `http://localhost:3000/` to use the connected phase-one client. Enter an existing Atlas account and workspace ID. This client reads live API data; it does not substitute fictional awareness cards.
 
 ## Local PostgreSQL stack
 

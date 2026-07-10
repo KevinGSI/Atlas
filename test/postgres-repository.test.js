@@ -188,3 +188,11 @@ test('PostgreSQL observations preserve source, confidence, location, and provide
   const observation=await repository.createIntelligenceObservation({id:'ino_1',workspaceId:'wsp_1',jobId:'inj_1',sourceObjectId:'obj_1',kind:'fact',data:row.data,confidence:.93,sourceLocation:row.source_location,provider:'extractor',status:'candidate',reviewedBy:null,reviewedAt:null,createdAt:timestamp});
   assert.equal(observation.confidence,.93);assert.deepEqual(observation.sourceLocation,{page:2});assert.match(calls[0].sql,/atlas_intelligence_observation/);
 });
+
+test('PostgreSQL awareness feed is attorney-scoped and review receipts upsert safely',async()=>{
+  const calls=[];const item={id:'awi_1',workspace_id:'wsp_1',target_user_id:'usr_1',source_job_id:'inj_1',source_object_id:'obj_1',category:'incoming_email',priority:'high',headline:'Review response',summary:'Draft ready',observation_ids:[],action_proposal_ids:[],created_at:timestamp,review_status:'unseen'};
+  const receipt={item_id:'awi_1',user_id:'usr_1',status:'reviewed',updated_at:timestamp};
+  const repository=new PostgresRepository({async query(sql,values){calls.push({sql,values});return {rows:[sql.startsWith('INSERT INTO atlas_awareness_receipt')?receipt:item]};}});
+  const feed=await repository.listAwarenessItems('wsp_1','usr_1',null);assert.equal(feed[0].reviewStatus,'unseen');assert.match(calls[0].sql,/target_user_id IS NULL OR i\.target_user_id=\$2/);assert.deepEqual(calls[0].values,['wsp_1','usr_1',null]);
+  const updated=await repository.updateAwarenessReceipt('wsp_1','awi_1','usr_1','reviewed',timestamp);assert.equal(updated.status,'reviewed');assert.match(calls[1].sql,/ON CONFLICT \(item_id,user_id\) DO UPDATE/);assert.deepEqual(calls[1].values,['wsp_1','awi_1','usr_1','reviewed',timestamp]);
+});

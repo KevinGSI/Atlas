@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Atlas — Connected Phase One</title>
+  <style>
+    :root{font-family:Inter,system-ui,sans-serif;color:#152238;background:#f3f6fa;--navy:#142b4a;--line:#d8e0ea;--muted:#65748a}*{box-sizing:border-box}body{margin:0}.shell{max-width:1040px;margin:auto;padding:32px}.brand{font:32px Georgia,serif;color:var(--navy)}.card{background:white;border:1px solid var(--line);border-radius:16px;padding:22px;margin-top:20px;box-shadow:0 10px 35px #142b4a12}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{font-size:12px;font-weight:700;color:var(--muted)}input{width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;margin-top:5px}button{border:1px solid var(--line);border-radius:9px;padding:10px 14px;background:white;font-weight:700}button.primary{background:var(--navy);color:white;border-color:var(--navy)}button:disabled{opacity:.5}.hidden{display:none}.hero{text-align:center;padding:24px}.hero h1{font:36px Georgia,serif;margin:8px}.hero p,.muted{color:var(--muted)}.feed{display:grid;gap:10px}.item{border:1px solid var(--line);border-left:5px solid var(--navy);border-radius:11px;padding:15px;display:grid;grid-template-columns:1fr auto;gap:12px}.item[data-priority="urgent"]{border-left-color:#b42318}.item h3{margin:3px 0}.item p{color:var(--muted);margin:5px 0 10px}.pill{font-size:10px;text-transform:uppercase;font-weight:800;color:#5b7190}.error{color:#b42318;margin-top:12px}.toolbar{display:flex;gap:10px;align-items:end}.toolbar>label{flex:1}@media(max-width:700px){.grid,.item{grid-template-columns:1fr}.shell{padding:18px}}
+  </style>
+</head>
+<body><main class="shell">
+  <div class="brand">Atlas</div>
+  <section id="login" class="card">
+    <h1>Sign in to your firm</h1><p class="muted">This connected client sends credentials only to the Atlas API address you specify.</p>
+    <form id="loginForm"><div class="grid">
+      <label>Atlas API address<input id="apiBase" required></label>
+      <label>Workspace ID<input id="workspaceId" placeholder="wsp_…" required></label>
+      <label>Email<input id="email" type="email" autocomplete="username" required></label>
+      <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+    </div><button class="primary" type="submit">Sign in to Atlas</button><div id="loginError" class="error"></div></form>
+  </section>
+  <section id="home" class="hidden">
+    <div class="hero"><span class="pill">Native firm intelligence</span><h1>What do you need?</h1><p>Atlas is processing firm activity beneath every workflow.</p></div>
+    <section class="card"><div class="toolbar"><label>Show activity since<input id="since" type="datetime-local"></label><button id="refresh">Refresh</button><button id="signOut">Sign out</button></div></section>
+    <section class="card"><h2>While You Were Gone</h2><p id="feedStatus" class="muted">Loading verified awareness items…</p><div id="feed" class="feed"></div></section>
+  </section>
+</main><script type="module" src="./app.js"></script></body></html>

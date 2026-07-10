@@ -13,6 +13,7 @@ COPY --chown=node:node package.json pnpm-lock.yaml ./
 COPY --chown=node:node src ./src
 COPY --chown=node:node scripts ./scripts
 COPY --chown=node:node db ./db
+COPY --chown=node:node web ./web
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

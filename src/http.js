@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { AtlasError } from './errors.js';
+import { phaseOneAsset } from './phase-one-web.js';
 
 async function readJson(request, maxBodyBytes) {
   const chunks = [];
@@ -46,8 +47,12 @@ function send(response, status, body, headers = {}) {
   response.end(JSON.stringify(body));
 }
 
+function sendAsset(response,asset,headers={}){response.writeHead(200,{...headers,'content-type':asset.contentType,'content-length':asset.content.length,'content-security-policy':"default-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'"});response.end(asset.content);}
+
 function route(method, pathname) {
   const patterns = [
+    ['GET', /^\/$/, 'frontendIndex'],
+    ['GET', /^\/app\.js$/, 'frontendApp'],
     ['GET', /^\/health$/, 'health'],
     ['GET', /^\/live$/, 'live'],
     ['GET', /^\/ready$/, 'ready'],
@@ -118,7 +123,7 @@ export function createAtlasHandler(service, options = {}) {
       const match = route(request.method, url.pathname);
       if (!match) throw new AtlasError('ROUTE_NOT_FOUND', 'Route not found', 404);
       const [workspaceId, objectId] = match.params;
-      const publicRoute = ['health', 'live', 'ready', 'register', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'cmsOAuthCallback'].includes(match.name);
+      const publicRoute = ['frontendIndex', 'frontendApp', 'health', 'live', 'ready', 'register', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'cmsOAuthCallback'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/')) {
         const permission = ['getWorkspace', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsConnections', 'whileYouWereGone', 'updateAwarenessStatus'].includes(match.name)
@@ -127,8 +132,9 @@ export function createAtlasHandler(service, options = {}) {
       }
       let result;
       switch (match.name) {
-        case 'health': case 'live': result = { status: 'ok', version: '0.22.0' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.22.0' }; break;
+        case 'frontendIndex': case 'frontendApp': return sendAsset(response,await phaseOneAsset(match.name),headers);
+        case 'health': case 'live': result = { status: 'ok', version: '0.22.1' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.22.1' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes)); break;
         case 'refresh': result = await identity.refresh(await readJson(request, config.maxBodyBytes)); break;
