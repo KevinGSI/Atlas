@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AtlasIntelligenceRuntime, IntelligenceProviderRegistry } from '../src/intelligence.js';
+import { AtlasIntelligenceRuntime, IntelligenceProviderRegistry, StructuredModelIntelligenceProvider, runIntelligenceWorker } from '../src/intelligence.js';
 import { InMemoryRepository } from '../src/repository.js';
 import { AtlasService } from '../src/service.js';
 import { IntelligenceProjectionService } from '../src/intelligence-projection.js';
@@ -91,4 +91,25 @@ test('invalid provider observations roll back projection and job completion', as
   await assert.rejects(() => runtime.processNext(), (error) => error.code === 'INTELLIGENCE_RESULT_INVALID');
   assert.equal((await repository.listIntelligenceObservations(workspace.id)).length, 0);
   assert.equal((await repository.listIntelligenceJobs(workspace.id))[0].status, 'failed');
+});
+
+test('capability routing selects providers by native event type',()=>{
+  const registry=new IntelligenceProviderRegistry()
+    .register('documents',{capabilities(){return {triggers:['attachment.received']};},async analyze(){return {};}})
+    .register('communications',{capabilities(){return {triggers:['email.received']};},async analyze(){return {};}});
+  assert.equal(registry.resolveFor('email.received').name,'communications');
+  assert.equal(registry.resolveFor('attachment.received').name,'documents');
+});
+
+test('background worker drains queued intelligence until aborted',async()=>{
+  let calls=0;const controller=new AbortController();const runtime={async processNext(){calls+=1;if(calls===2)controller.abort();return calls===1?{id:'job'}:null;}};
+  await runIntelligenceWorker(runtime,{signal:controller.signal,pollMs:1});assert.equal(calls,2);
+});
+
+test('any interchangeable chat model can power normalized native intelligence',async()=>{
+  const model={async complete(input){assert.equal(input.tools.length,0);return {text:JSON.stringify({observations:[{kind:'risk',data:{title:'Deadline risk'},confidence:.8}],actionProposals:[]})};}};
+  const provider=new StructuredModelIntelligenceProvider(model);
+  const result=await provider.analyze({event:{type:'email.received'},context:{workspaceId:'wsp_1'}});
+  assert.equal(result.observations[0].kind,'risk');assert.equal(provider.capabilities().providerNeutralModel,true);
+  await assert.rejects(()=>new StructuredModelIntelligenceProvider({async complete(){return {text:'not-json'};}}).analyze({event:{},context:{}}),(error)=>error.code==='INTELLIGENCE_RESULT_INVALID');
 });

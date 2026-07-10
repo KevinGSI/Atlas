@@ -82,6 +82,14 @@ test('computes explainable matter health deductions', async () => {
   assert.equal((await service.matterHealth(workspace.id, healthy.id)).score, 100);
 });
 
+test('matter health consumes accepted digital-twin deadlines and risks',async()=>{
+  const {service,workspace}=await fixture();const matter=await service.createObject(workspace.id,{dimension:'matter',type:'civil',title:'Twin Matter',state:{clientId:'client',ownerId:'owner'}});
+  await service.createObject(workspace.id,{parentObjectId:matter.id,dimension:'operation',type:'deadline',title:'Response due',state:{date:'2026-08-01'}});
+  assert.equal((await service.matterHealth(workspace.id,matter.id)).score,100);
+  const risk=await service.createObject(workspace.id,{parentObjectId:matter.id,dimension:'operation',type:'risk',title:'Service defect'});
+  const health=await service.matterHealth(workspace.id,matter.id);assert.equal(health.score,90);assert.deepEqual(health.reasons[0],{code:'INTELLIGENCE_RISK',deduction:10,objectId:risk.id});
+});
+
 test('rolls back object creation when its timeline event fails', async () => {
   class FailingEventRepository extends InMemoryRepository {
     async createEvent() { throw new Error('forced event failure'); }

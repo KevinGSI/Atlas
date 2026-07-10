@@ -175,3 +175,16 @@ test('PostgreSQL AI action decisions are workspace-scoped, versioned, and pendin
   assert.match(calls[0].sql, /version=\$3/);
   assert.match(calls[0].sql, /status='pending'/);
 });
+
+test('PostgreSQL intelligence queue claims concurrent work with skip-locked semantics',async()=>{
+  const calls=[];const row={id:'inj_1',workspace_id:'wsp_1',trigger_type:'email.received',object_id:'obj_1',event_id:'evt_1',status:'processing',attempts:1,payload:{},result:null,provider:null,error_code:null,available_at:timestamp,locked_at:timestamp,created_at:timestamp,completed_at:null};
+  const repository=new PostgresRepository({async query(sql,values){calls.push({sql,values});return {rows:[row]};}});
+  const job=await repository.claimIntelligenceJob(timestamp);assert.equal(job.status,'processing');assert.match(calls[0].sql,/FOR UPDATE SKIP LOCKED/);assert.match(calls[0].sql,/attempts=j\.attempts\+1/);
+});
+
+test('PostgreSQL observations preserve source, confidence, location, and provider provenance',async()=>{
+  const calls=[];const row={id:'ino_1',workspace_id:'wsp_1',job_id:'inj_1',source_object_id:'obj_1',kind:'fact',data:{description:'Extracted'},confidence:'0.9300',source_location:{page:2},provider:'extractor',status:'candidate',reviewed_by:null,reviewed_at:null,created_at:timestamp};
+  const repository=new PostgresRepository({async query(sql,values){calls.push({sql,values});return {rows:[row]};}});
+  const observation=await repository.createIntelligenceObservation({id:'ino_1',workspaceId:'wsp_1',jobId:'inj_1',sourceObjectId:'obj_1',kind:'fact',data:row.data,confidence:.93,sourceLocation:row.source_location,provider:'extractor',status:'candidate',reviewedBy:null,reviewedAt:null,createdAt:timestamp});
+  assert.equal(observation.confidence,.93);assert.deepEqual(observation.sourceLocation,{page:2});assert.match(calls[0].sql,/atlas_intelligence_observation/);
+});

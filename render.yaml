@@ -25,6 +25,31 @@ services:
         sync: false
       - key: AUTH_TOKEN_SECRET
         generateValue: true
+  - type: worker
+    name: atlas-intelligence-worker
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node scripts/intelligence-worker.js
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: atlas-postgres
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_TOKEN_SECRET
+        sync: false
+      - key: AI_PROVIDER
+        sync: false
+      - key: AI_MODEL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AI_CONTENT_ENCRYPTION_KEY
+        sync: false
 
 databases:
   - name: atlas-postgres

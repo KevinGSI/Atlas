@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.19.0` begins the native-intelligence rebuild with a provider-neutral runtime and durable event-driven work queue beneath every interface, including chat.
+Atlas Core is the verified backend rebuild of the Atlas legal intelligence platform. Version `0.20.0` completes the architectural correction that makes provider-interchangeable native intelligence a shared digital-twin layer beneath platform workflows and chat.
 
 ## Implemented
 
@@ -73,6 +73,15 @@ Atlas Core is the verified backend rebuild of the Atlas legal intelligence platf
 - Durable pending, processing, completed, and failed job lifecycle
 - Concurrent-worker-safe PostgreSQL claiming with `SKIP LOCKED`
 - Bounded retries, result provenance, provider identity, and terminal failure records
+- Idempotent incoming-email and attachment ingestion with canonical objects and graph links
+- Replaceable mail connector, blob storage, PDF extraction, and OCR boundaries
+- Capability-based intelligence-provider routing and deployable background worker
+- Normalized candidate observations for entities, matter matches, facts, deadlines, duties, conflicts, risks, and recommendations
+- Human acceptance/rejection before candidate knowledge becomes canonical twin state
+- Deterministic workspace-scoped matter and entity resolution scoring
+- Unified intelligence review inbox for candidates, actions, and processing failures
+- Shared twin search used by platform APIs and the chat tool registry
+- Matter health consuming accepted twin deadlines, risks, and conflicts
 
 ## Local development
 
@@ -145,7 +154,7 @@ Login failures are tracked by a normalized email hash. The defaults lock a princ
 
 ## Atlas AI orchestration
 
-The assistant endpoint authenticates the user, checks `workspace:read`, and pins every model-requested tool to that authorized workspace. The model cannot supply or change the workspace ID. The current orchestration layer exposes only read-only tools and returns source-object references with the final answer.
+The assistant endpoint authenticates the user, checks `workspace:read`, and pins every model-requested tool to that authorized workspace. The model cannot supply or change the workspace ID. Tools either read shared twin state or create review proposals; they cannot directly send, file, publish, or perform another consequential mutation.
 
 The runtime accepts providers implementing `complete({ messages, tools, context, state })` and `capabilities()`. Atlas selects one with `AI_PROVIDER`; `AI_MODEL` identifies the provider model. Without a selected provider, the endpoint returns `503 AI_NOT_CONFIGURED` rather than generating a scripted response or claiming AI work occurred.
 
@@ -158,6 +167,14 @@ For rotation, set `AI_CONTENT_ENCRYPTION_KEYS` to a JSON object containing the o
 Before enabling confidential data, back up PostgreSQL and inventory legacy rows with `pnpm encrypt-ai-content`. This is a dry run. During an approved maintenance window, stop application traffic and run `pnpm encrypt-ai-content -- --apply`. The apply mode obtains an exclusive lock and commits all conversions together; rerunning safely skips encrypted values. Do not remove an old key until the inventory and backup recovery procedure prove that no retained envelope needs it.
 
 Other providers are registered through the same `AiProviderRegistry`; legal tools and workflows do not import or reference the OpenAI adapter.
+
+## Native intelligence and digital twin
+
+Native intelligence runs beneath chat and direct platform workflows. Material object, timeline, ingestion, and approved-action events enqueue durable jobs. `pnpm worker:intelligence` runs the background worker. It selects interchangeable providers by declared trigger capabilities, validates normalized results, and projects candidate observations and action proposals with source, confidence, location, job, and provider provenance.
+
+Incoming connector emails enter through `POST /v1/workspaces/:workspaceId/ingestions/email`. Attachment metadata points to an external blob reference; binary storage, malware scanning, PDF parsing, and OCR are replaceable adapters rather than database blobs or vendor-specific domain code.
+
+Candidates remain noncanonical until reviewed. The homepage can consume `GET /v1/workspaces/:workspaceId/intelligence/review-inbox`; authorized reviewers accept or reject observations through `POST /v1/workspaces/:workspaceId/intelligence/observations/:observationId/decision`. Accepted knowledge becomes canonical twin objects or relationships. Both ordinary screens and Atlas chat search the same accepted state through `GET /v1/workspaces/:workspaceId/intelligence/search?q=...` and the `search_twin` tool.
 
 ## AI accountability ledger
 

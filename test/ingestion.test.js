@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AtlasIngestionService, ContentExtractorRegistry, IngestionConnectorRegistry } from '../src/ingestion.js';
+import { AtlasIngestionService, AttachmentExtractionProvider, ContentExtractorRegistry, IngestionConnectorRegistry } from '../src/ingestion.js';
 import { InMemoryRepository } from '../src/repository.js';
 import { AtlasService } from '../src/service.js';
 
@@ -35,4 +35,13 @@ test('invalid attachment metadata rolls back the entire ingestion',async()=>{
   const {repository,workspace,ingestion}=await fixture();
   await assert.rejects(()=>ingestion.ingestEmail(workspace.id,{connector:'mail',externalId:'bad',from:'a@example.com',to:['b@example.com'],attachments:[{filename:'bad.pdf'}]}),(error)=>error.code==='INGESTION_INVALID');
   assert.equal((await repository.listObjects(workspace.id,{})).filter((object)=>object.type==='incoming_email').length,0);
+});
+
+test('attachment extraction is a replaceable intelligence provider with blob and OCR boundaries',async()=>{
+  const extractors=new ContentExtractorRegistry().register('application/pdf',{capabilities(){return {ocrFallback:true};},async extract({content}){assert.equal(content,'pdf-bytes');return {text:'Response due July 20',documentType:'court_notice',confidence:.91};}});
+  const provider=new AttachmentExtractionProvider({async read(reference){assert.equal(reference,'blob://one');return 'pdf-bytes';}},extractors);
+  const result=await provider.analyze({event:{document:{id:'obj_pdf',title:'notice.pdf',state:{storageRef:'blob://one',mediaType:'application/pdf'}},matterId:'obj_matter'},context:{workspaceId:'wsp_1'}});
+  assert.deepEqual(provider.capabilities().triggers,['attachment.received']);
+  assert.equal(result.observations[0].data.documentType,'court_notice');
+  assert.equal(result.observations[1].data.description,'Response due July 20');
 });

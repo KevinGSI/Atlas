@@ -257,9 +257,11 @@ export class AtlasService {
     const matter = await this.repository.getObject(workspaceId, matterId);
     if (matter.dimension !== 'matter') throw new AtlasError('NOT_A_MATTER', 'Object is not a matter', 400);
     const reasons = [];
+    const connected=(await this.repository.listObjects(workspaceId,{})).filter((object)=>object.parentObjectId===matterId);
     if (!matter.state.clientId) reasons.push({ code: 'MISSING_CLIENT', deduction: 15 });
-    if (!matter.state.nextDeadline) reasons.push({ code: 'MISSING_DEADLINE', deduction: 10 });
+    if (!matter.state.nextDeadline&&!connected.some((object)=>object.type==='deadline')) reasons.push({ code: 'MISSING_DEADLINE', deduction: 10 });
     if (!matter.state.ownerId) reasons.push({ code: 'MISSING_OWNER', deduction: 10 });
+    for(const object of connected.filter((item)=>item.type==='risk'||item.type==='conflict')) reasons.push({code:object.type==='risk'?'INTELLIGENCE_RISK':'INTELLIGENCE_CONFLICT',deduction:10,objectId:object.id});
     const score = Math.max(0, 100 - reasons.reduce((sum, reason) => sum + reason.deduction, 0));
     return { matterId, score, status: score >= 80 ? 'green' : score >= 60 ? 'orange' : 'red', reasons };
   }

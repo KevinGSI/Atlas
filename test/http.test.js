@@ -31,7 +31,7 @@ async function json(handler, url, options = {}) {
 test('health endpoint reports the running release', async () => {
   const response = await json(fixture(), '/health');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.19.0' } });
+  assert.deepEqual(response.body, { data: { status: 'ok', version: '0.20.0' } });
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
 });
@@ -79,6 +79,12 @@ test('HTTP vertical slice creates workspace, matter, evidence, graph, timeline, 
     assert.equal(timeline.body.data[0].type, 'object.created');
     const health = await json(handler, `/v1/workspaces/${workspaceId}/matters/${matter.id}/health`);
     assert.equal(health.body.data.score, 65);
+});
+
+test('platform exposes the shared native intelligence review inbox',async()=>{
+  const handler=fixture();const workspace=(await json(handler,'/v1/workspaces',{method:'POST',body:JSON.stringify({name:'Review Firm'})})).body.data;
+  const response=await json(handler,`/v1/workspaces/${workspace.id}/intelligence/review-inbox`);
+  assert.equal(response.status,200);assert.deepEqual(response.body.data.counts,{observations:0,actions:0,failures:0});
 });
 
 test('HTTP errors have stable structured responses', async () => {

@@ -4,11 +4,11 @@ import { spawnSync } from 'node:child_process';
 const requiredFiles = [
   'package.json', 'pnpm-lock.yaml', 'README.md', 'IMPLEMENTATION_STATUS.md', 'docker-compose.yml',
   'Dockerfile', '.dockerignore', 'render.yaml', 'src/server.js', 'src/application.js', 'src/config.js',
-  'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js', 'src/content-security.js', 'src/ai-content-migration.js', 'src/intelligence.js',
+  'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js', 'src/content-security.js', 'src/ai-content-migration.js', 'src/intelligence.js', 'src/intelligence-projection.js', 'src/ingestion.js', 'src/resolution.js', 'docs/NATIVE_INTELLIGENCE_CONSTITUTION.md', 'docs/NATIVE_INTELLIGENCE_VERIFICATION.md',
   'src/postgres-repository.js', 'src/migrations.js', 'src/runtime.js',
-  'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'db/migrations/0007_ai_run_ledger.sql', 'db/migrations/0008_ai_conversations.sql', 'db/migrations/0009_ai_action_proposals.sql', 'db/migrations/0010_ai_draft_actions.sql', 'db/migrations/0011_intelligence_jobs.sql', 'test/service.test.js', 'test/http.test.js',
+  'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'db/migrations/0007_ai_run_ledger.sql', 'db/migrations/0008_ai_conversations.sql', 'db/migrations/0009_ai_action_proposals.sql', 'db/migrations/0010_ai_draft_actions.sql', 'db/migrations/0011_intelligence_jobs.sql', 'db/migrations/0012_intelligence_observations.sql', 'db/migrations/0013_ingestion_records.sql', 'test/service.test.js', 'test/http.test.js',
   'test/postgres-repository.test.js', 'test/migrations.test.js', 'test/config.test.js', 'test/runtime.test.js',
-  'test/deployment.test.js', 'test/identity.test.js', 'test/assistant.test.js', 'test/ai-providers.test.js', 'test/content-security.test.js', 'test/ai-content-migration.test.js', 'test/intelligence.test.js', 'scripts/encrypt-ai-content.js'
+  'test/deployment.test.js', 'test/identity.test.js', 'test/assistant.test.js', 'test/ai-providers.test.js', 'test/content-security.test.js', 'test/ai-content-migration.test.js', 'test/intelligence.test.js', 'test/ingestion.test.js', 'test/resolution.test.js', 'test/architecture.test.js', 'scripts/encrypt-ai-content.js', 'scripts/intelligence-worker.js'
 ];
 
 const failures = [];
@@ -17,7 +17,7 @@ for (const file of requiredFiles) {
 }
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-if (pkg.version !== '0.19.0') failures.push(`expected version 0.19.0, got ${pkg.version}`);
+if (pkg.version !== '0.20.0') failures.push(`expected version 0.20.0, got ${pkg.version}`);
 
 const migration = await readFile('db/migrations/0001_initial.sql', 'utf8');
 for (const table of ['atlas_workspace', 'atlas_object', 'atlas_relationship', 'atlas_timeline_event']) {
@@ -52,9 +52,14 @@ const draftActionMigration = await readFile('db/migrations/0010_ai_draft_actions
 if (!draftActionMigration.includes("'create_document'") || !draftActionMigration.includes("'draft_email'")) failures.push('AI draft action types are missing');
 const intelligenceMigration = await readFile('db/migrations/0011_intelligence_jobs.sql', 'utf8');
 if (!intelligenceMigration.includes('CREATE TABLE atlas_intelligence_job') || !intelligenceMigration.includes('atlas_intelligence_job_queue_idx')) failures.push('native intelligence job queue is missing');
+const observationMigration = await readFile('db/migrations/0012_intelligence_observations.sql', 'utf8');
+if (!observationMigration.includes('CREATE TABLE atlas_intelligence_observation') || !observationMigration.includes('intelligence_job_id')) failures.push('digital twin observation/provenance schema is missing');
+const ingestionMigration = await readFile('db/migrations/0013_ingestion_records.sql', 'utf8');
+if (!ingestionMigration.includes('CREATE TABLE atlas_ingestion_record') || !ingestionMigration.includes('UNIQUE(workspace_id,connector,external_id)')) failures.push('idempotent ingestion schema is missing');
 if (!pkg.dependencies?.pg) failures.push('pg runtime dependency is missing');
 if (pkg.scripts?.migrate !== 'node scripts/migrate.js') failures.push('standalone migration command is missing');
 if (pkg.scripts?.['encrypt-ai-content'] !== 'node scripts/encrypt-ai-content.js') failures.push('AI content encryption migration command is missing');
+if (pkg.scripts?.['worker:intelligence'] !== 'node scripts/intelligence-worker.js') failures.push('native intelligence worker command is missing');
 
 const dockerfile = await readFile('Dockerfile', 'utf8');
 if (!dockerfile.includes('USER node')) failures.push('container does not run as non-root');
@@ -77,4 +82,4 @@ if (failures.length) {
   console.error(`Verification failed:\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log(`Verification passed: version ${pkg.version}, ${requiredFiles.length} required files, ${sourceFiles} source modules, 15 database tables.`);
+console.log(`Verification passed: version ${pkg.version}, ${requiredFiles.length} required files, ${sourceFiles} source modules, 17 database tables.`);

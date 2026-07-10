@@ -56,3 +56,21 @@ export class AtlasIngestionService {
     });
   }
 }
+
+export class AttachmentExtractionProvider {
+  constructor(blobStore, extractors) {
+    if(typeof blobStore?.read!=='function')throw new AtlasError('BLOB_STORE_INVALID','Blob store must implement read',500);
+    this.blobStore=blobStore;this.extractors=extractors;
+  }
+  capabilities(){return {triggers:['attachment.received'],contentExtraction:true};}
+  async analyze({event,context}){
+    const document=event.document;const extractor=this.extractors.resolve(document.state.mediaType);
+    const content=await this.blobStore.read(document.state.storageRef);
+    const extracted=await extractor.extract({content,mediaType:document.state.mediaType,filename:document.title,context});
+    if(typeof extracted?.text!=='string')throw new AtlasError('CONTENT_EXTRACTION_INVALID','Extractor did not return text',502);
+    return {observations:[
+      {kind:'classification',data:{mediaType:document.state.mediaType,documentType:extracted.documentType??'unknown'},confidence:extracted.confidence??1,sourceLocation:null},
+      {kind:'fact',data:{title:`Extracted text: ${document.title}`,description:extracted.text,matterId:event.matterId??null},confidence:extracted.confidence??1,sourceLocation:{attachmentId:document.id}}
+    ],actionProposals:[]};
+  }
+}

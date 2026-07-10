@@ -1,6 +1,6 @@
 {
   "name": "atlas-core",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "type": "module",
@@ -9,6 +9,7 @@
     "start": "node src/server.js",
     "migrate": "node scripts/migrate.js",
     "encrypt-ai-content": "node scripts/encrypt-ai-content.js",
+    "worker:intelligence": "node scripts/intelligence-worker.js",
     "test": "node --test test/*.test.js",
     "verify": "node scripts/verify.js"
   },

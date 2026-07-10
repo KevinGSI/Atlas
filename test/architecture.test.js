@@ -17,3 +17,9 @@ test('native intelligence constitution explicitly prevents chat-owned intelligen
   assert.match(constitution, /No intelligence capability may be owned exclusively by chat/);
   assert.match(constitution, /explicit authorized approval/);
 });
+
+test('chat exposes shared twin retrieval instead of only chat-local memory',async()=>{
+  const assistant=await readFile(new URL('../src/assistant.js',import.meta.url),'utf8');
+  assert.match(assistant,/name: 'search_twin'/);
+  assert.match(assistant,/this\.service\.searchTwin/);
+});
