@@ -5,10 +5,13 @@ import { createId } from './ids.js';
 
 const scrypt = promisify(scryptCallback);
 const dummyPasswordHash = 'scrypt$16384$8$1$YXRsYXMtZHVtbXktc2FsdA$MTFgp77CaO1lpwhhuy-VhvfjmeBI4xBJgoDlcoruvkl5v05ss7zox1IMCOQx1JBIlCS264VtylZK8HzFwo76Jw';
-const roles = new Set(['owner', 'admin', 'member', 'viewer']);
+const roles = new Set(['owner', 'admin', 'attorney', 'paralegal', 'billing', 'member', 'viewer']);
 const permissions = {
   owner: new Set(['workspace:read', 'workspace:write', 'members:admin']),
   admin: new Set(['workspace:read', 'workspace:write', 'members:admin']),
+  attorney: new Set(['workspace:read', 'workspace:write']),
+  paralegal: new Set(['workspace:read', 'workspace:write']),
+  billing: new Set(['workspace:read', 'workspace:write']),
   member: new Set(['workspace:read', 'workspace:write']),
   viewer: new Set(['workspace:read'])
 };
@@ -84,6 +87,18 @@ export class IdentityService {
     return this.repository.transaction(async (repository) => {
       const user = await repository.createUser({ id: createId('usr'), email, name: required(input.name, 'name'), passwordHash, createdAt: this.clock() });
       return { user: this.publicUser(user), ...(await this.issueSession(user, repository)) };
+    });
+  }
+  async registerFirm(input){
+    const email=required(input.email,'email').trim().toLowerCase();
+    if(!/^\S+@\S+\.\S+$/.test(email))throw new AtlasError('INVALID_EMAIL','Email address is invalid',400);
+    const passwordHash=await hashPassword(input.password);const now=this.clock();
+    return this.repository.transaction(async(repository)=>{
+      const user=await repository.createUser({id:createId('usr'),email,name:required(input.name,'name'),passwordHash,createdAt:now});
+      const workspace=await repository.createWorkspace({id:createId('wsp'),name:required(input.firmName,'firmName'),createdAt:now,updatedAt:now,version:1});
+      await repository.createMembership({id:createId('mem'),workspaceId:workspace.id,userId:user.id,role:'owner',createdAt:now});
+      const subscription=await repository.createSubscription({id:createId('sub'),workspaceId:workspace.id,plan:'pilot',status:'trialing',seatLimit:10,trialEndsAt:null,currentPeriodEndsAt:null,createdAt:now,updatedAt:now});
+      return {user:this.publicUser(user),workspace,subscription,...(await this.issueSession(user,repository))};
     });
   }
   async login(input) {
