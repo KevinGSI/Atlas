@@ -1,8 +1,13 @@
-# Atlas Core 0.27.0 — Production AI Readiness Status
+# Atlas Core 0.27.1 — OpenAI Deployment Configuration Status
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.26.0`
+- Everything verified through Atlas Core `0.27.0`
+- OpenAI selected as the initial web and worker deployment provider
+- Explicit `gpt-5.6-sol` model configuration
+- Unsynchronized deployment secrets for OpenAI and Atlas AI-content encryption
+- Local environment template without committed secrets
+- Production intelligence worker parity with application situational playbooks
 - Provider-neutral legal event evaluation framework
 - Four representative situational-awareness scenarios
 - Required observation and action scoring with configurable threshold
@@ -108,6 +113,7 @@
 - Live local network-listener execution in this restricted workspace (`listen EPERM`)
 - Execution of the new integration harness against a real PostgreSQL daemon; this workspace supplied neither `TEST_DATABASE_URL` nor a database service
 - Execution of `pnpm test:ai` against a paid production model; no provider credentials were supplied here
+- OpenAI API authentication and model entitlement; `OPENAI_API_KEY` is not present in this workspace
 - A production KMS/HSM-backed vault, multi-instance scheduler locks, rate-limit behavior, or large-firm migration volumes
 - Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
 

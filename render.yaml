@@ -25,6 +25,14 @@ services:
         sync: false
       - key: AUTH_TOKEN_SECRET
         generateValue: true
+      - key: AI_PROVIDER
+        value: openai
+      - key: AI_MODEL
+        value: gpt-5.6-sol
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AI_CONTENT_ENCRYPTION_KEY
+        sync: false
   - type: worker
     name: atlas-intelligence-worker
     runtime: docker
@@ -43,9 +51,9 @@ services:
       - key: AUTH_TOKEN_SECRET
         sync: false
       - key: AI_PROVIDER
-        sync: false
+        value: openai
       - key: AI_MODEL
-        sync: false
+        value: gpt-5.6-sol
       - key: OPENAI_API_KEY
         sync: false
       - key: AI_CONTENT_ENCRYPTION_KEY

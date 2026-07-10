@@ -2,7 +2,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 
 const requiredFiles = [
-  'package.json', 'pnpm-lock.yaml', 'README.md', 'IMPLEMENTATION_STATUS.md', 'docker-compose.yml',
+  'package.json', 'pnpm-lock.yaml', 'README.md', 'IMPLEMENTATION_STATUS.md', '.env.example', 'docker-compose.yml',
   'Dockerfile', '.dockerignore', 'render.yaml', 'src/server.js', 'src/application.js', 'src/config.js',
   'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js', 'src/ai-evaluation.js', 'src/content-security.js', 'src/ai-content-migration.js', 'src/intelligence.js', 'src/intelligence-projection.js', 'src/ingestion.js', 'src/resolution.js', 'src/cms-connectors.js', 'src/cms-provider-adapters.js', 'src/situational-awareness.js', 'src/phase-one-web.js', 'web/phase-one/index.html', 'web/phase-one/app.js', 'docs/NATIVE_INTELLIGENCE_CONSTITUTION.md', 'docs/NATIVE_INTELLIGENCE_VERIFICATION.md',
   'src/postgres-repository.js', 'src/migrations.js', 'src/runtime.js',
@@ -17,7 +17,7 @@ for (const file of requiredFiles) {
 }
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-if (pkg.version !== '0.27.0') failures.push(`expected version 0.27.0, got ${pkg.version}`);
+if (pkg.version !== '0.27.1') failures.push(`expected version 0.27.1, got ${pkg.version}`);
 
 const migration = await readFile('db/migrations/0001_initial.sql', 'utf8');
 for (const table of ['atlas_workspace', 'atlas_object', 'atlas_relationship', 'atlas_timeline_event']) {

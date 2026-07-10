@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.27.0` adds provider-neutral legal-workflow evaluation and a fail-closed live AI acceptance command so any configured model must demonstrate useful, safe native intelligence before pilot use.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.27.1` selects OpenAI as the initial deployment provider using `gpt-5.6-sol`, while preserving the provider-neutral Atlas boundary and applying the same situational playbooks in the production intelligence worker.
 
 ## Implemented
 
@@ -121,6 +121,10 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Automatic failure for malformed output or proposals to send, file, publish, or delete
 - Configurable acceptance threshold with per-scenario results and usage reporting
 - Dedicated `pnpm test:ai` command that refuses to run without explicit provider credentials
+- OpenAI deployment configuration for both the web application and intelligence worker
+- Current flagship `gpt-5.6-sol` model selected explicitly rather than hidden inside domain code
+- Secret placeholders for the API key and AI-content encryption key
+- Production worker corrected to load the deterministic situational playbook layer
 
 ## Local development
 

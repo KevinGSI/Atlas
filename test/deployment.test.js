@@ -11,10 +11,17 @@ test('Render Blueprint is valid and wires migrations, readiness, and PostgreSQL'
   assert.equal(service.healthCheckPath, '/ready');
   assert.equal(service.envVars.find((item) => item.key === 'DATABASE_URL').fromDatabase.name, 'atlas-postgres');
   assert.equal(service.envVars.find((item) => item.key === 'AUTH_TOKEN_SECRET').generateValue, true);
+  assert.equal(service.envVars.find((item)=>item.key==='AI_PROVIDER').value,'openai');
+  assert.equal(service.envVars.find((item)=>item.key==='AI_MODEL').value,'gpt-5.6-sol');
+  assert.equal(service.envVars.find((item)=>item.key==='OPENAI_API_KEY').sync,false);
+  assert.equal(service.envVars.find((item)=>item.key==='AI_CONTENT_ENCRYPTION_KEY').sync,false);
   assert.equal(blueprint.databases[0].name, 'atlas-postgres');
   const worker=blueprint.services.find((item)=>item.type==='worker');
   assert.equal(worker.dockerCommand,'node scripts/intelligence-worker.js');
   assert.equal(worker.envVars.find((item)=>item.key==='DATABASE_URL').fromDatabase.name,'atlas-postgres');
+  assert.equal(worker.envVars.find((item)=>item.key==='AI_PROVIDER').value,'openai');
+  assert.equal(worker.envVars.find((item)=>item.key==='AI_MODEL').value,'gpt-5.6-sol');
+  const workerSource=await readFile('scripts/intelligence-worker.js','utf8');assert.match(workerSource,/SituationalPlaybookEngine/);
 });
 
 test('Docker image is non-root and has a readiness health check', async () => {
