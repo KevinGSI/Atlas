@@ -40,8 +40,18 @@ test('firm onboarding atomically creates the owner subscription and authenticate
   const {workspace,accessToken}=created.body.data;const headers={authorization:`Bearer ${accessToken}`};
   const subscription=await json(handler,`/v1/workspaces/${workspace.id}/subscription`,{headers});
   assert.equal(subscription.status,200);assert.equal(subscription.body.data.workspaceId,workspace.id);
+  const firms=await json(handler,'/v1/me/workspaces',{headers});assert.equal(firms.status,200);assert.deepEqual(firms.body.data.map(item=>item.workspace.id),[workspace.id]);assert.equal(firms.body.data[0].role,'owner');
   const members=await json(handler,`/v1/workspaces/${workspace.id}/memberships`,{headers});
   assert.equal(members.body.data.length,1);assert.equal(members.body.data[0].role,'owner');
+});
+
+test('launch pilot journey enters the firm and creates matter-scoped daily work',async()=>{
+  const repository=new InMemoryRepository();const service=new AtlasService(repository);const identity=new IdentityService(repository,new TokenService('b'.repeat(32)));const handler=createAtlasHandler(service,{identity,config:{maxBodyBytes:1_048_576,corsOrigins:[]},ready:async()=>true});
+  const signup=(await json(handler,'/v1/auth/register-firm',{method:'POST',body:JSON.stringify({firmName:'Pilot Firm',name:'Pilot Owner',email:'pilot@firm.test',password:'correct horse battery staple'})})).body.data;const headers={authorization:`Bearer ${signup.accessToken}`};const workspaceId=signup.workspace.id;
+  const matter=(await json(handler,`/v1/workspaces/${workspaceId}/objects`,{method:'POST',headers,body:JSON.stringify({dimension:'matter',type:'civil',title:'Reed v. Northline',state:{caseNumber:'2026-CV-104',status:'open'}})})).body.data;
+  for(const input of [{dimension:'client',type:'client',title:'Jordan Reed'},{dimension:'document',type:'document',title:'Initial disclosures'},{dimension:'evidence',type:'evidence',title:'Body camera'},{dimension:'operation',type:'communication',title:'Client status call'},{dimension:'operation',type:'task',title:'Review production'},{dimension:'operation',type:'deadline',title:'Discovery due'}]){const response=await json(handler,`/v1/workspaces/${workspaceId}/objects`,{method:'POST',headers,body:JSON.stringify({...input,parentObjectId:matter.id,state:{scope:'matter',matterId:matter.id,status:'open'}})});assert.equal(response.status,201);assert.equal(response.body.data.parentObjectId,matter.id);}
+  const objects=(await json(handler,`/v1/workspaces/${workspaceId}/objects`,{headers})).body.data;assert.equal(objects.length,7);assert.equal(objects.filter(item=>item.parentObjectId===matter.id).length,6);
+  const health=await json(handler,`/v1/workspaces/${workspaceId}/matters/${matter.id}/health`,{headers});assert.equal(health.status,200);assert.equal(typeof health.body.data.score,'number');
 });
 
 test('health endpoint reports the running release', async () => {

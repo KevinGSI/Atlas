@@ -224,6 +224,7 @@ export class IdentityService {
     return { ...(await this.repository.getUser(payload.sub)), sessionId: payload.sid };
   }
   async addOwner(workspaceId, userId) { return this.addMembership(workspaceId, userId, 'owner'); }
+  async listUserWorkspaces(userId){const memberships=await this.repository.listMembershipsForUser(userId);return Promise.all(memberships.map(async membership=>({workspace:await this.repository.getWorkspace(membership.workspaceId),subscription:await this.repository.getSubscription(membership.workspaceId),role:membership.role})));}
   async addMembership(workspaceId, userId, role) {
     if (!roles.has(role)) throw new AtlasError('INVALID_ROLE', 'Role is invalid', 400);
     const subscription=await this.repository.getSubscription(workspaceId);

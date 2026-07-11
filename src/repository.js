@@ -296,6 +296,7 @@ export class InMemoryRepository {
   listMemberships(workspaceId) {
     return [...this.#memberships.values()].filter((item) => item.workspaceId === workspaceId).map(clone);
   }
+  listMembershipsForUser(userId){return [...this.#memberships.values()].filter(item=>item.userId===userId).map(clone);}
   createSubscription(value){this.getWorkspace(value.workspaceId);if(this.#subscriptions.has(value.workspaceId))throw new AtlasError('SUBSCRIPTION_EXISTS','Firm subscription already exists',409);this.#subscriptions.set(value.workspaceId,clone(value));return clone(value);}
   getSubscription(workspaceId){this.getWorkspace(workspaceId);const value=this.#subscriptions.get(workspaceId);if(!value)throw new AtlasError('SUBSCRIPTION_NOT_FOUND','Firm subscription not found',404);return clone(value);}
   updateSubscription(workspaceId,changes,updatedAt){const current=this.getSubscription(workspaceId);const value={...current,...clone(changes),workspaceId,updatedAt};this.#subscriptions.set(workspaceId,value);return clone(value);}

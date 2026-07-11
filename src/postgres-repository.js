@@ -374,6 +374,7 @@ export class PostgresRepository {
       'SELECT * FROM atlas_workspace_membership WHERE workspace_id = $1 ORDER BY created_at, id', [workspaceId]);
     return result.rows.map(membership);
   }
+  async listMembershipsForUser(userId){const result=await this.executor.query('SELECT * FROM atlas_workspace_membership WHERE user_id = $1 ORDER BY created_at, id',[userId]);return result.rows.map(membership);}
 
   async createSubscription(value){try{const result=await this.executor.query(`INSERT INTO atlas_subscription (id,workspace_id,plan,status,seat_limit,trial_ends_at,current_period_ends_at,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,[value.id,value.workspaceId,value.plan,value.status,value.seatLimit,value.trialEndsAt,value.currentPeriodEndsAt,value.createdAt,value.updatedAt]);return subscription(result.rows[0]);}catch(error){if(error.code==='23505')throw new AtlasError('SUBSCRIPTION_EXISTS','Firm subscription already exists',409);throw error;}}
   async getSubscription(workspaceId){const result=await this.executor.query('SELECT * FROM atlas_subscription WHERE workspace_id = $1',[workspaceId]);if(!result.rows[0])throw new AtlasError('SUBSCRIPTION_NOT_FOUND','Firm subscription not found',404);return subscription(result.rows[0]);}

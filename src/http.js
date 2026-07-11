@@ -63,6 +63,7 @@ function route(method, pathname) {
     ['POST', /^\/v1\/auth\/logout$/, 'logout'],
     ['POST', /^\/v1\/auth\/password-reset\/request$/, 'requestPasswordReset'],
     ['POST', /^\/v1\/auth\/password-reset\/complete$/, 'resetPassword'],
+    ['GET', /^\/v1\/me\/workspaces$/, 'listUserWorkspaces'],
     ['GET', /^\/v1\/cms\/oauth\/callback$/, 'cmsOAuthCallback'],
     ['GET', /^\/v1\/auth\/sessions$/, 'listSessions'],
     ['DELETE', /^\/v1\/auth\/sessions$/, 'revokeAllSessions'],
@@ -148,6 +149,7 @@ export function createAtlasHandler(service, options = {}) {
         case 'logout': result = await identity.logout(await readJson(request, config.maxBodyBytes)); break;
         case 'requestPasswordReset': result = await identity.requestPasswordReset(await readJson(request, config.maxBodyBytes)); break;
         case 'resetPassword': result = await identity.resetPassword(await readJson(request, config.maxBodyBytes)); break;
+        case 'listUserWorkspaces': result = await identity.listUserWorkspaces(user.id); break;
         case 'cmsOAuthCallback': result = await cms.completeAuthorization({state:url.searchParams.get('state'),code:url.searchParams.get('code')}); break;
         case 'listSessions': result = await identity.listSessions(user.id, user.sessionId); break;
         case 'revokeSession': result = await identity.revokeSession(user.id, workspaceId); break;

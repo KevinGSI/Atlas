@@ -72,6 +72,8 @@ test('PostgreSQL membership lookup is scoped by workspace and user', async () =>
   assert.deepEqual(calls[0].values, ['wsp_1', 'usr_1']);
 });
 
+test('PostgreSQL firm discovery is scoped only to the authenticated user',async()=>{const calls=[];const pool={async query(sql,values){calls.push({sql,values});return {rows:[]};}};await new PostgresRepository(pool).listMembershipsForUser('usr_1');assert.match(calls[0].sql,/WHERE user_id = \$1/);assert.deepEqual(calls[0].values,['usr_1']);});
+
 test('PostgreSQL subscription lookup is constrained to one firm workspace',async()=>{
   const calls=[];
   const row={id:'sub_1',workspace_id:'wsp_1',plan:'pilot',status:'active',seat_limit:10,trial_ends_at:null,current_period_ends_at:null,created_at:timestamp,updated_at:timestamp};
