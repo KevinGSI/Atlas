@@ -35,6 +35,8 @@ test('serves the connected phase-one client from the application origin',async()
 
 test('frontend uses a versioned deferred script that executes in the local pilot browser',async()=>{const page=await raw(fixture(),'/');assert.match(page.body,/<script defer src="\.\/app\.js\?v=0\.36\.0"><\/script>/);});
 
+test('local preview offers a fictional one-click firm without requesting real information',async()=>{const handler=fixture();const page=await raw(handler,'/');assert.match(page.body,/Open fictional demo firm/);assert.match(page.body,/No real information is needed/);const script=await raw(handler,'/app.js');assert.match(script.body,/Atlas Demo Law/);assert.match(script.body,/Demo Attorney/);assert.match(script.body,/fictional-demo-password-only/);});
+
 test('firm onboarding atomically creates the owner subscription and authenticated workspace',async()=>{
   const repository=new InMemoryRepository();const service=new AtlasService(repository);const identity=new IdentityService(repository,new TokenService('a'.repeat(32)));const handler=createAtlasHandler(service,{identity,config:{maxBodyBytes:1_048_576,corsOrigins:[]},ready:async()=>true});
   const created=await json(handler,'/v1/auth/register-firm',{method:'POST',body:JSON.stringify({firmName:'New Law Firm',name:'First Owner',email:'owner@newfirm.test',password:'correct horse battery staple'})});
@@ -89,6 +91,11 @@ test('allows configured CORS origins and rejects others', async () => {
   const denied = await json(fixture(), '/health', { headers: { origin: 'https://evil.example' } });
   assert.equal(denied.status, 403);
   assert.equal(denied.body.error.code, 'CORS_ORIGIN_DENIED');
+  const sameOrigin=await json(fixture(),'/health',{headers:{origin:'http://127.0.0.1:3000',host:'127.0.0.1:3000'}});
+  assert.equal(sameOrigin.status,200);
+  assert.equal(sameOrigin.headers['access-control-allow-origin'],'http://127.0.0.1:3000');
+  const hostMismatch=await json(fixture(),'/health',{headers:{origin:'http://localhost:3000',host:'127.0.0.1:3000'}});assert.equal(hostMismatch.status,403);
+  const schemeMismatch=await json(fixture(),'/health',{headers:{origin:'https://127.0.0.1:3000',host:'127.0.0.1:3000'}});assert.equal(schemeMismatch.status,403);
 });
 
 test('HTTP vertical slice creates workspace, matter, evidence, graph, timeline, and health', async () => {

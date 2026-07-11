@@ -28,9 +28,12 @@ function securityHeaders(requestId) {
   };
 }
 
-function corsHeaders(origin, config) {
+function corsHeaders(request, config) {
+  const origin=request.headers?.origin;
   if (!origin) return {};
-  if (!config.corsOrigins.includes(origin) && !config.corsOrigins.includes('*')) {
+  let sameOrigin=false;
+  try{const protocol=request.socket?.encrypted?'https:':'http:';sameOrigin=Boolean(request.headers?.host)&&new URL(origin).origin===new URL(`${protocol}//${request.headers.host}`).origin;}catch{}
+  if (!sameOrigin&&!config.corsOrigins.includes(origin) && !config.corsOrigins.includes('*')) {
     throw new AtlasError('CORS_ORIGIN_DENIED', 'Origin is not allowed', 403);
   }
   return {
@@ -124,7 +127,7 @@ export function createAtlasHandler(service, options = {}) {
     const requestId = request.headers?.['x-atlas-request-id'] || randomUUID();
     let headers = securityHeaders(requestId);
     try {
-      headers = { ...headers, ...corsHeaders(request.headers?.origin, config) };
+      headers = { ...headers, ...corsHeaders(request, config) };
       if (request.method === 'OPTIONS') return send(response, 204, {}, headers);
       const url = new URL(request.url, 'http://atlas.local');
       const match = route(request.method, url.pathname);
