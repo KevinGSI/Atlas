@@ -4,7 +4,7 @@
 
 Every authenticated Atlas view, including every future view, must expose the same persistent digital-twin command dock automatically.
 
-The only excluded view is Home because Home contains the complete, prominent `What do you need?` command center.
+The excluded views are Home and Workspace because each contains its own complete, prominent native-AI command surface. A duplicate floating dock must not obscure either primary work area.
 
 The dock must reuse the authenticated workspace, assistant endpoint, conversation identity, canonical sources, action proposals, and human-approval lifecycle. A feature may not introduce a separate chatbot, page-local AI memory, or parallel action path.
 
