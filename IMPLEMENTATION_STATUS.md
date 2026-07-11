@@ -1,8 +1,17 @@
-# Atlas Core 0.35.0 — Digital Twin Command Surface Status
+# Atlas Core 0.36.0 — Consolidated Pilot Launch Candidate
 
 ## Verified as implemented
 
-- Everything verified through Atlas Core `0.34.0`
+- Everything verified through Atlas Core `0.35.0`
+- Self-service subscribing-firm onboarding with atomic owner, workspace, membership, subscription, and session creation
+- Firm-scoped subscription entitlement and seat enforcement with fail-closed inactive access
+- Authenticated firm discovery removes the need for users to know a workspace identifier
+- Connected navy application shell with responsive navigation and mobile sign-out
+- Functional matter creation, matter workspace, health, timeline, and connected-object views
+- Connected client, document, evidence, communication, task, and deadline workspaces
+- Mandatory matter scope for manually created legal work and client records
+- Automated authenticated pilot journey from firm signup through matter-scoped daily work
+- Cross-firm membership, object, AI, event, and subscription isolation retained
 - Prominent connected `What do you need?` command surface on the authenticated homepage
 - Commands execute through the authorized digital-twin assistant endpoint
 - Persistent multi-turn conversation identity within the signed-in session

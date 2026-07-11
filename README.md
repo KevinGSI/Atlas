@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.35.0` makes “What do you need?” the connected command surface for the continuously aware firm twin, including sourced responses and reviewable task or draft proposals.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.36.0` is the consolidated pilot launch candidate: an isolated subscribing-firm workspace with native digital-twin commands, connected matters, and matter-scoped clients, documents, evidence, communications, tasks, and deadlines.
 
 ## Implemented
 
