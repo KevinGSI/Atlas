@@ -11,6 +11,7 @@ export class InMemoryRepository {
   #events = new Map();
   #users = new Map();
   #memberships = new Map();
+  #workspaceInvitations = new Map();
   #subscriptions = new Map();
   #audits = new Map();
   #refreshSessions = new Map();
@@ -33,16 +34,19 @@ export class InMemoryRepository {
   #schedulerLeases = new Map();
   #canonicalEvents = new Map();
   #canonicalDeliveries = new Map();
+  #mfaFactors = new Map();
+  #securityEvents = new Map();
+  #workspaceSecurityPolicies = new Map();
 
   async transaction(work) {
-    const markerSnapshot=new Set(this.#automationMarkers);const leaseSnapshot=new Map(this.#schedulerLeases);const canonicalEventSnapshot=new Map(this.#canonicalEvents);const canonicalDeliverySnapshot=new Map(this.#canonicalDeliveries);
-    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#subscriptions, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts]
+    const markerSnapshot=new Set(this.#automationMarkers);const leaseSnapshot=new Map(this.#schedulerLeases);const canonicalEventSnapshot=new Map(this.#canonicalEvents);const canonicalDeliverySnapshot=new Map(this.#canonicalDeliveries);const mfaSnapshot=new Map(this.#mfaFactors);const securityEventSnapshot=new Map(this.#securityEvents);const workspaceSecurityPolicySnapshot=new Map(this.#workspaceSecurityPolicies);
+    const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#workspaceInvitations, this.#subscriptions, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     const beforeObjects=new Map([...this.#objects].map(([key,value])=>[key,JSON.stringify(value)]));const beforeRelationships=new Set(this.#relationships.keys());const beforeEvents=new Set(this.#canonicalEvents.keys());
     try { const result=await work(this);const mutated=new Set();for(const [id,value] of this.#objects)if(beforeObjects.get(id)!==JSON.stringify(value))mutated.add(id);for(const [id,relationship] of this.#relationships)if(!beforeRelationships.has(id)){mutated.add(relationship.fromObjectId);mutated.add(relationship.toObjectId);}const covered=new Set([...this.#canonicalEvents].filter(([id])=>!beforeEvents.has(id)).flatMap(([,event])=>event.affectedObjectIds));const missing=[...mutated].filter((id)=>!covered.has(id));if(missing.length)throw new AtlasError('CANONICAL_EVENT_REQUIRED','Material canonical mutations require event coverage',500,{objectIds:missing});return result; }
     catch (error) {
-      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#subscriptions, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts] = snapshot;
-      this.#automationMarkers=markerSnapshot;this.#schedulerLeases=leaseSnapshot;this.#canonicalEvents=canonicalEventSnapshot;this.#canonicalDeliveries=canonicalDeliverySnapshot;
+      [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#workspaceInvitations, this.#subscriptions, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts] = snapshot;
+      this.#automationMarkers=markerSnapshot;this.#schedulerLeases=leaseSnapshot;this.#canonicalEvents=canonicalEventSnapshot;this.#canonicalDeliveries=canonicalDeliverySnapshot;this.#mfaFactors=mfaSnapshot;this.#securityEvents=securityEventSnapshot;this.#workspaceSecurityPolicies=workspaceSecurityPolicySnapshot;
       throw error;
     }
   }
@@ -102,7 +106,7 @@ export class InMemoryRepository {
   listObjects(workspaceId, filters = {}) {
     this.getWorkspace(workspaceId);
     return [...this.#objects.values()]
-      .filter((item) => item.workspaceId === workspaceId && !item.deletedAt)
+      .filter((item) => item.workspaceId === workspaceId && (filters.includeDeleted || !item.deletedAt))
       .filter((item) => !filters.type || item.type === filters.type)
       .filter((item) => !filters.dimension || item.dimension === filters.dimension)
       .map(clone);
@@ -253,6 +257,22 @@ export class InMemoryRepository {
     }
   }
 
+  listWorkspaceRefreshSessions(workspaceId) {
+    const userIds=new Set([...this.#memberships.values()].filter(item=>item.workspaceId===workspaceId).map(item=>item.userId));
+    return [...this.#refreshSessions.values()].filter(item=>userIds.has(item.userId)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(session=>({...clone(session),user:clone(this.#users.get(session.userId))}));
+  }
+
+  revokeRefreshSessionsForWorkspace(workspaceId,revokedAt) {
+    const userIds=new Set([...this.#memberships.values()].filter(item=>item.workspaceId===workspaceId).map(item=>item.userId));
+    for(const [id,session] of this.#refreshSessions)if(userIds.has(session.userId)&&!session.revokedAt)this.#refreshSessions.set(id,{...session,revokedAt});
+  }
+
+  upsertMfaFactor(factor){this.#mfaFactors.set(factor.userId,clone(factor));return clone(factor);}
+  getMfaFactor(userId){const factor=this.#mfaFactors.get(userId);if(!factor)throw new AtlasError('MFA_NOT_CONFIGURED','Multi-factor authentication is not configured',404);return clone(factor);}
+  deleteMfaFactor(userId){if(!this.#mfaFactors.has(userId))throw new AtlasError('MFA_NOT_CONFIGURED','Multi-factor authentication is not configured',404);this.#mfaFactors.delete(userId);return {deleted:true};}
+  createSecurityEvent(event){this.#securityEvents.set(event.id,clone(event));return clone(event);}
+  listSecurityEvents(workspaceId,limit=100){const members=new Set([...this.#memberships.values()].filter(item=>item.workspaceId===workspaceId).map(item=>item.userId));return [...this.#securityEvents.values()].filter(item=>item.workspaceId===workspaceId||members.has(item.userId)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,limit).map(clone);}
+
   createPasswordReset(reset) {
     this.#passwordResets.set(reset.id, clone(reset));
     return clone(reset);
@@ -283,8 +303,9 @@ export class InMemoryRepository {
     if (this.#memberships.has(key)) throw new AtlasError('MEMBERSHIP_EXISTS', 'Membership already exists', 409);
     this.getWorkspace(membership.workspaceId);
     this.getUser(membership.userId);
-    this.#memberships.set(key, clone(membership));
-    return clone(membership);
+    const stored={active:true,deactivatedAt:null,deactivatedBy:null,deactivationReason:null,...membership};
+    this.#memberships.set(key, clone(stored));
+    return clone(stored);
   }
 
   getMembership(workspaceId, userId) {
@@ -297,6 +318,14 @@ export class InMemoryRepository {
     return [...this.#memberships.values()].filter((item) => item.workspaceId === workspaceId).map(clone);
   }
   listMembershipsForUser(userId){return [...this.#memberships.values()].filter(item=>item.userId===userId).map(clone);}
+  updateMembershipAccess(workspaceId,userId,changes){const key=`${workspaceId}:${userId}`;const current=this.#memberships.get(key);if(!current)throw new AtlasError('ACCESS_DENIED','Workspace access denied',403);const updated={...current,...changes};this.#memberships.set(key,clone(updated));return clone(updated);}
+  getWorkspaceSecurityPolicy(workspaceId){this.getWorkspace(workspaceId);return clone(this.#workspaceSecurityPolicies.get(workspaceId)??{workspaceId,requireMfa:false,updatedBy:null,createdAt:null,updatedAt:null});}
+  upsertWorkspaceSecurityPolicy(value){this.getWorkspace(value.workspaceId);const current=this.#workspaceSecurityPolicies.get(value.workspaceId);const stored={...value,createdAt:current?.createdAt??value.createdAt};this.#workspaceSecurityPolicies.set(value.workspaceId,clone(stored));return clone(stored);}
+  createWorkspaceInvitation(value){if([...this.#workspaceInvitations.values()].some(item=>item.workspaceId===value.workspaceId&&item.email.toLowerCase()===value.email.toLowerCase()&&item.status==='pending'))throw new AtlasError('INVITATION_EXISTS','A pending invitation already exists for this email',409);this.#workspaceInvitations.set(value.id,clone(value));return clone(value);}
+  listWorkspaceInvitations(workspaceId){return [...this.#workspaceInvitations.values()].filter(item=>item.workspaceId===workspaceId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(clone);}
+  cancelExpiredWorkspaceInvitations(workspaceId,now){let count=0;for(const [id,item] of this.#workspaceInvitations)if(item.workspaceId===workspaceId&&item.status==='pending'&&new Date(item.expiresAt)<=new Date(now)){this.#workspaceInvitations.set(id,{...item,status:'canceled'});count+=1;}return count;}
+  getWorkspaceInvitationByTokenHash(tokenHash){const value=[...this.#workspaceInvitations.values()].find(item=>item.tokenHash===tokenHash);if(!value)throw new AtlasError('INVITATION_INVALID','Invitation is invalid',401);return clone(value);}
+  acceptWorkspaceInvitation(id,userId,acceptedAt){const value=this.#workspaceInvitations.get(id);if(!value||value.status!=='pending')throw new AtlasError('INVITATION_INVALID','Invitation is invalid or already used',401);const updated={...value,status:'accepted',acceptedBy:userId,acceptedAt};this.#workspaceInvitations.set(id,clone(updated));return clone(updated);}
   createSubscription(value){this.getWorkspace(value.workspaceId);if(this.#subscriptions.has(value.workspaceId))throw new AtlasError('SUBSCRIPTION_EXISTS','Firm subscription already exists',409);this.#subscriptions.set(value.workspaceId,clone(value));return clone(value);}
   getSubscription(workspaceId){this.getWorkspace(workspaceId);const value=this.#subscriptions.get(workspaceId);if(!value)throw new AtlasError('SUBSCRIPTION_NOT_FOUND','Firm subscription not found',404);return clone(value);}
   updateSubscription(workspaceId,changes,updatedAt){const current=this.getSubscription(workspaceId);const value={...current,...clone(changes),workspaceId,updatedAt};this.#subscriptions.set(workspaceId,value);return clone(value);}
@@ -363,6 +392,7 @@ export class InMemoryRepository {
   updateCmsRecordLink(id,changes){const entry=[...this.#cmsRecordLinks.entries()].find(([,value])=>value.id===id);if(!entry)throw new AtlasError('CMS_RECORD_LINK_NOT_FOUND','CMS record link not found',404);const updated={...entry[1],...changes};this.#cmsRecordLinks.set(entry[0],clone(updated));return clone(updated);}
   createEncryptedSecret(value){this.#encryptedSecrets.set(value.id,clone(value));return clone(value);}
   getEncryptedSecret(id){const value=this.#encryptedSecrets.get(id);if(!value)throw new AtlasError('CMS_CREDENTIAL_UNAVAILABLE','CMS credential is unavailable',503);return clone(value);}
+  updateEncryptedSecret(id,changes){const value=this.#encryptedSecrets.get(id);if(!value)throw new AtlasError('CMS_CREDENTIAL_UNAVAILABLE','CMS credential is unavailable',503);const updated={...value,...changes};this.#encryptedSecrets.set(id,clone(updated));return clone(updated);}
   deleteEncryptedSecret(id){this.#encryptedSecrets.delete(id);return {deleted:true};}
   createAwarenessItem(value){if([...this.#awarenessItems.values()].some((x)=>x.sourceJobId===value.sourceJobId))throw new AtlasError('AWARENESS_ITEM_EXISTS','Awareness item already exists for job',409);this.#awarenessItems.set(value.id,clone(value));return clone(value);}
   listAwarenessItems(workspaceId,userId,since){return [...this.#awarenessItems.values()].filter((x)=>x.workspaceId===workspaceId&&(!x.targetUserId||x.targetUserId===userId)&&(!since||x.createdAt>since)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map((item)=>({...clone(item),reviewStatus:this.#awarenessReceipts.get(`${item.id}:${userId}`)?.status??'unseen'}));}

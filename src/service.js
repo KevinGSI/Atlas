@@ -2,6 +2,7 @@ import { AtlasError, required } from './errors.js';
 import { createId } from './ids.js';
 
 const dimensions = new Set(['matter', 'client', 'evidence', 'document', 'person', 'organization', 'operation']);
+const immutableLedgerTypes = new Set(['payment', 'refund', 'trust_transaction', 'journal_entry']);
 
 export class AtlasService {
   constructor(repository, clock = () => new Date().toISOString()) {
@@ -87,6 +88,7 @@ export class AtlasService {
     if (!Object.keys(changes).length) throw new AtlasError('VALIDATION_ERROR', 'At least one editable field is required', 400);
     return this.repository.transaction(async (repository) => {
       const before = await repository.getObject(workspaceId, objectId);
+      if (immutableLedgerTypes.has(before.type)) throw new AtlasError('IMMUTABLE_LEDGER_ENTRY', 'Posted accounting entries cannot be edited; create a correcting entry instead', 409);
       const after = await repository.updateObject(workspaceId, objectId, version, changes, this.clock());
       await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: objectId, type: 'object.updated', actorId, source: 'atlas', data: { version: after.version } }));
       await repository.createAudit(this.buildAudit(workspaceId, objectId, actorId, 'object.updated', before, after));
@@ -99,6 +101,7 @@ export class AtlasService {
     const version = this.validateVersion(input.version);
     return this.repository.transaction(async (repository) => {
       const before = await repository.getObject(workspaceId, objectId);
+      if (immutableLedgerTypes.has(before.type)) throw new AtlasError('IMMUTABLE_LEDGER_ENTRY', 'Posted accounting entries cannot be deleted; create a correcting entry instead', 409);
       await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: objectId, type: 'object.deleted', actorId, source: 'atlas', data: { previousVersion: before.version } }));
       const after = await repository.softDeleteObject(workspaceId, objectId, version, this.clock());
       await repository.createAudit(this.buildAudit(workspaceId, objectId, actorId, 'object.deleted', before, after));

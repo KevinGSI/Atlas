@@ -5,7 +5,7 @@ services:
     plan: starter
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    preDeployCommand: node scripts/migrate.js
+    preDeployCommand: node scripts/check-launch.js && node scripts/migrate.js
     healthCheckPath: /ready
     autoDeployTrigger: commit
     envVars:
@@ -17,6 +17,8 @@ services:
         value: production
       - key: HOST
         value: 0.0.0.0
+      - key: PUBLIC_BASE_URL
+        sync: false
       - key: DATABASE_POOL_SIZE
         value: 10
       - key: MAX_BODY_BYTES
@@ -25,15 +27,45 @@ services:
         sync: false
       - key: AUTH_TOKEN_SECRET
         generateValue: true
+      - key: MFA_ENCRYPTION_KEY
+        sync: false
       - key: AI_PROVIDER
         value: openai
       - key: AI_MODEL
-        value: gpt-5.6-sol
+        value: gpt-4.1-mini
+      - key: AI_WEB_SEARCH_ENABLED
+        value: true
+      - key: AI_WEB_SEARCH_CONTEXT_SIZE
+        value: medium
       - key: OPENAI_API_KEY
         sync: false
       - key: AI_CONTENT_ENCRYPTION_KEY
         sync: false
+      - key: CMS_CREDENTIAL_ENCRYPTION_KEY
+        sync: false
+      - key: CMS_SYNC_ENABLED
+        value: true
+      - key: GOOGLE_WORKSPACE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_WORKSPACE_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_365_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_365_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_365_TENANT
+        value: organizations
       - key: INGESTION_WEBHOOK_SECRETS
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PAYMENT_CHECKOUT_SIGNING_SECRET
+        generateValue: true
+      - key: PAYMENT_RETURN_URL
         sync: false
   - type: worker
     name: atlas-intelligence-worker
@@ -52,10 +84,12 @@ services:
         value: production
       - key: AUTH_TOKEN_SECRET
         sync: false
+      - key: MFA_ENCRYPTION_KEY
+        sync: false
       - key: AI_PROVIDER
         value: openai
       - key: AI_MODEL
-        value: gpt-5.6-sol
+        value: gpt-4.1-mini
       - key: OPENAI_API_KEY
         sync: false
       - key: AI_CONTENT_ENCRYPTION_KEY

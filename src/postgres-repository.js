@@ -26,7 +26,9 @@ function event(row) {
   };
 }
 function user(row) { return { id: row.id, email: row.email, name: row.name, passwordHash: row.password_hash, createdAt: iso(row.created_at) }; }
-function membership(row) { return { id: row.id, workspaceId: row.workspace_id, userId: row.user_id, role: row.role, createdAt: iso(row.created_at) }; }
+function membership(row) { return { id: row.id, workspaceId: row.workspace_id, userId: row.user_id, role: row.role, active:row.active??true, deactivatedAt:iso(row.deactivated_at), deactivatedBy:row.deactivated_by??null, deactivationReason:row.deactivation_reason??null, createdAt: iso(row.created_at) }; }
+function workspaceSecurityPolicy(row){return {workspaceId:row.workspace_id,requireMfa:row.require_mfa,updatedBy:row.updated_by??null,createdAt:iso(row.created_at),updatedAt:iso(row.updated_at)};}
+function workspaceInvitation(row){return {id:row.id,workspaceId:row.workspace_id,email:row.email,role:row.role,tokenHash:row.token_hash,status:row.status,invitedBy:row.invited_by,acceptedBy:row.accepted_by,expiresAt:iso(row.expires_at),createdAt:iso(row.created_at),acceptedAt:iso(row.accepted_at)};}
 function subscription(row){return {id:row.id,workspaceId:row.workspace_id,plan:row.plan,status:row.status,seatLimit:row.seat_limit,trialEndsAt:iso(row.trial_ends_at),currentPeriodEndsAt:iso(row.current_period_ends_at),createdAt:iso(row.created_at),updatedAt:iso(row.updated_at)};}
 function audit(row) { return { id: row.id, workspaceId: row.workspace_id, objectId: row.object_id, actorId: row.actor_id, action: row.action, beforeSnapshot: row.before_snapshot, afterSnapshot: row.after_snapshot, createdAt: iso(row.created_at) }; }
 function refreshSession(row) {
@@ -42,6 +44,8 @@ function passwordReset(row) {
 function loginThrottle(row) {
   return { principalHash: row.principal_hash, failedCount: row.failed_count, windowStartedAt: iso(row.window_started_at), lockedUntil: iso(row.locked_until), updatedAt: iso(row.updated_at) };
 }
+function mfaFactor(row){return {userId:row.user_id,encryptedSecret:row.encrypted_secret,enabled:row.enabled,recoveryCodeHashes:row.recovery_code_hashes,createdAt:iso(row.created_at),verifiedAt:iso(row.verified_at),updatedAt:iso(row.updated_at)};}
+function securityEvent(row){return {id:row.id,userId:row.user_id,workspaceId:row.workspace_id,type:row.type,outcome:row.outcome,ipAddress:row.ip_address,userAgent:row.user_agent,details:row.details,createdAt:iso(row.created_at)};}
 function aiRun(row) {
   return {
     id: row.id, workspaceId: row.workspace_id, actorId: row.actor_id, status: row.status,
@@ -151,7 +155,8 @@ export class PostgresRepository {
   async listObjects(workspaceId, filters = {}) {
     await this.getWorkspace(workspaceId);
     const values = [workspaceId];
-    const conditions = ['workspace_id = $1', 'deleted_at IS NULL'];
+    const conditions = ['workspace_id = $1'];
+    if (!filters.includeDeleted) conditions.push('deleted_at IS NULL');
     if (filters.type) { values.push(filters.type); conditions.push(`type = $${values.length}`); }
     if (filters.dimension) { values.push(filters.dimension); conditions.push(`dimension = $${values.length}`); }
     const result = await this.executor.query(
@@ -323,6 +328,16 @@ export class PostgresRepository {
       'UPDATE atlas_refresh_session SET revoked_at = COALESCE(revoked_at, $2) WHERE user_id = $1', [userId, revokedAt]);
   }
 
+  async listWorkspaceRefreshSessions(workspaceId){const result=await this.executor.query(`SELECT s.*,u.email AS user_email,u.name AS user_name FROM atlas_refresh_session s JOIN atlas_workspace_membership m ON m.user_id=s.user_id JOIN atlas_user u ON u.id=s.user_id WHERE m.workspace_id=$1 ORDER BY s.created_at DESC,s.id`,[workspaceId]);return result.rows.map(row=>({...refreshSession(row),user:{id:row.user_id,email:row.user_email,name:row.user_name}}));}
+
+  async revokeRefreshSessionsForWorkspace(workspaceId,revokedAt){await this.executor.query(`UPDATE atlas_refresh_session s SET revoked_at=COALESCE(s.revoked_at,$2) WHERE EXISTS (SELECT 1 FROM atlas_workspace_membership m WHERE m.workspace_id=$1 AND m.user_id=s.user_id)`,[workspaceId,revokedAt]);}
+
+  async upsertMfaFactor(value){const result=await this.executor.query(`INSERT INTO atlas_mfa_factor (user_id,encrypted_secret,enabled,recovery_code_hashes,created_at,verified_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (user_id) DO UPDATE SET encrypted_secret=EXCLUDED.encrypted_secret,enabled=EXCLUDED.enabled,recovery_code_hashes=EXCLUDED.recovery_code_hashes,verified_at=EXCLUDED.verified_at,updated_at=EXCLUDED.updated_at RETURNING *`,[value.userId,value.encryptedSecret,value.enabled,JSON.stringify(value.recoveryCodeHashes),value.createdAt,value.verifiedAt,value.updatedAt]);return mfaFactor(result.rows[0]);}
+  async getMfaFactor(userId){const result=await this.executor.query('SELECT * FROM atlas_mfa_factor WHERE user_id=$1',[userId]);if(!result.rows[0])throw new AtlasError('MFA_NOT_CONFIGURED','Multi-factor authentication is not configured',404);return mfaFactor(result.rows[0]);}
+  async deleteMfaFactor(userId){const result=await this.executor.query('DELETE FROM atlas_mfa_factor WHERE user_id=$1 RETURNING user_id',[userId]);if(!result.rows[0])throw new AtlasError('MFA_NOT_CONFIGURED','Multi-factor authentication is not configured',404);return {deleted:true};}
+  async createSecurityEvent(value){const result=await this.executor.query(`INSERT INTO atlas_security_event (id,user_id,workspace_id,type,outcome,ip_address,user_agent,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,[value.id,value.userId,value.workspaceId,value.type,value.outcome,value.ipAddress,value.userAgent,value.details,value.createdAt]);return securityEvent(result.rows[0]);}
+  async listSecurityEvents(workspaceId,limit=100){const result=await this.executor.query(`SELECT e.* FROM atlas_security_event e WHERE e.workspace_id=$1 OR EXISTS (SELECT 1 FROM atlas_workspace_membership m WHERE m.workspace_id=$1 AND m.user_id=e.user_id) ORDER BY e.created_at DESC,e.id LIMIT $2`,[workspaceId,limit]);return result.rows.map(securityEvent);}
+
   async createPasswordReset(value) {
     const result = await this.executor.query(
       `INSERT INTO atlas_password_reset (id, user_id, token_hash, expires_at, created_at, used_at)
@@ -352,9 +367,9 @@ export class PostgresRepository {
   async createMembership(value) {
     try {
       const result = await this.executor.query(
-        `INSERT INTO atlas_workspace_membership (id, workspace_id, user_id, role, created_at)
-         VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-        [value.id, value.workspaceId, value.userId, value.role, value.createdAt]);
+        `INSERT INTO atlas_workspace_membership (id, workspace_id, user_id, role, active, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [value.id, value.workspaceId, value.userId, value.role, value.active??true, value.createdAt]);
       return membership(result.rows[0]);
     } catch (error) {
       if (error.code === '23505') throw new AtlasError('MEMBERSHIP_EXISTS', 'Membership already exists', 409);
@@ -375,6 +390,14 @@ export class PostgresRepository {
     return result.rows.map(membership);
   }
   async listMembershipsForUser(userId){const result=await this.executor.query('SELECT * FROM atlas_workspace_membership WHERE user_id = $1 ORDER BY created_at, id',[userId]);return result.rows.map(membership);}
+  async updateMembershipAccess(workspaceId,userId,changes){const result=await this.executor.query('UPDATE atlas_workspace_membership SET active=$3,deactivated_at=$4,deactivated_by=$5,deactivation_reason=$6 WHERE workspace_id=$1 AND user_id=$2 RETURNING *',[workspaceId,userId,changes.active,changes.deactivatedAt??null,changes.deactivatedBy??null,changes.deactivationReason??null]);if(!result.rows[0])throw new AtlasError('ACCESS_DENIED','Workspace access denied',403);return membership(result.rows[0]);}
+  async getWorkspaceSecurityPolicy(workspaceId){const result=await this.executor.query('SELECT * FROM atlas_workspace_security_policy WHERE workspace_id=$1',[workspaceId]);return result.rows[0]?workspaceSecurityPolicy(result.rows[0]):{workspaceId,requireMfa:false,updatedBy:null,createdAt:null,updatedAt:null};}
+  async upsertWorkspaceSecurityPolicy(value){const result=await this.executor.query('INSERT INTO atlas_workspace_security_policy (workspace_id,require_mfa,updated_by,created_at,updated_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (workspace_id) DO UPDATE SET require_mfa=EXCLUDED.require_mfa,updated_by=EXCLUDED.updated_by,updated_at=EXCLUDED.updated_at RETURNING *',[value.workspaceId,value.requireMfa,value.updatedBy,value.createdAt,value.updatedAt]);return workspaceSecurityPolicy(result.rows[0]);}
+  async createWorkspaceInvitation(v){try{const result=await this.executor.query('INSERT INTO atlas_workspace_invitation (id,workspace_id,email,role,token_hash,status,invited_by,accepted_by,expires_at,created_at,accepted_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',[v.id,v.workspaceId,v.email,v.role,v.tokenHash,v.status,v.invitedBy,v.acceptedBy,v.expiresAt,v.createdAt,v.acceptedAt]);return workspaceInvitation(result.rows[0]);}catch(error){if(error.code==='23505')throw new AtlasError('INVITATION_EXISTS','A pending invitation already exists for this email',409);throw error;}}
+  async listWorkspaceInvitations(workspaceId){const result=await this.executor.query('SELECT * FROM atlas_workspace_invitation WHERE workspace_id=$1 ORDER BY created_at DESC,id',[workspaceId]);return result.rows.map(workspaceInvitation);}
+  async cancelExpiredWorkspaceInvitations(workspaceId,now){const result=await this.executor.query("UPDATE atlas_workspace_invitation SET status='canceled' WHERE workspace_id=$1 AND status='pending' AND expires_at<=$2 RETURNING id",[workspaceId,now]);return result.rows.length;}
+  async getWorkspaceInvitationByTokenHash(tokenHash){const result=await this.executor.query('SELECT * FROM atlas_workspace_invitation WHERE token_hash=$1 FOR UPDATE',[tokenHash]);if(!result.rows[0])throw new AtlasError('INVITATION_INVALID','Invitation is invalid',401);return workspaceInvitation(result.rows[0]);}
+  async acceptWorkspaceInvitation(id,userId,acceptedAt){const result=await this.executor.query("UPDATE atlas_workspace_invitation SET status='accepted',accepted_by=$2,accepted_at=$3 WHERE id=$1 AND status='pending' RETURNING *",[id,userId,acceptedAt]);if(!result.rows[0])throw new AtlasError('INVITATION_INVALID','Invitation is invalid or already used',401);return workspaceInvitation(result.rows[0]);}
 
   async createSubscription(value){try{const result=await this.executor.query(`INSERT INTO atlas_subscription (id,workspace_id,plan,status,seat_limit,trial_ends_at,current_period_ends_at,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,[value.id,value.workspaceId,value.plan,value.status,value.seatLimit,value.trialEndsAt,value.currentPeriodEndsAt,value.createdAt,value.updatedAt]);return subscription(result.rows[0]);}catch(error){if(error.code==='23505')throw new AtlasError('SUBSCRIPTION_EXISTS','Firm subscription already exists',409);throw error;}}
   async getSubscription(workspaceId){const result=await this.executor.query('SELECT * FROM atlas_subscription WHERE workspace_id = $1',[workspaceId]);if(!result.rows[0])throw new AtlasError('SUBSCRIPTION_NOT_FOUND','Firm subscription not found',404);return subscription(result.rows[0]);}
@@ -445,6 +468,7 @@ export class PostgresRepository {
   async updateCmsRecordLink(id,changes){const r=await this.executor.query('UPDATE atlas_cms_record_link SET source_updated_at=$2,source_checksum=$3,last_synced_at=$4,source_deleted_at=$5,reconciliation_status=$6 WHERE id=$1 RETURNING *',[id,changes.sourceUpdatedAt,changes.sourceChecksum,changes.lastSyncedAt,changes.sourceDeletedAt??null,changes.reconciliationStatus??'active']);if(!r.rows[0])throw new AtlasError('CMS_RECORD_LINK_NOT_FOUND','CMS record link not found',404);return cmsRecordLink(r.rows[0]);}
   async createEncryptedSecret(v){const r=await this.executor.query('INSERT INTO atlas_encrypted_secret (id,purpose,ciphertext,created_at) VALUES ($1,$2,$3,$4) RETURNING *',[v.id,v.purpose,v.ciphertext,v.createdAt]);return r.rows[0];}
   async getEncryptedSecret(id){const r=await this.executor.query('SELECT * FROM atlas_encrypted_secret WHERE id=$1',[id]);if(!r.rows[0])throw new AtlasError('CMS_CREDENTIAL_UNAVAILABLE','CMS credential is unavailable',503);return {id:r.rows[0].id,purpose:r.rows[0].purpose,ciphertext:r.rows[0].ciphertext,createdAt:iso(r.rows[0].created_at)};}
+  async updateEncryptedSecret(id,changes){const r=await this.executor.query('UPDATE atlas_encrypted_secret SET ciphertext=$2 WHERE id=$1 RETURNING *',[id,changes.ciphertext]);if(!r.rows[0])throw new AtlasError('CMS_CREDENTIAL_UNAVAILABLE','CMS credential is unavailable',503);return {id:r.rows[0].id,purpose:r.rows[0].purpose,ciphertext:r.rows[0].ciphertext,createdAt:iso(r.rows[0].created_at)};}
   async deleteEncryptedSecret(id){await this.executor.query('DELETE FROM atlas_encrypted_secret WHERE id=$1',[id]);return {deleted:true};}
   async createAwarenessItem(v){try{const r=await this.executor.query('INSERT INTO atlas_awareness_item (id,workspace_id,target_user_id,source_job_id,source_object_id,category,priority,headline,summary,observation_ids,action_proposal_ids,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',[v.id,v.workspaceId,v.targetUserId,v.sourceJobId,v.sourceObjectId,v.category,v.priority,v.headline,v.summary,v.observationIds,v.actionProposalIds,v.createdAt]);return awarenessItem(r.rows[0]);}catch(error){if(error.code==='23505')throw new AtlasError('AWARENESS_ITEM_EXISTS','Awareness item already exists for job',409);throw error;}}
   async listAwarenessItems(workspaceId,userId,since){const r=await this.executor.query("SELECT i.*,COALESCE(r.status,'unseen') review_status FROM atlas_awareness_item i LEFT JOIN atlas_awareness_receipt r ON r.item_id=i.id AND r.user_id=$2 WHERE i.workspace_id=$1 AND (i.target_user_id IS NULL OR i.target_user_id=$2) AND ($3::timestamptz IS NULL OR i.created_at>$3) ORDER BY i.created_at DESC,i.id",[workspaceId,userId,since??null]);return r.rows.map(awarenessItem);}

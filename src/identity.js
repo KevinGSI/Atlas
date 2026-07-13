@@ -2,10 +2,12 @@ import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSa
 import { promisify } from 'node:util';
 import { AtlasError, required } from './errors.js';
 import { createId } from './ids.js';
+import { MfaService } from './mfa.js';
 
 const scrypt = promisify(scryptCallback);
 const dummyPasswordHash = 'scrypt$16384$8$1$YXRsYXMtZHVtbXktc2FsdA$MTFgp77CaO1lpwhhuy-VhvfjmeBI4xBJgoDlcoruvkl5v05ss7zox1IMCOQx1JBIlCS264VtylZK8HzFwo76Jw';
 const roles = new Set(['owner', 'admin', 'attorney', 'paralegal', 'billing', 'member', 'viewer']);
+const invitationRoles = new Set(['admin', 'attorney', 'paralegal', 'billing', 'member', 'viewer']);
 const permissions = {
   owner: new Set(['workspace:read', 'workspace:write', 'members:admin']),
   admin: new Set(['workspace:read', 'workspace:write', 'members:admin']),
@@ -38,10 +40,10 @@ export class TokenService {
   constructor(secret, ttlSeconds = 900, clock = () => Math.floor(Date.now() / 1000)) {
     this.secret = secret; this.ttlSeconds = ttlSeconds; this.clock = clock;
   }
-  issue(user, sessionId = undefined) {
+  issue(user, sessionId = undefined, authMethods = ['password']) {
     const header = encode({ alg: 'HS256', typ: 'JWT' });
     const now = this.clock();
-    const payload = encode({ sub: user.id, email: user.email, ...(sessionId ? { sid: sessionId } : {}), iat: now, exp: now + this.ttlSeconds });
+    const payload = encode({ sub: user.id, email: user.email, ...(sessionId ? { sid: sessionId } : {}), amr:authMethods, iat: now, exp: now + this.ttlSeconds });
     const signature = createHmac('sha256', this.secret).update(`${header}.${payload}`).digest('base64url');
     return { accessToken: `${header}.${payload}.${signature}`, tokenType: 'Bearer', expiresIn: this.ttlSeconds };
   }
@@ -68,9 +70,10 @@ export class IdentityService {
     this.loginLockSeconds = options.loginLockSeconds ?? 900;
     this.randomToken = options.randomToken ?? (() => randomBytes(32).toString('base64url'));
     this.deliverPasswordReset = options.deliverPasswordReset ?? (async () => {});
+    this.mfa=options.mfaService??new MfaService(repository,{clock,nowMs:options.nowMs,encryptionSecret:options.mfaEncryptionSecret??tokenService.secret});
   }
   publicUser(user) { return { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt }; }
-  async issueSession(user, repository = this.repository, familyId = createId('fam')) {
+  async issueSession(user, repository = this.repository, familyId = createId('fam'),authMethods=['password']) {
     const refreshToken = this.randomToken();
     const createdAt = this.clock();
     const expiresAt = new Date(new Date(createdAt).getTime() + this.refreshTokenTtlSeconds * 1000).toISOString();
@@ -78,8 +81,9 @@ export class IdentityService {
       id: createId('ses'), userId: user.id, familyId, tokenHash: hashToken(refreshToken),
       expiresAt, createdAt, usedAt: null, revokedAt: null, replacedBySessionId: null
     });
-    return { ...this.tokens.issue(user, session.id), refreshToken, refreshTokenExpiresAt: session.expiresAt };
+    return { ...this.tokens.issue(user, session.id,authMethods), refreshToken, refreshTokenExpiresAt: session.expiresAt };
   }
+  async recordSecurityEvent({userId=null,workspaceId=null,type,outcome,context={},details={}}){return this.repository.createSecurityEvent({id:createId('sec'),userId,workspaceId,type,outcome,ipAddress:String(context.ipAddress??'').slice(0,128)||null,userAgent:String(context.userAgent??'').slice(0,500)||null,details,createdAt:this.clock()});}
   async register(input) {
     const email = required(input.email, 'email').trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(email)) throw new AtlasError('INVALID_EMAIL', 'Email address is invalid', 400);
@@ -101,12 +105,13 @@ export class IdentityService {
       return {user:this.publicUser(user),workspace,subscription,...(await this.issueSession(user,repository))};
     });
   }
-  async login(input) {
+  async login(input,context={}) {
     const email = required(input.email, 'email').trim().toLowerCase();
     const principalHash = hashToken(email);
     const now = this.clock();
     const throttle = await this.repository.getLoginThrottle(principalHash);
     if (throttle?.lockedUntil && new Date(throttle.lockedUntil).getTime() > new Date(now).getTime()) {
+      await this.recordSecurityEvent({type:'login',outcome:'blocked',context,details:{reason:'rate_limited'}});
       throw new AtlasError('ACCOUNT_LOCKED', 'Too many failed login attempts; try again later', 429, { lockedUntil: throttle.lockedUntil });
     }
     let user;
@@ -114,11 +119,15 @@ export class IdentityService {
     const valid = await verifyPassword(input.password ?? '', user?.passwordHash ?? dummyPasswordHash);
     if (!user || !valid) {
       const failure = await this.repository.recordLoginFailure(principalHash, now, this.loginFailureWindowSeconds, this.loginFailureThreshold, this.loginLockSeconds);
+      await this.recordSecurityEvent({userId:user?.id??null,type:'login',outcome:failure.lockedUntil?'blocked':'failure',context,details:{reason:failure.lockedUntil?'rate_limited':'invalid_credentials'}});
       if (failure.lockedUntil) throw new AtlasError('ACCOUNT_LOCKED', 'Too many failed login attempts; try again later', 429, { lockedUntil: failure.lockedUntil });
       throw new AtlasError('INVALID_CREDENTIALS', 'Invalid email or password', 401);
     }
+    const mfaStatus=await this.mfa.status(user.id);let authMethods=['password'];
+    if(mfaStatus.enabled){if(!input.mfaCode){await this.recordSecurityEvent({userId:user.id,type:'login',outcome:'blocked',context,details:{reason:'mfa_required'}});throw new AtlasError('MFA_REQUIRED','An authenticator or recovery code is required',401);}
+      try{const verified=await this.mfa.verify(user.id,input.mfaCode);authMethods.push(verified.method);}catch(error){await this.repository.recordLoginFailure(principalHash,now,this.loginFailureWindowSeconds,this.loginFailureThreshold,this.loginLockSeconds);await this.recordSecurityEvent({userId:user.id,type:'login',outcome:'failure',context,details:{reason:'invalid_mfa'}});throw error;}}
     await this.repository.clearLoginThrottle(principalHash);
-    return { user: this.publicUser(user), ...(await this.issueSession(user)) };
+    const issued={ user: this.publicUser(user), ...(await this.issueSession(user,this.repository,createId('fam'),authMethods)) };await this.recordSecurityEvent({userId:user.id,type:'login',outcome:'success',context,details:{sessionId:this.tokens.verify(issued.accessToken).sid,mfa:mfaStatus.enabled}});return issued;
   }
   async refresh(input) {
     const refreshToken = required(input.refreshToken, 'refreshToken');
@@ -172,6 +181,13 @@ export class IdentityService {
     await this.repository.revokeRefreshSessionsForUser(userId, this.clock());
     return { revoked: true };
   }
+  async mfaStatus(userId){return this.mfa.status(userId);}
+  async beginMfa(userId,input){const user=await this.repository.getUser(userId);if(!await verifyPassword(input.password??'',user.passwordHash))throw new AtlasError('INVALID_CREDENTIALS','Current password is invalid',401);const enrollment=await this.mfa.begin(user);await this.recordSecurityEvent({userId,type:'mfa.enrollment_started',outcome:'success'});return enrollment;}
+  async confirmMfa(userId,input){const result=await this.mfa.confirm(userId,required(input.code,'code'));await this.repository.revokeRefreshSessionsForUser(userId,this.clock());await this.recordSecurityEvent({userId,type:'mfa.enabled',outcome:'success'});return {...result,sessionsRevoked:true};}
+  async disableMfa(userId,input){const memberships=(await this.repository.listMembershipsForUser(userId)).filter(item=>item.active!==false);for(const membership of memberships){const policy=await this.repository.getWorkspaceSecurityPolicy(membership.workspaceId);if(policy.requireMfa)throw new AtlasError('FIRM_MFA_REQUIRED','This firm requires multi-factor authentication',409,{workspaceId:membership.workspaceId});}const user=await this.repository.getUser(userId);if(!await verifyPassword(input.password??'',user.passwordHash))throw new AtlasError('INVALID_CREDENTIALS','Current password is invalid',401);const result=await this.mfa.disable(userId,required(input.code,'code'));await this.repository.revokeRefreshSessionsForUser(userId,this.clock());await this.recordSecurityEvent({userId,type:'mfa.disabled',outcome:'success'});return {...result,sessionsRevoked:true};}
+  async listWorkspaceSessions(workspaceId,currentSessionId){const sessions=await this.repository.listWorkspaceRefreshSessions(workspaceId);return sessions.map(session=>({...this.publicSession(session,currentSessionId),user:{id:session.user.id,email:session.user.email,name:session.user.name}}));}
+  async listWorkspaceSecurityEvents(workspaceId,limit=100){return this.repository.listSecurityEvents(workspaceId,Math.min(Math.max(Number(limit)||100,1),500));}
+  async revokeWorkspaceSessions(workspaceId,actorId){await this.recordSecurityEvent({userId:actorId,workspaceId,type:'firm.sessions_revoked',outcome:'success'});await this.repository.revokeRefreshSessionsForWorkspace(workspaceId,this.clock());return {revoked:true,workspaceId};}
   async requestPasswordReset(input) {
     const email = required(input.email, 'email').trim().toLowerCase();
     let user;
@@ -224,7 +240,40 @@ export class IdentityService {
     return { ...(await this.repository.getUser(payload.sub)), sessionId: payload.sid };
   }
   async addOwner(workspaceId, userId) { return this.addMembership(workspaceId, userId, 'owner'); }
-  async listUserWorkspaces(userId){const memberships=await this.repository.listMembershipsForUser(userId);return Promise.all(memberships.map(async membership=>({workspace:await this.repository.getWorkspace(membership.workspaceId),subscription:await this.repository.getSubscription(membership.workspaceId),role:membership.role})));}
+  async listUserWorkspaces(userId){const memberships=(await this.repository.listMembershipsForUser(userId)).filter(item=>item.active!==false);return Promise.all(memberships.map(async membership=>({workspace:await this.repository.getWorkspace(membership.workspaceId),subscription:await this.repository.getSubscription(membership.workspaceId),role:membership.role})));}
+  async listWorkspaceMembers(workspaceId){const memberships=await this.repository.listMemberships(workspaceId);return Promise.all(memberships.map(async membership=>({ ...membership,user:this.publicUser(await this.repository.getUser(membership.userId)),mfaEnabled:(await this.mfa.status(membership.userId)).enabled})));}
+  async getWorkspaceSecurityPolicy(workspaceId){return this.repository.getWorkspaceSecurityPolicy(workspaceId);}
+  async updateWorkspaceSecurityPolicy(workspaceId,input,actorId){if(typeof input.requireMfa!=='boolean')throw new AtlasError('INVALID_SECURITY_POLICY','requireMfa must be true or false',400);if(input.requireMfa&&!(await this.mfa.status(actorId)).enabled)throw new AtlasError('MFA_REQUIRED_TO_ENFORCE','Enable MFA on your own account before requiring it for the firm',409);const now=this.clock();const policy=await this.repository.upsertWorkspaceSecurityPolicy({workspaceId,requireMfa:input.requireMfa,updatedBy:actorId,createdAt:now,updatedAt:now});await this.recordSecurityEvent({userId:actorId,workspaceId,type:'firm.mfa_policy_changed',outcome:'success',details:{requireMfa:policy.requireMfa}});return policy;}
+  async deactivateMembership(workspaceId,targetUserId,input,actorId){const actor=await this.repository.getMembership(workspaceId,actorId);const target=await this.repository.getMembership(workspaceId,targetUserId);if(target.role==='owner'||target.userId===actorId)throw new AtlasError('MEMBERSHIP_PROTECTED','Firm owners cannot be deactivated',409);if(actor.role==='admin'&&target.role==='admin')throw new AtlasError('MEMBERSHIP_PROTECTED','Only a firm owner can deactivate an administrator',403);const reason=String(input.reason??'').trim().slice(0,500)||null;if(target.active===false)return target;const updated=await this.repository.updateMembershipAccess(workspaceId,targetUserId,{active:false,deactivatedAt:this.clock(),deactivatedBy:actorId,deactivationReason:reason});await this.recordSecurityEvent({userId:actorId,workspaceId,type:'membership.deactivated',outcome:'success',details:{targetUserId,reason}});return updated;}
+  async reactivateMembership(workspaceId,targetUserId,actorId){const target=await this.repository.getMembership(workspaceId,targetUserId);if(target.active!==false)return target;const updated=await this.repository.updateMembershipAccess(workspaceId,targetUserId,{active:true,deactivatedAt:null,deactivatedBy:null,deactivationReason:null});await this.recordSecurityEvent({userId:actorId,workspaceId,type:'membership.reactivated',outcome:'success',details:{targetUserId}});return updated;}
+  async inviteMember(workspaceId,input,invitedBy){
+    const email=required(input.email,'email').trim().toLowerCase();const role=required(input.role,'role');
+    if(!/^\S+@\S+\.\S+$/.test(email))throw new AtlasError('INVALID_EMAIL','Email address is invalid',400);
+    if(!invitationRoles.has(role))throw new AtlasError('INVALID_ROLE','Invitation role is invalid',400);
+    const now=this.clock();await this.repository.cancelExpiredWorkspaceInvitations(workspaceId,now);
+    const subscription=await this.repository.getSubscription(workspaceId);const memberships=await this.repository.listMemberships(workspaceId);const pending=(await this.repository.listWorkspaceInvitations(workspaceId)).filter(item=>item.status==='pending'&&new Date(item.expiresAt)>new Date(now));
+    if(memberships.length+pending.length>=subscription.seatLimit)throw new AtlasError('SEAT_LIMIT_REACHED','Firm subscription seat limit reached',409,{seatLimit:subscription.seatLimit});
+    try{const user=await this.repository.getUserByEmail(email);if(memberships.some(item=>item.userId===user.id))throw new AtlasError('MEMBERSHIP_EXISTS','User already belongs to this firm',409);}catch(error){if(!(error instanceof AtlasError)||error.code!=='INVALID_CREDENTIALS')throw error;}
+    const invitationToken=this.randomToken();const expiresAt=new Date(new Date(now).getTime()+7*86_400_000).toISOString();
+    const invitation=await this.repository.createWorkspaceInvitation({id:createId('inv'),workspaceId,email,role,tokenHash:hashToken(invitationToken),status:'pending',invitedBy,acceptedBy:null,expiresAt,createdAt:now,acceptedAt:null});
+    const {tokenHash,...safe}=invitation;return {...safe,invitationToken};
+  }
+  async listWorkspaceInvitations(workspaceId){const now=this.clock();await this.repository.cancelExpiredWorkspaceInvitations(workspaceId,now);return (await this.repository.listWorkspaceInvitations(workspaceId)).map(({tokenHash,...safe})=>safe);}
+  async acceptInvitation(input){
+    const invitationToken=required(input.invitationToken,'invitationToken');
+    return this.repository.transaction(async(repository)=>{
+      const invitation=await repository.getWorkspaceInvitationByTokenHash(hashToken(invitationToken));const now=this.clock();
+      if(invitation.status!=='pending')throw new AtlasError('INVITATION_INVALID','Invitation is invalid or already used',401);
+      if(new Date(invitation.expiresAt)<=new Date(now))throw new AtlasError('INVITATION_EXPIRED','Invitation has expired',401);
+      const subscription=await repository.getSubscription(invitation.workspaceId);if(!['trialing','active'].includes(subscription.status))throw new AtlasError('SUBSCRIPTION_INACTIVE','Firm subscription is not active',402,{status:subscription.status});
+      const memberships=await repository.listMemberships(invitation.workspaceId);if(memberships.length>=subscription.seatLimit)throw new AtlasError('SEAT_LIMIT_REACHED','Firm subscription seat limit reached',409,{seatLimit:subscription.seatLimit});
+      let user;try{user=await repository.getUserByEmail(invitation.email);}catch(error){if(!(error instanceof AtlasError)||error.code!=='INVALID_CREDENTIALS')throw error;user=null;}
+      if(user){if(!await verifyPassword(input.password??'',user.passwordHash))throw new AtlasError('INVALID_CREDENTIALS','Existing Atlas users must enter their current password',401);}
+      else{const passwordHash=await hashPassword(input.password);user=await repository.createUser({id:createId('usr'),email:invitation.email,name:required(input.name,'name'),passwordHash,createdAt:now});}
+      const membership=await repository.createMembership({id:createId('mem'),workspaceId:invitation.workspaceId,userId:user.id,role:invitation.role,createdAt:now});await repository.acceptWorkspaceInvitation(invitation.id,user.id,now);const workspace=await repository.getWorkspace(invitation.workspaceId);
+      return {user:this.publicUser(user),workspace,membership,...(await this.issueSession(user,repository))};
+    });
+  }
   async addMembership(workspaceId, userId, role) {
     if (!roles.has(role)) throw new AtlasError('INVALID_ROLE', 'Role is invalid', 400);
     const subscription=await this.repository.getSubscription(workspaceId);
@@ -234,8 +283,10 @@ export class IdentityService {
   }
   async authorize(workspaceId, userId, permission) {
     const membership = await this.repository.getMembership(workspaceId, userId);
+    if(membership.active===false)throw new AtlasError('MEMBERSHIP_DEACTIVATED','Your access to this firm has been deactivated',403);
     const subscription=await this.repository.getSubscription(workspaceId);
     if(!['trialing','active'].includes(subscription.status))throw new AtlasError('SUBSCRIPTION_INACTIVE','Firm subscription is not active',402,{status:subscription.status});
+    const policy=await this.repository.getWorkspaceSecurityPolicy(workspaceId);if(policy.requireMfa&&!(await this.mfa.status(userId)).enabled)throw new AtlasError('FIRM_MFA_REQUIRED','This firm requires multi-factor authentication. Open Settings and enable MFA to continue.',403,{workspaceId});
     if (!permissions[membership.role]?.has(permission)) throw new AtlasError('ACCESS_DENIED', 'Workspace permission denied', 403);
     return membership;
   }

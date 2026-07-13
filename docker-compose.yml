@@ -8,12 +8,45 @@ services:
       DATABASE_URL: postgresql://atlas:atlas@postgres:5432/atlas
       CORS_ORIGINS: http://localhost:5173
       AUTH_TOKEN_SECRET: local-atlas-development-secret-32-chars
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      AI_MODEL: ${AI_MODEL:-gpt-4.1-mini}
+      AI_WEB_SEARCH_ENABLED: ${AI_WEB_SEARCH_ENABLED:-true}
+      AI_WEB_SEARCH_CONTEXT_SIZE: ${AI_WEB_SEARCH_CONTEXT_SIZE:-medium}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_CONTENT_ENCRYPTION_KEY: ${AI_CONTENT_ENCRYPTION_KEY:-}
+      AI_CONTENT_ENCRYPTION_KEY_ID: ${AI_CONTENT_ENCRYPTION_KEY_ID:-primary}
+      CMS_CREDENTIAL_ENCRYPTION_KEY: ${CMS_CREDENTIAL_ENCRYPTION_KEY:-}
+      CMS_CREDENTIAL_ENCRYPTION_KEY_ID: ${CMS_CREDENTIAL_ENCRYPTION_KEY_ID:-cms-primary}
+      CMS_SYNC_ENABLED: ${CMS_SYNC_ENABLED:-true}
+      GOOGLE_WORKSPACE_CLIENT_ID: ${GOOGLE_WORKSPACE_CLIENT_ID:-}
+      GOOGLE_WORKSPACE_CLIENT_SECRET: ${GOOGLE_WORKSPACE_CLIENT_SECRET:-}
+      MICROSOFT_365_CLIENT_ID: ${MICROSOFT_365_CLIENT_ID:-}
+      MICROSOFT_365_CLIENT_SECRET: ${MICROSOFT_365_CLIENT_SECRET:-}
+      MICROSOFT_365_TENANT: ${MICROSOFT_365_TENANT:-organizations}
     ports:
       - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
     command: ["sh", "-c", "node scripts/migrate.js && node src/server.js"]
+
+  intelligence-worker:
+    build: .
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://atlas:atlas@postgres:5432/atlas
+      AUTH_TOKEN_SECRET: local-atlas-development-secret-32-chars
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      AI_MODEL: ${AI_MODEL:-gpt-4.1-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_CONTENT_ENCRYPTION_KEY: ${AI_CONTENT_ENCRYPTION_KEY:-}
+      AI_CONTENT_ENCRYPTION_KEY_ID: ${AI_CONTENT_ENCRYPTION_KEY_ID:-primary}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["node", "scripts/intelligence-worker.js"]
 
   postgres:
     image: postgres:16-alpine

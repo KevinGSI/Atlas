@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import { TwilioVoiceAdapter } from '../src/telephony-provider-adapters.js';
+
+const token='test-auth-token';const base='https://atlas.example';
+function signature(path,params){const payload=`${base}${path}`+Object.keys(params).sort().map(key=>`${key}${params[key]}`).join('');return createHmac('sha1',token).update(payload).digest('base64');}
+
+test('Twilio adapter verifies signed webhook parameters and normalizes calls',()=>{const adapter=new TwilioVoiceAdapter({authToken:token,publicBaseUrl:base});const path='/v1/voice/twilio/wsp_1/incoming';const params={CallSid:'CA123',From:'+15550001111',To:'+15559990000'};assert.equal(adapter.verify(path,params,signature(path,params)),true);assert.deepEqual(adapter.incoming(params),{externalCallId:'CA123',from:'+15550001111',to:'+15559990000',provider:'twilio'});assert.throws(()=>adapter.verify(path,params,'bad'),/signature is invalid/);});
+
+test('Twilio adapter renders escaped speech collection transfer and hangup instructions',()=>{const adapter=new TwilioVoiceAdapter({authToken:token,publicBaseUrl:base});const gathered=adapter.render({action:'gather',prompt:'Ask <anything>'},{turnPath:'/turn',statusPath:'/status'});assert.match(gathered,/<Gather/);assert.match(gathered,/Ask &lt;anything&gt;/);const transferred=adapter.render({action:'transfer',prompt:'Connecting',transferNumber:'+15551230000'},{statusPath:'/status'});assert.match(transferred,/<Dial/);assert.match(transferred,/\+15551230000/);assert.match(adapter.render({action:'hangup',prompt:'Goodbye'}),/<Hangup\/>/);});
+
+test('Twilio adapter normalizes inbound SMS and sends approved outbound messages',async()=>{let request;const transport=async(url,options)=>{request={url,options};return {ok:true,async json(){return {sid:'SM123',status:'queued',from:'+15559990000',to:'+15550001111'};}};};const adapter=new TwilioVoiceAdapter({authToken:token,publicBaseUrl:base,accountSid:'AC123',messagingFrom:'+15559990000',transport});assert.deepEqual(adapter.incomingMessage({MessageSid:'SM-IN',From:'+15550001111',To:'+15559990000',Body:'Hello',NumMedia:'0'}),{externalMessageId:'SM-IN',from:'+15550001111',to:'+15559990000',body:'Hello',mediaCount:0,provider:'twilio'});assert.match(adapter.renderMessageResponse('Received & queued'),/Received &amp; queued/);const sent=await adapter.sendMessage({to:'+15550001111',body:'Approved reply'});assert.equal(sent.id,'SM123');assert.match(request.url,/Messages\.json/);assert.match(String(request.options.body),/Body=Approved\+reply/);assert.match(request.options.headers.authorization,/^Basic /);});

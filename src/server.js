@@ -1,10 +1,18 @@
 import { pathToFileURL } from 'node:url';
+import { existsSync } from 'node:fs';
+import { loadEnvFile } from 'node:process';
 import { startAtlas } from './application.js';
+
+export function loadLocalEnvironment(path = '.env') {
+  if (!existsSync(path)) return false;
+  loadEnvFile(path);
+  return true;
+}
 
 export async function main(env = process.env, logger = console) {
   const app = await startAtlas(env);
   const address = app.address;
-  logger.log(`Atlas Core 0.36.0 listening on http://${address.address}:${address.port}`);
+  logger.log(`Atlas Core 0.45.0 listening on http://${address.address}:${address.port}`);
   let stopping = false;
   const shutdown = async (signal) => {
     if (stopping) return;
@@ -21,5 +29,6 @@ export async function main(env = process.env, logger = console) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  loadLocalEnvironment();
   main().catch((error) => { console.error(error); process.exit(1); });
 }

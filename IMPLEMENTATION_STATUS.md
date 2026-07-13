@@ -1,6 +1,103 @@
-# Atlas Core 0.36.0 — Consolidated Pilot Launch Candidate
+# Atlas Core 0.45.0 — Atlas-Branded Secure Checkout
 
 ## Verified as implemented
+
+- Client payment links now open an Atlas-owned, responsive checkout instead of redirecting to a processor-branded website
+- Atlas controls the checkout branding, invoice summary, security explanation, error states, and completion experience
+- The regulated processor controls only isolated embedded payment fields, bank verification, mandate collection, authentication, and movement of funds
+- Signed Atlas checkout tokens expire after 24 hours, reject tampering, and contain no processor client secret
+- The browser receives the processor client secret only after the Atlas server verifies the signed checkout token and retrieves the matching session
+- Checkout assets use a payment-specific Content Security Policy limited to Atlas and the processor’s required script, API, and frame origins
+- Firms can create secure, invoice-owned payment links for ACH bank payments and debit/credit cards from Accounting
+- Stripe is the first concrete processor adapter, while Accounting remains provider-neutral and interchangeable
+- Checkout is hosted by the processor; Atlas does not accept or store card numbers, CVVs, routing/account numbers, or online-banking credentials
+- Processor confirmations require a signature over the unmodified request body and reject stale deliveries outside a five-minute window
+- ACH is booked only after the processor reports the asynchronous payment as paid
+- Repeated processor events do not create repeated canonical payments
+- Amount, currency, invoice, firm, rail, and processor checkout reference must all match before Atlas books a receipt
+- Deployment configuration keeps the Stripe API secret and webhook signing secret outside source control
+
+- Accounting now exposes the existing non-custodial crypto service as a connected website workflow
+- Firms can register a public receiving address only after an approved crypto provider is configured
+- Unpaid invoices can generate stablecoin payment instructions to that firm-controlled address
+- Submitted blockchain transaction hashes are verified for token contract, destination, amount, success, and confirmation depth before accounting records payment
+- Confirmed crypto payments become canonical invoice-owned payment objects visible to firm intelligence
+- Atlas never requests or stores wallet private keys, seed phrases, or custody credentials
+- Firm owners and administrators can create a complete JSON export only after typed confirmation
+- Export covers canonical objects including soft-deleted records, relationships, timeline events, audit history, safe membership metadata, security policy, reviewed intelligence, and action proposals
+- Every export contains a SHA-256 integrity manifest and creates an append-only firm security event
+- Authentication secrets, sessions, MFA material, password-reset tokens, connector credentials, webhook secrets, and encryption keys are explicitly excluded
+
+- Firm administrators can require MFA across the isolated firm workspace
+- Enabling firm-wide MFA requires the acting administrator to enroll first
+- Active members without MFA retain access only to account-protection enrollment and are blocked from firm work
+- MFA cannot be disabled while any active firm membership requires it
+- Firm administrators can deactivate and reactivate attorneys, paralegals, billing users, members, and viewers
+- Deactivation immediately fails every firm-scoped authorization while leaving unrelated firm memberships untouched
+- Owners cannot deactivate themselves or another owner; administrators cannot deactivate peer administrators
+- Membership status, MFA readiness, and deactivation reason are visible in Settings
+- Firm MFA policy changes, deactivations, and reactivations enter the append-only security-event ledger
+- PostgreSQL migration `0025_firm_access_security.sql` persists access lifecycle and firm security policy
+- Authenticated application now fills the viewport and contains responsive cards, forms, actions, and navigation without horizontal overflow
+
+- RFC 6238-style authenticator MFA with a bounded clock window
+- Authenticator secrets encrypted with AES-256-GCM under a dedicated production key
+- Ten single-use recovery codes displayed once, stored only as hashes, and consumed atomically
+- MFA-required login flow with authenticator and recovery-code methods recorded in token assurance
+- MFA enable/disable revokes all existing user sessions
+- Append-only PostgreSQL security-event ledger and workspace-scoped administrator history
+- Firm administrator session inventory and typed-confirmation emergency logout for every firm member
+- Settings interface for MFA enrollment, confirmation, disablement, activity review, session review, and incident containment
+- Permissions Policy, Cross-Origin-Opener-Policy, and Cross-Origin-Resource-Policy headers
+- Automated CodeQL analysis, high-severity dependency auditing, and Dependabot configuration
+- Responsible-disclosure policy, incident/recovery runbook, and Clio-benchmarked compliance matrix
+- No claim of SOC 2, ISO 27001, HIPAA, PCI DSS, penetration-test completion, backup restoration, or regional compliance without the required external evidence
+
+- Communications now presents one native call-and-text assistant rather than a separate messaging bolt-on
+- Signed Twilio inbound SMS webhook validation using the same provider-neutral telephony boundary as voice
+- Canonical inbound and approved-outbound `sms_message` objects inside each isolated firm workspace
+- Interchangeable AI intent classification with deterministic fallback and no autonomous substantive sending
+- Safe, firm-approved receipt acknowledgment; automated legal advice, engagement acceptance, outcome promises, confidential disclosures, and unapproved sends remain prohibited
+- Every non-opt-out inbound text creates review work and an editable `sms_draft`
+- Authenticated firm users must explicitly confirm each substantive outbound text
+- STOP and equivalent opt-out keywords are retained canonically and block later sends to that number
+- Communications UI supports local fictional inbound-text simulation, firm acknowledgment configuration, composing drafts, editing drafts, and approved sending when a live provider is configured
+
+- First-class Migration workspace supporting connected-provider coexistence and uploaded export migration
+- CSV and JSON preview engine with dataset detection, counts, samples, warnings, and fail-closed unsupported-file handling
+- Canonical import mappings for cases, clients, events, accounting, email, calendars, tasks, and communications
+- Imported child records linked to their canonical Atlas case when source matter identifiers are present
+- Source provider, external ID, source file, checksum, update time, batch ID, and import time provenance
+- Repeat-safe imports that skip previously imported provider/type/external-ID records
+- Canonical migration batches with created, skipped, and record-error audit summaries
+- Connected CMS sync now links newly pulled child records to previously synchronized matters
+
+- Provider-neutral inbound phone assistant with a signed Twilio adapter for live carrier webhooks
+- Firm-configurable greeting, automated-assistant disclosure, guarded FAQs, recording notice, and urgent transfer destination
+- Caller screening, known-contact matching, staged prospective-client intake, appointment requests, billing callbacks, messages, and urgent escalation
+- Canonical call sessions, transcript turns, timeline events, and automatically created attorney-review work
+- Legal-safety boundaries preventing advice, representation acceptance, outcome promises, or case disclosure based only on caller ID
+- Local fictional-call simulator in the Phone Assistant workspace
+- Non-custodial crypto receiving accounts, payment requests, and EVM token transaction verification
+- Crypto receipt creation only after token contract, destination, amount, and chain confirmation depth are verified
+- Firm invoice and Atlas subscription crypto flows with duplicate-transaction prevention
+
+- Canonical accounting service built on the same firm object graph as cases and digital-twin intelligence
+- Case-owned invoices, time entries, expenses, payments, refunds, trust transactions, and balanced journals
+- Derived billed, paid, receivable, unbilled-time, unbilled-expense, trust-received, and trust-balance metrics
+- First-class Accounting sidebar workspace and per-case Billing tab
+- ACH, card, and Zelle payment rails modeled without Atlas storing raw card or online-banking credentials
+- Hosted/tokenized processor adapter boundary for card and ACH collection
+- External Zelle confirmation and reconciliation workflow without Atlas claiming network participation or custody
+- Interchangeable payment, bank-connection, and legal-financing provider registries
+- Explicit client consent before an external financing application is created
+- Lender application handoffs stored as canonical case activity for digital-twin awareness
+- Payment overcollection, refund overage, trust overdraft, and unbalanced-journal safeguards
+- Production-boundary and current legal-fee financing candidate documentation
+- Real Google Workspace and Microsoft 365 read-only OAuth mail/calendar connectors
+- Encrypted credential rotation and continuous synchronization into canonical firm intelligence
+- One-time professional firm invitations and reload-safe authenticated browser sessions
+- Fail-closed launch-readiness check used before production migrations
 
 - Everything verified through Atlas Core `0.35.0`
 - Self-service subscribing-firm onboarding with atomic owner, workspace, membership, subscription, and session creation
@@ -13,12 +110,18 @@
 - Automated authenticated pilot journey from firm signup through matter-scoped daily work
 - Cross-firm membership, object, AI, event, and subscription isolation retained
 - Prominent connected `What do you need?` command surface on the authenticated homepage
+- Continuously flowing current-exchange chat with a reply composer directly beneath the latest Atlas response
 - Commands execute through the authorized digital-twin assistant endpoint
+- Deterministic server-side firm metrics for case activity, workload, deadlines, and client-contact frequency
+- Isolated, replaceable public-web research with OpenAI as the initial adapter
+- Public-query confidentiality screening against canonical firm identifiers and common contact data
+- Clearly separated Atlas-record references and clickable public-web citations in every command surface
 - Persistent multi-turn conversation identity within the signed-in session
 - Twin responses display canonical source-object references
 - Tasks, email drafts, and legal-document drafts render inside the response that proposed them
 - Existing human approval and rejection controls reused without a parallel execution path
 - Explicit UI confirmation that proposals remain unsent and unfiled
+- Live homepage work queue for open canonical tasks, case deadlines, and pending Atlas task suggestions
 - Suggested commands for daily priorities, recent matters, motions to compel, and task preparation
 - Provider-neutral CMS deletion and archive normalization
 - Source tombstones preserve canonical Atlas objects instead of deleting them
@@ -89,7 +192,7 @@
 - Secret-presence checks without value disclosure
 - Explicitly manual execution to prevent unintended API spend
 - OpenAI selected as the initial web and worker deployment provider
-- Explicit `gpt-5.6-sol` model configuration
+- Explicit `gpt-4.1-mini` model configuration
 - Unsynchronized deployment secrets for OpenAI and Atlas AI-content encryption
 - Local environment template without committed secrets
 - Production intelligence worker parity with application situational playbooks
@@ -153,7 +256,7 @@
 
 ## Verification completed here
 
-- 150 canonical tests passed locally across the complete non-live Atlas Core surface
+- 209 canonical tests passed locally across the complete non-live Atlas Core surface
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection
 - Live AI command environment and failure behavior verified locally
@@ -186,6 +289,9 @@
 - Clio OAuth/token/bearer request translation using a simulated official API transport
 - MyCase configuration fail-closed behavior
 - Scheduler repetition and graceful shutdown
+- Deterministic firm-metric computation and canonical source attribution
+- Isolated web-search request construction, citation normalization, confidentiality rejection, and provider replacement
+- Connected-client rendering of safe clickable citations on Home, Workspace, and the persistent twin
 - Full native-intelligence, identity, authorization, migration, PostgreSQL adapter, and deployment regression suite
 
 ## Explicitly not live-verified here
@@ -198,8 +304,8 @@
 - Deployment of the connected homepage against a public production environment
 - Live local network-listener execution in this restricted workspace (`listen EPERM`)
 - Execution of the new integration harness against a real PostgreSQL daemon; this workspace supplied neither `TEST_DATABASE_URL` nor a database service
-- Execution of `pnpm test:ai` against a paid production model; no provider credentials were supplied here
-- OpenAI API authentication and model entitlement; `OPENAI_API_KEY` is not present in this workspace
+- Execution of `pnpm test:ai` against a paid production model was not part of this automated regression run
+- A live paid OpenAI web-search request was not executed by the automated suite; its transport contract was verified with simulated provider responses to prevent unplanned spend
 - Execution result of the GitHub OpenAI workflow; it will exist only after this commit is pushed and the workflow is manually run
 - Real vendor webhook delivery; no mailbox, telephony, or document vendor credentials were supplied here
 - Execution against a public staging deployment; `STAGING_BASE_URL` has not been supplied and Atlas has not yet been deployed

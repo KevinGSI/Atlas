@@ -56,6 +56,24 @@ test('daily priorities are derived from matter health and deadlines with sources
   assert.equal(result.sources[0].objectId, matter.id);
 });
 
+test('matter context and priorities include canonical child tasks and deadlines', async () => {
+  const { service, tools, workspace, matter } = await fixture();
+  const task = await service.createObject(workspace.id, { parentObjectId: matter.id, dimension: 'operation', type: 'task', title: 'Review discovery plan', state: { status: 'open' } });
+  const deadline = await service.createObject(workspace.id, { parentObjectId: matter.id, dimension: 'operation', type: 'deadline', title: 'Discovery responses due', state: { status: 'open', date: '2026-07-11T12:00:00.000Z' } });
+  const context = await tools.execute('get_matter_context', workspace.id, { matterId: matter.id });
+  assert.deepEqual(context.data.related.map((item) => item.id), [task.id, deadline.id]);
+  assert.deepEqual(new Set(context.sources.map((item) => item.id ?? item.objectId)), new Set([matter.id, task.id, deadline.id]));
+  const priorities = await tools.execute('list_daily_priorities', workspace.id, { limit: 1 });
+  assert.equal(priorities.data[0].openTaskCount, 1);
+  assert.equal(priorities.sources.some((item) => item.objectId === deadline.id), true);
+});
+
+test('firm metrics compute recent-case work and client-contact counts on the server',async()=>{const {service,tools,workspace,matter}=await fixture();await service.createObject(workspace.id,{parentObjectId:matter.id,dimension:'operation',type:'communication',title:'Client status call',state:{status:'completed',occurredAt:'2026-07-09T15:00:00.000Z'}});await service.createObject(workspace.id,{parentObjectId:matter.id,dimension:'operation',type:'task',title:'Prepare discovery response',state:{status:'open',date:'2026-07-09T10:00:00.000Z'}});await service.createObject(workspace.id,{parentObjectId:matter.id,dimension:'operation',type:'deadline',title:'Discovery due',state:{status:'open',date:'2026-07-12T12:00:00.000Z'}});const metrics=await tools.execute('compute_firm_metrics',workspace.id,{recentMatterLimit:10});assert.equal(metrics.data.totals.matters,1);assert.equal(metrics.data.totals.openTasks,1);assert.equal(metrics.data.totals.overdueTasks,1);assert.equal(metrics.data.totals.deadlinesWithinSevenDays,1);assert.equal(metrics.data.totals.communications,1);assert.equal(metrics.data.recentMatters[0].clientContactCount,1);assert.equal(metrics.data.recentMatters[0].lastClientContactAt,'2026-07-09T15:00:00.000Z');assert.equal(metrics.sources.some(item=>item.objectId===matter.id),true);});
+
+test('public web research is isolated, cited, and rejects private firm identifiers',async()=>{const {service,workspace}=await fixture();const calls=[];const webResearch={async search(input){calls.push(input);return {answer:'Rule 26 requires proportionality.',sources:[{url:'https://www.law.cornell.edu/rules/frcp/rule_26',title:'Federal Rule 26'}],usage:{inputTokens:3,outputTokens:4,totalTokens:7}};}};const tools=new AtlasToolRegistry(service,{webResearch});assert.equal(tools.definitions().some(tool=>tool.name==='search_public_web'),true);const researched=await tools.execute('search_public_web',workspace.id,{query:'current federal discovery proportionality standard'});assert.deepEqual(calls,[{query:'current federal discovery proportionality standard'}]);assert.deepEqual(researched.webSources,[{url:'https://www.law.cornell.edu/rules/frcp/rule_26',title:'Federal Rule 26'}]);await assert.rejects(()=>tools.execute('search_public_web',workspace.id,{query:'search Reed v. Northline on the web'}),error=>error.code==='AI_WEB_QUERY_CONFIDENTIAL');await assert.rejects(()=>tools.execute('search_public_web',workspace.id,{query:'research client@example.com'}),error=>error.code==='AI_WEB_QUERY_CONFIDENTIAL');});
+
+test('assistant combines canonical tools with isolated web citations and audit usage',async()=>{const {service,workspace}=await fixture();const webResearch={async search(){return {answer:'Public research result',sources:[{url:'https://rules.example/rule',title:'Public rule'}],usage:{inputTokens:5,outputTokens:6,totalTokens:11}};}};const tools=new AtlasToolRegistry(service,{webResearch});let turn=0;const model={async complete(){turn+=1;return turn===1?{toolCalls:[{id:'web_1',name:'search_public_web',arguments:{query:'current public discovery rule'}}],usage:{inputTokens:2,outputTokens:1,totalTokens:3},provider:'test',model:'test-model'}:{text:'The current rule is supported by the cited public source.',usage:{inputTokens:3,outputTokens:4,totalTokens:7},provider:'test',model:'test-model'};}};const result=await new AtlasAssistant(model,tools,{repository:service.repository}).query({workspaceId:workspace.id,userId:'usr_1',prompt:'Research the current discovery rule'});assert.deepEqual(result.webSources,[{url:'https://rules.example/rule',title:'Public rule'}]);assert.deepEqual(result.usage,{inputTokens:10,outputTokens:11,totalTokens:21});const run=(await service.repository.listAiRuns(workspace.id,1))[0];assert.equal(run.sources.some(item=>item.sourceType==='web'&&item.url==='https://rules.example/rule'),true);});
+
 test('assistant fails honestly when no model provider is configured', async () => {
   const { tools, workspace } = await fixture();
   await assert.rejects(
@@ -108,7 +126,8 @@ test('assistant persists private conversations and continues with prior messages
   const first = await assistant.query({ workspaceId: workspace.id, userId: 'usr_owner', prompt: 'First question' });
   const second = await assistant.query({ workspaceId: workspace.id, userId: 'usr_owner', conversationId: first.conversationId, prompt: 'Follow up' });
   assert.equal(second.conversationId, first.conversationId);
-  assert.deepEqual(seen[1], ['user:First question', 'assistant:Answer 1', 'user:Follow up']);
+  assert.equal(seen[1][0].startsWith('developer:You are Atlas'), true);
+  assert.deepEqual(seen[1].slice(1), ['user:First question', 'assistant:Answer 1', 'user:Follow up']);
   const conversations = await assistant.listConversations(workspace.id, 'usr_owner');
   assert.equal(conversations.length, 1);
   const messages = await assistant.listMessages(workspace.id, 'usr_owner', first.conversationId);

@@ -60,7 +60,9 @@ test('assistant encrypts repository content and decrypts authorized API results 
   assert.ok(rawRuns.every((run) => run.prompt.startsWith('atlas:v1:') && run.answer.startsWith('atlas:v1:')));
   assert.ok(rawConversations[0].title.startsWith('atlas:v1:'));
   assert.ok(rawMessages.every((message) => message.content.startsWith('atlas:v1:')));
-  assert.deepEqual(seen[1].map((message) => `${message.role}:${message.content}`), ['user:Sensitive question', 'assistant:Protected answer', 'user:Follow up']);
+  const secondTurn = seen[1].map((message) => `${message.role}:${message.content}`);
+  assert.equal(secondTurn[0].startsWith('developer:You are Atlas'), true);
+  assert.deepEqual(secondTurn.slice(1), ['user:Sensitive question', 'assistant:Protected answer', 'user:Follow up']);
   assert.equal((await assistant.listRuns(workspace.id))[0].prompt, 'Follow up');
   assert.equal((await assistant.listConversations(workspace.id, 'usr_1'))[0].title, 'Sensitive question');
   assert.deepEqual((await assistant.listMessages(workspace.id, 'usr_1', first.conversationId)).map((message) => message.content), ['Sensitive question', 'Protected answer', 'Follow up', 'Protected answer']);

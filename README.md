@@ -1,8 +1,57 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.36.0` is the consolidated pilot launch candidate: an isolated subscribing-firm workspace with native digital-twin commands, connected matters, and matter-scoped clients, documents, evidence, communications, tasks, and deadlines.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.45.0` adds Atlas-branded secure checkout for ACH and debit/credit-card collection. Clients remain on an Atlas payment page while sensitive fields render inside the regulated processor’s isolated embedded component. Signed, replay-bounded webhooks book confirmed receipts into the canonical invoice ledger without Atlas collecting raw bank or card credentials.
 
 ## Implemented
+
+- Accounting workflow for invoice-linked ACH and debit/credit-card payment links
+- Responsive Atlas-owned checkout page with invoice summary, security explanation, completion state, and embedded sensitive-field boundary
+- Stripe embedded Checkout adapter behind the provider-neutral payment registry
+- Signed, expiring Atlas checkout links that do not contain processor client secrets
+- Signed raw-body webhook verification with a five-minute replay window and repeat-safe canonical payment booking
+- No Atlas fields for card number, CVV, routing number, account number, or banking password
+- Accounting interface for firm-controlled crypto receiving addresses, invoice payment requests, and blockchain confirmation tracking
+- Provider-neutral EVM stablecoin verification with destination, token, amount, transaction, and confirmation-depth validation
+- Crypto receipts booked into the same canonical invoice and firm intelligence graph as ACH, card, and externally reconciled payments
+- Explicit non-custodial boundary: Atlas stores public addresses and verification records, never private keys, seed phrases, or client funds
+- Administrator-only firm export with exact confirmation, canonical data coverage, SHA-256 integrity manifest, and security-event audit
+- Export exclusion of password hashes, sessions, MFA material, reset tokens, connector credentials, webhook secrets, and encryption keys
+
+- Authenticator-app MFA with encrypted TOTP secrets and hashed, single-use recovery codes
+- MFA enforcement at login and authentication-method claims in access tokens
+- Append-only security events with firm-administrator activity and session visibility
+- Typed-confirmation emergency logout for every user in one isolated firm
+- CodeQL, dependency audit, Dependabot, responsible disclosure, incident response, and recovery-readiness controls
+- Clio-benchmarked compliance matrix that explicitly separates implemented controls from unearned certifications and operational claims
+- Firm-wide MFA policy that blocks firm operations until each active member completes enrollment
+- Administrator-controlled member deactivation and reactivation without crossing into another firm's access
+- Owner-account protection and additional safeguards around administrator deactivation
+- Active/deactivated membership state and MFA readiness visible in firm Settings
+
+- Migration workspace with connected-provider and downloaded-export paths
+- Non-mutating preview for CSV and JSON exports before any canonical record is created
+- Provider-neutral classification of cases, clients, events, accounting, email, calendar, tasks, and communications
+- Case ownership linking, import provenance, batch audit history, record-level errors, and repeat-safe source identities
+- Read-only OAuth coexistence for supported CMS providers with incremental synchronization and preserved source tombstones
+
+- Provider-neutral text assistant in Communications with signed Twilio inbound webhooks and a fictional local simulator
+- Firm-approved receipt acknowledgments, interchangeable AI intent classification, canonical messages, generated review work, and editable draft replies
+- Explicit human approval for every substantive text send, plus retained STOP opt-outs that block later sends
+
+- Inbound legal phone assistant for firm greetings, caller screening, approved FAQs, preliminary intake, appointment requests, messages, callbacks, and urgent transfer
+- Canonical call sessions, transcripts, events, caller matching, and review work visible to the firm digital twin
+- Explicit automated-assistant disclosure and hard prohibitions on legal advice, engagement acceptance, outcome promises, and unverified case disclosure
+- Replaceable intent provider and telephony adapter boundaries, with a signed Twilio webhook adapter as the first live carrier integration
+- Non-custodial EVM token payment requests and on-chain confirmation for firm invoices and Atlas subscriptions
+- Contract, destination, amount, transaction, and confirmation-depth verification before a crypto receipt is booked
+
+- Canonical case accounting for invoices, time, expenses, payments, refunds, trust activity, and balanced journal entries
+- Derived billed, paid, receivable, unbilled, and trust balances without a separate accounting silo
+- Provider-neutral hosted/tokenized card and ACH payment requests that reject raw payment credentials by design
+- External Zelle payment recording and reconciliation without representing Atlas as the money-movement provider
+- Replaceable bank-connection and legal-fee financing provider registries
+- Explicit client consent and external lender handoff for legal-fee financing applications
+- First-class Accounting web workspace and case Billing view
 
 - Canonical workspaces and nested workspace objects
 - Matter, client, evidence, document, person, organization, and operation dimensions
@@ -39,6 +88,9 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Provider-neutral AI orchestration with bounded prompt and tool execution
 - Authenticated `POST /v1/workspaces/:workspaceId/assistant/query` endpoint
 - Read-only tools for workspace search, recent matters, object retrieval, matter health, and daily priorities
+- Deterministic server-side firm metrics for matter activity, task and deadline workload, and client-contact frequency
+- Replaceable public-web research provider with an isolated query boundary and clickable source citations
+- Confidentiality screening that rejects firm, client, matter, case-number, email, and phone identifiers before public search
 - Workspace-pinned tool execution and deduplicated source-object references
 - Explicit `503 AI_NOT_CONFIGURED` behavior until a real model adapter is supplied
 - Provider registry with normalized capabilities and duplicate/missing-provider safeguards
@@ -104,6 +156,7 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Native intelligence jobs and timeline provenance created atomically with ingested records
 - Awareness cards with human-readable proposal previews
 - Attorney approval and rejection controls inside the connected homepage
+- Live homepage work queue combining open canonical tasks, case deadlines, and pending Atlas task suggestions
 - Version-checked decisions preventing stale or duplicate approvals
 - Approved tasks become open task records; approved emails and legal documents remain drafts
 - Permanent `sent: false` and `filed: false` safety boundaries on approved draft creation
@@ -122,7 +175,7 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Configurable acceptance threshold with per-scenario results and usage reporting
 - Dedicated `pnpm test:ai` command that refuses to run without explicit provider credentials
 - OpenAI deployment configuration for both the web application and intelligence worker
-- Current flagship `gpt-5.6-sol` model selected explicitly rather than hidden inside domain code
+- Stable tool-capable `gpt-4.1-mini` model selected explicitly rather than hidden inside domain code
 - Secret placeholders for the API key and AI-content encryption key
 - Production worker corrected to load the deterministic situational playbook layer
 - Manual GitHub Actions workflow consuming `OPENAI_API_KEY` and `AI_CONTENT_ENCRYPTION_KEY`
@@ -168,10 +221,14 @@ export AI_PROVIDER=openai
 export AI_MODEL=your-approved-model-id
 export OPENAI_API_KEY=your-secret
 export AI_CONTENT_ENCRYPTION_KEY=your-base64-encoded-32-byte-key
+export AI_WEB_SEARCH_ENABLED=true
+export AI_WEB_SEARCH_CONTEXT_SIZE=medium
 pnpm test:ai
 ```
 
 The command prints a machine-readable scenario report and exits unsuccessfully if quality falls below the threshold, output is malformed, or the provider proposes a prohibited consequential action.
+
+GitHub Actions secrets are available only to GitHub Actions. They are not copied into a developer's computer or into Render. For local Docker, create an untracked `.env` from `.env.example` and place the real `OPENAI_API_KEY` and `AI_CONTENT_ENCRYPTION_KEY` values there. For Render, enter those values separately in the environment settings for both `atlas-api` and `atlas-intelligence-worker`.
 
 After deploying Atlas, store its HTTPS origin as the GitHub Secret `STAGING_BASE_URL`, then manually run **Atlas staging smoke test**. The test creates one clearly named synthetic user and workspace and returns only check names, version, duration, and pass/fail status.
 
@@ -180,10 +237,12 @@ Open `http://localhost:3000/` to use the connected phase-one client. Enter an ex
 ## Local PostgreSQL stack
 
 ```bash
+cp .env.example .env
+# Add the local OpenAI and AI-content encryption secrets to .env.
 docker compose up --build
 ```
 
-This starts PostgreSQL, applies migrations, and exposes Atlas at `http://localhost:3000`.
+This starts PostgreSQL, applies migrations, starts both the Atlas API and native intelligence worker, and exposes Atlas at `http://localhost:3000`. Atlas fails closed if the AI provider is selected but either required AI secret is missing.
 
 ## Health endpoints
 
@@ -254,6 +313,10 @@ The runtime accepts providers implementing `complete({ messages, tools, context,
 
 For the initial OpenAI adapter, set `AI_PROVIDER=openai`, `AI_MODEL` to an explicitly selected model ID, and `OPENAI_API_KEY`. `OPENAI_BASE_URL` defaults to `https://api.openai.com/v1`. The adapter uses the Responses API, keeps remote storage disabled, preserves provider response state locally for tool rounds, and normalizes token usage and provider errors before returning control to Atlas.
 
+Set `AI_WEB_SEARCH_ENABLED=true` to expose the provider-neutral `search_public_web` tool. The initial adapter performs a separate OpenAI Responses API request with live web search and returns normalized URL citations. Atlas sends only the screened, generic public query through that boundary—not the conversation history, retrieved firm records, workspace context, or canonical source objects. Searches containing known firm or matter identifiers, case numbers, email addresses, or phone numbers are rejected. `AI_WEB_SEARCH_CONTEXT_SIZE` accepts `low`, `medium`, or `high` and defaults to `medium`.
+
+Quantitative questions do not rely on model arithmetic. The `compute_firm_metrics` tool calculates matter, task, deadline, document, communication, and client-contact results from authorized canonical records on the Atlas server. Responses display Atlas-record sources separately from public-web citations.
+
 Any configured AI provider also requires `AI_CONTENT_ENCRYPTION_KEY`, a base64-encoded 32-byte secret, and accepts `AI_CONTENT_ENCRYPTION_KEY_ID` (default `primary`). Generate a development key with `openssl rand -base64 32`. Keep production keys in the deployment platform's secret manager, never in Git. Losing a key makes its encrypted content unrecoverable.
 
 For rotation, set `AI_CONTENT_ENCRYPTION_KEYS` to a JSON object containing the old and new base64 keys, and set `AI_CONTENT_ENCRYPTION_KEY_ID` to the new active ID. Atlas encrypts new values with the active key while retaining the ability to decrypt older envelopes. Key IDs cannot contain colons.
@@ -265,6 +328,8 @@ Other providers are registered through the same `AiProviderRegistry`; legal tool
 ## Native intelligence and digital twin
 
 Native intelligence runs beneath chat and direct platform workflows. Material object, timeline, ingestion, and approved-action events enqueue durable jobs. `pnpm worker:intelligence` runs the background worker. It selects interchangeable providers by declared trigger capabilities, validates normalized results, and projects candidate observations and action proposals with source, confidence, location, job, and provider provenance.
+
+Atlas does not silently retrain a hosted model on firm data. The digital twin learns through governed canonical events: incoming work updates the shared firm graph, accepted observations become canonical knowledge, and every authorized interface—including the continuously flowing `What do you need?` conversation—reads that same current twin. The interface shows only the current question and Atlas response while preserving the saved multi-turn conversation context for immediate follow-up replies. Public research remains outside the twin unless an authorized workflow later reviews and deliberately stores a result.
 
 Incoming connector emails enter through `POST /v1/workspaces/:workspaceId/ingestions/email`. Attachment metadata points to an external blob reference; binary storage, malware scanning, PDF parsing, and OCR are replaceable adapters rather than database blobs or vendor-specific domain code.
 

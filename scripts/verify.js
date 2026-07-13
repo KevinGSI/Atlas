@@ -3,12 +3,12 @@ import { spawnSync } from 'node:child_process';
 
 const requiredFiles = [
   'package.json', 'pnpm-lock.yaml', 'README.md', 'IMPLEMENTATION_STATUS.md', '.env.example', 'docker-compose.yml',
-  'Dockerfile', '.dockerignore', 'render.yaml', 'src/server.js', 'src/application.js', 'src/config.js', 'src/scheduler-leases.js', 'src/native-capabilities.js', 'src/canonical-events.js',
-  'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js', 'src/ai-evaluation.js', 'src/staging-smoke.js', 'src/content-security.js', 'src/ai-content-migration.js', 'src/intelligence.js', 'src/intelligence-projection.js', 'src/ingestion.js', 'src/webhook-security.js', 'src/resolution.js', 'src/cms-connectors.js', 'src/cms-provider-adapters.js', 'src/situational-awareness.js', 'src/phase-one-web.js', 'web/phase-one/index.html', 'web/phase-one/app.js', 'docs/NATIVE_INTELLIGENCE_CONSTITUTION.md', 'docs/NATIVE_INTELLIGENCE_VERIFICATION.md',
+  'Dockerfile', '.dockerignore', 'render.yaml', 'src/server.js', 'src/application.js', 'src/config.js', 'src/mfa.js', 'src/accounting.js', 'src/payment-provider-adapters.js', 'src/crypto-provider-adapters.js', 'src/voice-assistant.js', 'src/sms-assistant.js', 'src/telephony-provider-adapters.js', 'src/migration-import.js', 'scripts/launch-readiness.js', 'src/scheduler-leases.js', 'src/native-capabilities.js', 'src/canonical-events.js',
+  'src/http.js', 'src/service.js', 'src/repository.js', 'src/identity.js', 'src/assistant.js', 'src/ai-providers.js', 'src/ai-evaluation.js', 'src/staging-smoke.js', 'src/content-security.js', 'src/ai-content-migration.js', 'src/intelligence.js', 'src/intelligence-projection.js', 'src/ingestion.js', 'src/webhook-security.js', 'src/resolution.js', 'src/cms-connectors.js', 'src/cms-provider-adapters.js', 'src/mail-provider-adapters.js', 'src/situational-awareness.js', 'src/phase-one-web.js', 'web/phase-one/index.html', 'web/phase-one/app.js', 'web/phase-one/payment.html', 'web/phase-one/payment.js', 'docs/NATIVE_INTELLIGENCE_CONSTITUTION.md', 'docs/NATIVE_INTELLIGENCE_VERIFICATION.md',
   'src/postgres-repository.js', 'src/migrations.js', 'src/runtime.js',
-  'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'db/migrations/0007_ai_run_ledger.sql', 'db/migrations/0008_ai_conversations.sql', 'db/migrations/0009_ai_action_proposals.sql', 'db/migrations/0010_ai_draft_actions.sql', 'db/migrations/0011_intelligence_jobs.sql', 'db/migrations/0012_intelligence_observations.sql', 'db/migrations/0013_ingestion_records.sql', 'db/migrations/0014_cms_coexistence.sql', 'db/migrations/0015_encrypted_secrets.sql', 'db/migrations/0016_situational_awareness.sql', 'db/migrations/0017_scheduler_leases.sql', 'db/migrations/0018_canonical_event_ledger.sql', 'db/migrations/0019_postgres_integrity.sql', 'db/migrations/0020_cms_tombstones.sql', 'db/migrations/0021_firm_subscriptions.sql', 'test/service.test.js', 'test/http.test.js', 'test/subscriptions.test.js',
+  'db/migrations/0001_initial.sql', 'db/migrations/0002_identity.sql', 'db/migrations/0003_object_audit.sql', 'db/migrations/0004_refresh_sessions.sql', 'db/migrations/0005_password_reset.sql', 'db/migrations/0006_login_throttle.sql', 'db/migrations/0007_ai_run_ledger.sql', 'db/migrations/0008_ai_conversations.sql', 'db/migrations/0009_ai_action_proposals.sql', 'db/migrations/0010_ai_draft_actions.sql', 'db/migrations/0011_intelligence_jobs.sql', 'db/migrations/0012_intelligence_observations.sql', 'db/migrations/0013_ingestion_records.sql', 'db/migrations/0014_cms_coexistence.sql', 'db/migrations/0015_encrypted_secrets.sql', 'db/migrations/0016_situational_awareness.sql', 'db/migrations/0017_scheduler_leases.sql', 'db/migrations/0018_canonical_event_ledger.sql', 'db/migrations/0019_postgres_integrity.sql', 'db/migrations/0020_cms_tombstones.sql', 'db/migrations/0021_firm_subscriptions.sql', 'db/migrations/0022_professional_roles.sql', 'db/migrations/0023_workspace_invitations.sql', 'db/migrations/0024_security_controls.sql', 'db/migrations/0025_firm_access_security.sql', 'test/service.test.js', 'test/http.test.js', 'test/subscriptions.test.js',
   'test/postgres-repository.test.js', 'test/migrations.test.js', 'test/config.test.js', 'test/runtime.test.js',
-  'test/deployment.test.js', 'test/staging-smoke.test.js', 'test/live-postgres.test.js', 'test/identity.test.js', 'test/assistant.test.js', 'test/ai-providers.test.js', 'test/ai-evaluation.test.js', 'test/content-security.test.js', 'test/ai-content-migration.test.js', 'test/intelligence.test.js', 'test/ingestion.test.js', 'test/webhook-security.test.js', 'test/resolution.test.js', 'test/architecture.test.js', 'test/cms-connectors.test.js', 'test/situational-awareness.test.js', 'test/scheduler-leases.test.js', 'test/native-capabilities.test.js', 'test/canonical-events.test.js', 'docs/NATIVE_AI_CAPABILITIES.md', 'scripts/encrypt-ai-content.js', 'scripts/intelligence-worker.js', 'scripts/test-postgres.js', 'scripts/test-ai-provider.js', 'scripts/test-staging.js', '.github/workflows/postgres-integration.yml', '.github/workflows/openai-evaluation.yml', '.github/workflows/staging-smoke.yml'
+  'test/deployment.test.js', 'test/staging-smoke.test.js', 'test/launch-readiness.test.js', 'test/accounting.test.js', 'test/payment-provider-adapters.test.js', 'test/crypto-payments.test.js', 'test/voice-assistant.test.js', 'test/sms-assistant.test.js', 'test/mfa.test.js', 'test/telephony-provider-adapters.test.js', 'test/voice-http.test.js', 'test/sms-http.test.js', 'test/migration-import.test.js', 'test/migration-http.test.js', 'test/live-postgres.test.js', 'test/identity.test.js', 'test/assistant.test.js', 'test/ai-providers.test.js', 'test/ai-evaluation.test.js', 'test/content-security.test.js', 'test/ai-content-migration.test.js', 'test/intelligence.test.js', 'test/ingestion.test.js', 'test/webhook-security.test.js', 'test/resolution.test.js', 'test/architecture.test.js', 'test/cms-connectors.test.js', 'test/mail-provider-adapters.test.js', 'test/situational-awareness.test.js', 'test/scheduler-leases.test.js', 'test/native-capabilities.test.js', 'test/canonical-events.test.js', 'docs/NATIVE_AI_CAPABILITIES.md', 'docs/ACCOUNTING_PAYMENTS_AND_FINANCING.md', 'docs/CRYPTO_AND_VOICE_INTEGRATION.md', 'docs/CMS_MIGRATION.md', 'docs/COMMUNICATIONS_ASSISTANT.md', 'docs/TRUST_SECURITY_COMPLIANCE_MATRIX.md', 'docs/INCIDENT_RESPONSE_AND_RECOVERY.md', 'SECURITY.md', '.github/dependabot.yml', '.github/workflows/security-analysis.yml', 'scripts/check-launch.js', 'scripts/encrypt-ai-content.js', 'scripts/intelligence-worker.js', 'scripts/test-postgres.js', 'scripts/test-ai-provider.js', 'scripts/test-staging.js', '.github/workflows/postgres-integration.yml', '.github/workflows/openai-evaluation.yml', '.github/workflows/staging-smoke.yml'
 ];
 
 const failures = [];
@@ -17,7 +17,7 @@ for (const file of requiredFiles) {
 }
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-if (pkg.version !== '0.36.0') failures.push(`expected version 0.36.0, got ${pkg.version}`);
+if (pkg.version !== '0.45.0') failures.push(`expected version 0.45.0, got ${pkg.version}`);
 
 const migration = await readFile('db/migrations/0001_initial.sql', 'utf8');
 for (const table of ['atlas_workspace', 'atlas_object', 'atlas_relationship', 'atlas_timeline_event']) {
@@ -72,6 +72,15 @@ for(const kind of ['email','phone_call','document'])if(!postgresIntegrityMigrati
 if(!postgresIntegrityMigration.includes('atlas_timeline_no_update')||!postgresIntegrityMigration.includes('atlas_timeline_no_delete'))failures.push('append-only timeline triggers are missing');
 const cmsTombstoneMigration=await readFile('db/migrations/0020_cms_tombstones.sql','utf8');
 if(!cmsTombstoneMigration.includes('source_deleted_at')||!cmsTombstoneMigration.includes('reconciliation_status'))failures.push('CMS tombstone reconciliation columns are missing');
+const professionalRolesMigration=await readFile('db/migrations/0022_professional_roles.sql','utf8');
+for(const role of ['attorney','paralegal','billing'])if(!professionalRolesMigration.includes(`'${role}'`))failures.push(`professional membership role missing ${role}`);
+const invitationMigration=await readFile('db/migrations/0023_workspace_invitations.sql','utf8');
+if(!invitationMigration.includes('CREATE TABLE atlas_workspace_invitation')||!invitationMigration.includes('token_hash text NOT NULL UNIQUE'))failures.push('workspace invitation storage is missing or insecure');
+const securityMigration=await readFile('db/migrations/0024_security_controls.sql','utf8');
+for(const table of ['atlas_mfa_factor','atlas_security_event'])if(!securityMigration.includes(`CREATE TABLE ${table}`))failures.push(`security control migration missing ${table}`);
+if(!securityMigration.includes('atlas_security_event_no_update')||!securityMigration.includes('atlas_security_event_no_delete'))failures.push('security event ledger is not append-only');
+const accessSecurityMigration=await readFile('db/migrations/0025_firm_access_security.sql','utf8');
+if(!accessSecurityMigration.includes('CREATE TABLE atlas_workspace_security_policy')||!accessSecurityMigration.includes('ADD COLUMN active boolean NOT NULL DEFAULT true'))failures.push('firm access security migration is incomplete');
 if (!pkg.dependencies?.pg) failures.push('pg runtime dependency is missing');
 if (pkg.scripts?.migrate !== 'node scripts/migrate.js') failures.push('standalone migration command is missing');
 if (pkg.scripts?.['encrypt-ai-content'] !== 'node scripts/encrypt-ai-content.js') failures.push('AI content encryption migration command is missing');
@@ -82,7 +91,7 @@ if (!dockerfile.includes('USER node')) failures.push('container does not run as 
 if (!dockerfile.includes('HEALTHCHECK')) failures.push('container health check is missing');
 const render = await readFile('render.yaml', 'utf8');
 if (!render.includes('healthCheckPath: /ready')) failures.push('Render readiness check is missing');
-if (!render.includes('preDeployCommand: node scripts/migrate.js')) failures.push('Render migration command is missing');
+if (!render.includes('preDeployCommand: node scripts/check-launch.js && node scripts/migrate.js')) failures.push('Render launch gate and migration command are missing');
 
 const testFiles = (await readdir('test'))
   .filter((name) => name.endsWith('.test.js'))
@@ -98,4 +107,4 @@ if (failures.length) {
   console.error(`Verification failed:\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log(`Verification passed: version ${pkg.version}, ${requiredFiles.length} required files, ${sourceFiles} source modules, 28 database tables.`);
+console.log(`Verification passed: version ${pkg.version}, ${requiredFiles.length} required files, ${sourceFiles} source modules, 32 database tables.`);

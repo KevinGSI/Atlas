@@ -24,7 +24,7 @@ test('OpenAI adapter translates normalized tools, calls, outputs, text, state, a
   const transport = async (url, options) => { requests.push({ url, options, body: JSON.parse(options.body) }); return jsonResponse(responses.shift()); };
   const provider = new OpenAiResponsesProvider({ apiKey: 'test-key', model: 'model-a', transport });
   const tools = [{ name: 'search_objects', description: 'Search', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } }];
-  const first = await provider.complete({ messages: [{ role: 'user', content: 'Find motions' }], tools });
+  const first = await provider.complete({ messages: [{ role: 'developer', content: 'Use authorized tools.' }, { role: 'user', content: 'Find motions' }], tools });
   assert.deepEqual(first.toolCalls, [{ id: 'call_1', name: 'search_objects', arguments: { query: 'motion' } }]);
   assert.equal(requests[0].body.tools[0].type, 'function');
   assert.equal(requests[0].body.store, false);
@@ -35,9 +35,11 @@ test('OpenAI adapter translates normalized tools, calls, outputs, text, state, a
     { role: 'tool', toolCallId: 'call_1', name: 'search_objects', content: [{ id: 'obj_1' }] }
   ];
   const second = await provider.complete({ messages, tools, state: first.state });
-  assert.equal(requests[1].body.input[0].type, 'function_call');
-  assert.equal(requests[1].body.input[1].type, 'function_call_output');
-  assert.equal(requests[1].body.input[1].call_id, 'call_1');
+  assert.equal(requests[1].body.input[0].role, 'developer');
+  assert.equal(requests[1].body.input[1].role, 'user');
+  assert.equal(requests[1].body.input[2].type, 'function_call');
+  assert.equal(requests[1].body.input[3].type, 'function_call_output');
+  assert.equal(requests[1].body.input[3].call_id, 'call_1');
   assert.equal(second.text, 'One motion was found.');
   assert.deepEqual(second.usage, { inputTokens: 7, outputTokens: 5, totalTokens: 12 });
   assert.equal(second.provider, 'openai');

@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 15
     env:
       AI_PROVIDER: openai
-      AI_MODEL: gpt-5.6-sol
+      AI_MODEL: gpt-4.1-mini
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       AI_CONTENT_ENCRYPTION_KEY: ${{ secrets.AI_CONTENT_ENCRYPTION_KEY }}
       AI_CONTENT_ENCRYPTION_KEY_ID: primary
