@@ -1,6 +1,15 @@
-# Atlas Core 0.45.0 — Atlas-Branded Secure Checkout
+# Atlas Core 0.46.0 — Secure Canonical Document Storage
 
 ## Verified as implemented
+
+- Authenticated document upload from the real Documents workspace, not only metadata entry
+- Firm- and case-scoped canonical document records with native `attachment.received` events and intelligence jobs
+- Provider-neutral blob storage contract with local durable filesystem and injectable managed-object-store implementations
+- SHA-256 content addressing, server-computed checksums, duplicate-byte reuse, and verified size/digest on every download
+- Access-controlled retrieval rejecting cross-firm objects and externally managed connector references
+- PDF, DOCX, text, CSV, JPEG, and PNG allowlist with filename sanitization, base64 validation, and configurable limits
+- Production startup and launch readiness fail closed unless durable document storage is configured
+- Render blueprint includes a persistent document disk mounted outside the application container filesystem
 
 - Client payment links now open an Atlas-owned, responsive checkout instead of redirecting to a processor-branded website
 - Atlas controls the checkout branding, invoice summary, security explanation, error states, and completion experience
@@ -323,7 +332,7 @@ Atlas must not ask customers to submit their Clio or MyCase password. Users auth
 ## Product limitations remaining
 
 - Provider field mappings require certification against each vendor account and enabled API surface
-- Deletion/tombstone reconciliation, attachment binary transfer, trust-account migration controls, and conflict-resolution UI need additional releases
+- Provider-originated attachment fetching, trust-account migration controls, and conflict-resolution UI need additional releases
 - Final cutover tooling and write-back require separate explicit authorization and reconciliation policies
 - Email and phone response drafting quality still depends on the configured interchangeable AI provider and connector-supplied content
 - The motion-to-compel output is a reviewable draft shell, not a jurisdiction-certified filing

@@ -20,6 +20,7 @@ test('production defaults to a cloud-compatible listener', () => {
   assert.equal(config.openAiBaseUrl, 'https://api.openai.com/v1');
   assert.equal(config.aiWebSearchEnabled, false);
   assert.equal(config.aiWebSearchContextSize, 'medium');
+  assert.equal(config.documentMaxBytes,25_000_000);
 });
 
 test('AI provider configuration is explicit and provider-specific credentials stay isolated', () => {
@@ -91,4 +92,5 @@ test('configuration validates positive numeric limits', () => {
   assert.throws(() => loadConfig({ LOGIN_FAILURE_THRESHOLD: '0' }), /LOGIN_FAILURE_THRESHOLD must be a positive integer/);
   assert.throws(() => loadConfig({ CMS_SYNC_INTERVAL_MS: '0' }), /CMS_SYNC_INTERVAL_MS must be a positive integer/);
   assert.throws(() => loadConfig({ SITUATIONAL_SWEEP_INTERVAL_MS: '0' }), /SITUATIONAL_SWEEP_INTERVAL_MS must be a positive integer/);
+  assert.throws(() => loadConfig({ DOCUMENT_MAX_BYTES: '0' }), /DOCUMENT_MAX_BYTES must be a positive integer/);
 });

@@ -111,6 +111,8 @@ export function loadConfig(env = process.env) {
     databasePoolSize: positiveInteger(env.DATABASE_POOL_SIZE, 10, 'DATABASE_POOL_SIZE'),
     maxBodyBytes: positiveInteger(env.MAX_BODY_BYTES, 1_048_576, 'MAX_BODY_BYTES'),
     migrationMaxBodyBytes:positiveInteger(env.MIGRATION_MAX_BODY_BYTES,20_000_000,'MIGRATION_MAX_BODY_BYTES'),
+    documentMaxBytes:positiveInteger(env.DOCUMENT_MAX_BYTES,25_000_000,'DOCUMENT_MAX_BYTES'),
+    documentStoragePath:env.DOCUMENT_STORAGE_PATH||null,
     shutdownTimeoutMs: positiveInteger(env.SHUTDOWN_TIMEOUT_MS, 10_000, 'SHUTDOWN_TIMEOUT_MS'),
     corsOrigins
   };

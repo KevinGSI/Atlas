@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.45.0` adds Atlas-branded secure checkout for ACH and debit/credit-card collection. Clients remain on an Atlas payment page while sensitive fields render inside the regulated processor’s isolated embedded component. Signed, replay-bounded webhooks book confirmed receipts into the canonical invoice ledger without Atlas collecting raw bank or card credentials.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.46.0` adds real, access-controlled document upload and verified retrieval to the canonical Documents workspace. Files are content-addressed by SHA-256, scoped to one firm and case, constrained by type and size, stored through an interchangeable blob-store boundary, and queued into native intelligence without trusting a user-supplied storage reference.
 
 ## Implemented
 

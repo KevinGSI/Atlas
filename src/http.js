@@ -62,6 +62,7 @@ function sendXml(response,status,content,headers={}){response.writeHead(status,{
 
 function sendAsset(response,asset,headers={}){response.writeHead(200,{...headers,'content-type':asset.contentType,'content-length':asset.content.length,'content-security-policy':"default-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'"});response.end(asset.content);}
 function sendPaymentAsset(response,asset,headers={}){response.writeHead(200,{...headers,'content-type':asset.contentType,'content-length':asset.content.length,'cross-origin-opener-policy':'same-origin-allow-popups','content-security-policy':"default-src 'self'; script-src 'self' https://js.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://hooks.stripe.com"});response.end(asset.content);}
+function sendFile(response,file,headers={}){const safe=String(file.document.title).replace(/["\\\r\n]/g,'_');response.writeHead(200,{...headers,'content-type':file.document.state.mediaType,'content-length':file.content.length,'content-disposition':`attachment; filename="${safe}"`,'x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox"});response.end(file.content);}
 
 function sendOAuthCompletion(response,connection,headers={}){const provider=String(connection.provider??'External provider').replace(/[<>&"']/g,'');const content=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atlas connection complete</title><style>body{font:16px system-ui;background:#f5f7fb;color:#10233f;display:grid;place-items:center;min-height:100vh;margin:0}.card{background:white;border:1px solid #dbe3ee;border-radius:18px;padding:32px;max-width:520px;box-shadow:0 16px 48px #10233f18}h1{margin-top:0}</style></head><body><main class="card"><h1>Connection complete</h1><p>${provider} is securely connected to Atlas with read-only access.</p><p>You may close this window and return to Atlas. The Email and Calendar pages will detect the connection and begin synchronization.</p></main></body></html>`;response.writeHead(200,{...headers,'content-type':'text/html; charset=utf-8','content-length':Buffer.byteLength(content),'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});response.end(content);}
 
@@ -132,6 +133,8 @@ function route(method, pathname) {
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/ingestions\/email$/, 'ingestEmail']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/ingestions\/phone-calls$/, 'ingestPhoneCall']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/ingestions\/documents$/, 'ingestDocument']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/files$/, 'uploadFile']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)\/content$/, 'downloadFile']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/webhooks\/([^/]+)\/(email|phone-calls|documents)$/, 'ingestWebhook']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/intelligence\/search$/, 'searchTwin']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/intelligence\/observations\/([^/]+)\/decision$/, 'decideIntelligenceObservation']
@@ -189,6 +192,7 @@ export function createAtlasHandler(service, options = {}) {
   const identity = options.identity;
   const assistant = options.assistant;
   const ingestion = options.ingestion;
+  const files = options.files;
   const webhooks = options.webhooks;
   const cms = options.cms;
   const migration=options.migration;
@@ -210,7 +214,7 @@ export function createAtlasHandler(service, options = {}) {
       const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/') && match.name!=='ingestWebhook') {
-        const permission = ['getWorkspace', 'getSubscription', 'listObjects', 'getObject', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus'].includes(match.name)
+        const permission = ['getWorkspace', 'getSubscription', 'listObjects', 'getObject', 'downloadFile', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus'].includes(match.name)
           ? 'workspace:read' : ['createMembership','inviteMember','listWorkspaceInvitations','listWorkspaceSecurityEvents','listWorkspaceSessions','revokeWorkspaceSessions','deactivateMembership','reactivateMembership','getWorkspaceSecurityPolicy','updateWorkspaceSecurityPolicy','createFirmExport'].includes(match.name) ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
@@ -220,8 +224,8 @@ export function createAtlasHandler(service, options = {}) {
         case 'paymentPage': case 'paymentApp': return sendPaymentAsset(response,await phaseOneAsset(match.name),headers);
         case 'stripePaymentWebhook': {if(!accounting)throw new AtlasError('PAYMENT_PROVIDER_NOT_CONFIGURED','Payment processing is not configured',503);result=await accounting.processPaymentWebhook('stripe',await readRawBody(request,config.maxBodyBytes),request.headers?.['stripe-signature']);break;}
         case 'stripePaymentCheckout': {if(!accounting)throw new AtlasError('PAYMENT_PROVIDER_NOT_CONFIGURED','Payment processing is not configured',503);result=await accounting.paymentCheckoutConfiguration('stripe',workspaceId);break;}
-        case 'health': case 'live': result = { status: 'ok', version: '0.45.0' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.45.0' }; break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.46.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.46.0' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'registerFirm': result = await identity.registerFirm(await readJson(request,config.maxBodyBytes)); break;
         case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes),requestContext(request)); break;
@@ -276,6 +280,8 @@ export function createAtlasHandler(service, options = {}) {
         case 'ingestEmail': result = await ingestion.ingestEmail(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'ingestPhoneCall': result = await ingestion.ingestPhoneCall(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'ingestDocument': result = await ingestion.ingestDocument(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
+        case 'uploadFile': {if(!files)throw new AtlasError('FILE_STORAGE_NOT_CONFIGURED','File storage is unavailable',503);result=await files.upload(workspaceId,await readJson(request,Math.ceil(config.documentMaxBytes*1.4)+100_000),user.id);break;}
+        case 'downloadFile': {if(!files)throw new AtlasError('FILE_STORAGE_NOT_CONFIGURED','File storage is unavailable',503);return sendFile(response,await files.download(workspaceId,objectId),headers);}
         case 'ingestWebhook': {const connector=objectId;const kind=match.params[2];const input=await webhooks.verifyAndParse(request,workspaceId,connector,config.maxBodyBytes);const secured={...input,connector};result=kind==='email'?await ingestion.ingestEmail(workspaceId,secured,`connector:${connector}`):kind==='phone-calls'?await ingestion.ingestPhoneCall(workspaceId,secured,`connector:${connector}`):await ingestion.ingestDocument(workspaceId,secured,`connector:${connector}`);break;}
         case 'searchTwin': result = await service.searchTwin(workspaceId,url.searchParams.get('q')); break;
         case 'decideIntelligenceObservation': result = await service.decideIntelligenceObservation(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;

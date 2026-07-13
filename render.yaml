@@ -8,6 +8,10 @@ services:
     preDeployCommand: node scripts/check-launch.js && node scripts/migrate.js
     healthCheckPath: /ready
     autoDeployTrigger: commit
+    disk:
+      name: atlas-documents
+      mountPath: /var/data/atlas-documents
+      sizeGB: 10
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -23,6 +27,10 @@ services:
         value: 10
       - key: MAX_BODY_BYTES
         value: 1048576
+      - key: DOCUMENT_MAX_BYTES
+        value: 25000000
+      - key: DOCUMENT_STORAGE_PATH
+        value: /var/data/atlas-documents
       - key: CORS_ORIGINS
         sync: false
       - key: AUTH_TOKEN_SECRET

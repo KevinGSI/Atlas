@@ -17,3 +17,6 @@
 ## Honest external boundary
 
 The matrix verifies Atlas-owned contracts and behavior with deterministic adapters. It does not prove a live mailbox subscription, real PDF/OCR output, production blob storage, model quality, live PostgreSQL concurrency, or managed deployment security. Those require selected external services and environment credentials and are explicitly excluded from the local verification claim.
+# Secure document ingestion
+
+Atlas-owned uploads are hashed and stored through the provider-neutral blob boundary before becoming canonical case documents. The server computes file identity, enforces media-type and size boundaries, queues `attachment.received` intelligence work, and verifies stored bytes against canonical checksum and size metadata before an authorized download.
