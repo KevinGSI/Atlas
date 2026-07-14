@@ -399,6 +399,8 @@ Connections are read-only by default. Incremental sync maps supported provider r
 
 Clio requires `CLIO_CLIENT_ID`, `CLIO_CLIENT_SECRET`, and optionally `CLIO_REGION`. MyCase Open API availability and endpoints must be enabled/issued for the firm; configure `MYCASE_CLIENT_ID`, `MYCASE_CLIENT_SECRET`, `MYCASE_AUTHORIZE_ENDPOINT`, `MYCASE_TOKEN_ENDPOINT`, and `MYCASE_API_BASE`. Vendor APIs, scopes, tiers, and field availability must be verified before enabling a production connection.
 
+QuickBooks Online is available from Accounting as a read-only financial mirror. Configure an Intuit application with `QUICKBOOKS_CLIENT_ID`, `QUICKBOOKS_CLIENT_SECRET`, and `QUICKBOOKS_ENVIRONMENT` (`sandbox` or `production`), and register the exact Atlas callback URL `/v1/cms/oauth/callback`. Atlas imports accounts, customers, vendors, invoices, payments, purchases, bills, bill payments, deposits, journal entries, credit memos, and refund receipts into firm-isolated canonical records. It never collects the QuickBooks password, never writes to QuickBooks, rotates encrypted OAuth credentials, performs an initial paged scan, and then uses incremental change capture. Enable `CMS_SYNC_ENABLED=true` for recurring refreshes.
+
 ## AI accountability ledger
 
 Every assistant request receives a stable `runId`. Completed runs record the answer, source objects, tool count, provider/model identity, and normalized usage. Failed runs record the prompt, actor, timestamp, provider when known, and a sanitized Atlas error code. The ledger is workspace-scoped and append-only; PostgreSQL rejects updates and deletions.

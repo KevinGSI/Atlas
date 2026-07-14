@@ -57,6 +57,8 @@ export function loadConfig(env = process.env) {
   if(cmsCredentialEncryptionKey&&Buffer.from(cmsCredentialEncryptionKey,'base64').length!==32)throw new Error('CMS_CREDENTIAL_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
   if(Boolean(env.GOOGLE_WORKSPACE_CLIENT_ID)!==Boolean(env.GOOGLE_WORKSPACE_CLIENT_SECRET))throw new Error('GOOGLE_WORKSPACE_CLIENT_ID and GOOGLE_WORKSPACE_CLIENT_SECRET must be configured together');
   if(Boolean(env.MICROSOFT_365_CLIENT_ID)!==Boolean(env.MICROSOFT_365_CLIENT_SECRET))throw new Error('MICROSOFT_365_CLIENT_ID and MICROSOFT_365_CLIENT_SECRET must be configured together');
+  if(Boolean(env.QUICKBOOKS_CLIENT_ID)!==Boolean(env.QUICKBOOKS_CLIENT_SECRET))throw new Error('QUICKBOOKS_CLIENT_ID and QUICKBOOKS_CLIENT_SECRET must be configured together');
+  const quickBooksEnvironment=env.QUICKBOOKS_ENVIRONMENT||'production';if(!['sandbox','production'].includes(quickBooksEnvironment))throw new Error('QUICKBOOKS_ENVIRONMENT must be sandbox or production');
   const cryptoEvmRpcUrl=env.CRYPTO_EVM_RPC_URL||null;const cryptoTokenAddress=env.CRYPTO_TOKEN_ADDRESS||null;const cryptoPlatformWalletAddress=env.CRYPTO_PLATFORM_WALLET_ADDRESS||null;
   const cryptoConfigured=Boolean(cryptoEvmRpcUrl||cryptoTokenAddress||cryptoPlatformWalletAddress);
   if(cryptoConfigured&&!(cryptoEvmRpcUrl&&cryptoTokenAddress))throw new Error('CRYPTO_EVM_RPC_URL and CRYPTO_TOKEN_ADDRESS must be configured together');
@@ -112,6 +114,9 @@ export function loadConfig(env = process.env) {
     microsoft365ClientId: env.MICROSOFT_365_CLIENT_ID || null,
     microsoft365ClientSecret: env.MICROSOFT_365_CLIENT_SECRET || null,
     microsoft365Tenant: env.MICROSOFT_365_TENANT || 'organizations',
+    quickBooksClientId:env.QUICKBOOKS_CLIENT_ID||null,
+    quickBooksClientSecret:env.QUICKBOOKS_CLIENT_SECRET||null,
+    quickBooksEnvironment,
     cryptoProviderName:env.CRYPTO_PROVIDER_NAME||'base-usdc',
     cryptoEvmRpcUrl,cryptoNetwork:env.CRYPTO_NETWORK||'base',cryptoChainId:positiveInteger(env.CRYPTO_CHAIN_ID,8453,'CRYPTO_CHAIN_ID'),cryptoAsset:env.CRYPTO_ASSET||'USDC',cryptoTokenAddress,cryptoDecimals:positiveInteger(env.CRYPTO_DECIMALS,6,'CRYPTO_DECIMALS'),cryptoConfirmations:positiveInteger(env.CRYPTO_CONFIRMATIONS,12,'CRYPTO_CONFIRMATIONS'),cryptoPlatformWalletAddress,
     cryptoSubscriptionPlan:env.CRYPTO_SUBSCRIPTION_PLAN||'professional',cryptoSubscriptionPriceMinor:env.CRYPTO_SUBSCRIPTION_PRICE_MINOR?positiveInteger(env.CRYPTO_SUBSCRIPTION_PRICE_MINOR,null,'CRYPTO_SUBSCRIPTION_PRICE_MINOR'):null,

@@ -69,6 +69,8 @@ test('mailbox OAuth providers require paired credentials and remain independentl
   assert.equal(config.googleWorkspaceClientId,'google-id');assert.equal(config.microsoft365ClientId,'microsoft-id');assert.equal(config.microsoft365Tenant,'tenant-id');
 });
 
+test('QuickBooks requires paired Intuit credentials and a known environment',()=>{assert.throws(()=>loadConfig({QUICKBOOKS_CLIENT_ID:'intuit-id'}),/QUICKBOOKS_CLIENT_ID and QUICKBOOKS_CLIENT_SECRET/);assert.throws(()=>loadConfig({QUICKBOOKS_ENVIRONMENT:'local'}),/sandbox or production/);const config=loadConfig({QUICKBOOKS_CLIENT_ID:'intuit-id',QUICKBOOKS_CLIENT_SECRET:'intuit-secret',QUICKBOOKS_ENVIRONMENT:'sandbox'});assert.equal(config.quickBooksClientId,'intuit-id');assert.equal(config.quickBooksClientSecret,'intuit-secret');assert.equal(config.quickBooksEnvironment,'sandbox');});
+
 test('webhook connector secrets are workspace scoped and sufficiently strong',()=>{assert.throws(()=>loadConfig({INGESTION_WEBHOOK_SECRETS:'[]'}),/must be a JSON object/);assert.throws(()=>loadConfig({INGESTION_WEBHOOK_SECRETS:JSON.stringify({'wsp:phone':'short'})}),/at least 32 characters/);const config=loadConfig({INGESTION_WEBHOOK_SECRETS:JSON.stringify({'wsp_1:phone':'x'.repeat(32)})});assert.equal(config.ingestionWebhookSecrets['wsp_1:phone'].length,32);});
 
 test('live telephony requires paired credentials and an HTTPS public URL',()=>{assert.throws(()=>loadConfig({TWILIO_AUTH_TOKEN:'secret'}),/configured together/);assert.throws(()=>loadConfig({TWILIO_AUTH_TOKEN:'secret',VOICE_PUBLIC_BASE_URL:'http:\/\/atlas.example'}),/must use HTTPS/);const config=loadConfig({TWILIO_AUTH_TOKEN:'secret',VOICE_PUBLIC_BASE_URL:'https:\/\/atlas.example'});assert.equal(config.voicePublicBaseUrl,'https://atlas.example');});

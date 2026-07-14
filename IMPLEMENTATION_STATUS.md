@@ -188,6 +188,11 @@
 - Lender application handoffs stored as canonical case activity for digital-twin awareness
 - Payment overcollection, refund overage, trust overdraft, and unbalanced-journal safeguards
 - Production-boundary and current legal-fee financing candidate documentation
+- QuickBooks Online read-only accounting connection through Intuit OAuth 2.0
+- Initial paged import and incremental change capture for accounts, customers, vendors, invoices, payments, purchases, bills, bill payments, deposits, journals, credits, and refunds
+- Rotating QuickBooks refresh tokens retained only in the encrypted connector vault
+- QuickBooks financial mirror with canonical source provenance, separate financial summary, manual refresh, scheduled refresh compatibility, and safe revocation
+- Unchanged source checksums suppress duplicate canonical updates, events, and AI jobs
 - Real Google Workspace and Microsoft 365 read-only OAuth mail/calendar connectors
 - Encrypted credential rotation and continuous synchronization into canonical firm intelligence
 - One-time professional firm invitations and reload-safe authenticated browser sessions
@@ -343,6 +348,7 @@
 - Production refusal when a configured connector lacks a managed vault or encryption key
 - Clio Manage regional OAuth endpoints, bearer access, pagination, and read-only resource configuration
 - MyCase Open API adapter boundary requiring provider-issued endpoint/API access configuration
+- QuickBooks Online adapter with company-realm scoping, paged queries, rotating credentials, and incremental change capture
 - Read-only-by-default connections and explicit disconnect/revocation
 - Incremental cursors, source timestamps, checksums, stable provider record IDs, and idempotent Atlas links
 - Canonical mappings for matters, contacts, accounting, tasks, calendars, documents, and communications
@@ -353,8 +359,8 @@
 
 ## Verification completed here
 
-- 343 Phase 1 tests passed locally with 0 failures; 1 dedicated live-PostgreSQL test correctly skipped because this workspace supplied no database URL
-- Repository verification passed across 153 required launch files, 45 source modules, and 37 migration-derived database tables
+- 365 Phase 1 tests passed locally with 0 failures; 1 dedicated live-PostgreSQL test correctly skipped because this workspace supplied no database URL
+- Repository verification passed across 153 required launch files, 47 source modules, and 37 migration-derived database tables
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection
 - Live AI command environment and failure behavior verified locally
@@ -396,7 +402,8 @@
 
 - Clio developer application approval, real user authorization, or production API data
 - MyCase Advanced Tier/Open API enablement, issued endpoints, or real API data
-- Other CMS vendors not yet supplied as adapters
+- A live Intuit developer application, real QuickBooks company authorization, or production QuickBooks data
+- Other CMS vendors beyond the implemented Clio, MyCase, Google Workspace, Microsoft 365, and QuickBooks boundaries
 - Live PostgreSQL execution was not available inside this local release workspace; the dedicated GitHub PostgreSQL workflow applies all 29 migrations against PostgreSQL 16
 - A real mailbox, telephony provider, document store, or production AI model processing an event end to end
 - Deployment of the connected homepage against a public production environment
@@ -415,7 +422,7 @@ Atlas may autonomously observe, categorize, analyze, connect, prioritize, and pr
 
 ## Security and transition boundary
 
-Atlas must not ask customers to submit their Clio or MyCase password. Users authenticate on the provider's own authorization page. Atlas stores only encrypted OAuth/API credentials or a managed-vault reference. Imported records retain their source identity so users can continue working in the existing CMS while Atlas synchronizes and builds its authorized digital twin.
+Atlas must not ask customers to submit their Clio, MyCase, mailbox, or QuickBooks password. Users authenticate on the provider's own authorization page. Atlas stores only encrypted OAuth/API credentials or a managed-vault reference. Imported records retain their source identity so users can continue working in the existing system while Atlas synchronizes and builds its authorized digital twin.
 
 ## Product limitations remaining
 

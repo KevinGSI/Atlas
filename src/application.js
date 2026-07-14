@@ -12,7 +12,7 @@ import { IntelligenceProjectionService } from './intelligence-projection.js';
 import { AtlasIngestionService } from './ingestion.js';
 import { AtlasResolver } from './resolution.js';
 import { CmsCoexistenceService, CmsConnectorRegistry, InMemoryCredentialVault, RepositoryCredentialVault, runCmsSyncScheduler } from './cms-connectors.js';
-import { ClioManageConnector, MyCaseOpenApiConnector } from './cms-provider-adapters.js';
+import { ClioManageConnector, MyCaseOpenApiConnector, QuickBooksOnlineConnector } from './cms-provider-adapters.js';
 import { GoogleWorkspaceConnector, Microsoft365Connector } from './mail-provider-adapters.js';
 import { SituationalPlaybookEngine, SituationalSweepService, runSituationalSweepScheduler } from './situational-awareness.js';
 import { IngestionWebhookVerifier } from './webhook-security.js';
@@ -75,7 +75,8 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   if(config.myCaseClientId&&!dependencies.cmsConnectors?.mycase)cmsConnectors.register('mycase',new MyCaseOpenApiConnector({clientId:config.myCaseClientId,clientSecret:config.myCaseClientSecret,authorizeEndpoint:config.myCaseAuthorizeEndpoint,tokenEndpoint:config.myCaseTokenEndpoint,apiBase:config.myCaseApiBase,transport:dependencies.cmsTransport,resources:dependencies.myCaseResources??[]}));
   if(config.googleWorkspaceClientId&&!dependencies.cmsConnectors?.google)cmsConnectors.register('google',new GoogleWorkspaceConnector({clientId:config.googleWorkspaceClientId,clientSecret:config.googleWorkspaceClientSecret,transport:dependencies.mailTransport,maxAttachmentBytes:config.documentMaxBytes}));
   if(config.microsoft365ClientId&&!dependencies.cmsConnectors?.microsoft)cmsConnectors.register('microsoft',new Microsoft365Connector({clientId:config.microsoft365ClientId,clientSecret:config.microsoft365ClientSecret,tenant:config.microsoft365Tenant,transport:dependencies.mailTransport,maxAttachmentBytes:config.documentMaxBytes}));
-  const externalConnectorsConfigured=config.clioClientId||config.myCaseClientId||config.googleWorkspaceClientId||config.microsoft365ClientId;
+  if(config.quickBooksClientId&&!dependencies.cmsConnectors?.quickbooks)cmsConnectors.register('quickbooks',new QuickBooksOnlineConnector({clientId:config.quickBooksClientId,clientSecret:config.quickBooksClientSecret,environment:config.quickBooksEnvironment,transport:dependencies.cmsTransport}));
+  const externalConnectorsConfigured=config.clioClientId||config.myCaseClientId||config.googleWorkspaceClientId||config.microsoft365ClientId||config.quickBooksClientId;
   if(config.production&&externalConnectorsConfigured&&!dependencies.credentialVault&&!config.cmsCredentialEncryptionKey)throw new Error('CMS_CREDENTIAL_ENCRYPTION_KEY or a managed credentialVault is required for external connections in production');
   const credentialVault=dependencies.credentialVault??(config.cmsCredentialEncryptionKey?new RepositoryCredentialVault(runtime.repository,new AesGcmContentCipher({keys:{[config.cmsCredentialEncryptionKeyId]:config.cmsCredentialEncryptionKey},activeKeyId:config.cmsCredentialEncryptionKeyId})):new InMemoryCredentialVault());
   const cms=new CmsCoexistenceService(runtime.repository,cmsConnectors,credentialVault,undefined,{blobStore,maxAttachmentBytes:config.documentMaxBytes,fileSecurityScanner});

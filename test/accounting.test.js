@@ -28,6 +28,8 @@ test('invoices, external payments, refunds, and balances remain canonical firm o
   assert.equal((await repository.listIntelligenceJobs(workspace.id)).filter((job) => ['invoice', 'payment', 'refund'].includes(job.payload.object?.type)).length, 3);
 });
 
+test('QuickBooks imports are summarized separately without double-counting Atlas native books',async()=>{const {accounting,atlas,workspace,matter}=await fixture();await accounting.createInvoice(workspace.id,{matterId:matter.id,title:'Atlas invoice',amountMinor:10000},'usr_owner');await atlas.createObject(workspace.id,{dimension:'operation',type:'accounting_entry',title:'QBO invoice 42',state:{entryType:'invoice',amountMinor:25000,balanceMinor:9000,currency:'USD',externalSource:{provider:'quickbooks',externalId:'Invoice:42',status:'active'}}});await atlas.createObject(workspace.id,{dimension:'operation',type:'accounting_entry',title:'QBO payment 8',state:{entryType:'payment',amountMinor:16000,currency:'USD',externalSource:{provider:'quickbooks',externalId:'Payment:8',status:'active'}}});const summary=await accounting.summary(workspace.id);assert.equal(summary.billedMinor,10000);assert.equal(summary.quickBooks.recordCount,2);assert.equal(summary.quickBooks.billedMinor,25000);assert.equal(summary.quickBooks.receivableMinor,9000);assert.equal(summary.quickBooks.paymentsMinor,16000);assert.equal(summary.externalAccountingEntries.length,2);});
+
 test('card and ACH requests use tokenized provider checkout data and never accept raw credentials', async () => {
   let selectedRail;
   const paymentProviders = new ProviderRegistry('Payment').register('test-processor', {

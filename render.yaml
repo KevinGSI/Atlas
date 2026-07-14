@@ -81,6 +81,12 @@ services:
         sync: false
       - key: MICROSOFT_365_TENANT
         value: organizations
+      - key: QUICKBOOKS_CLIENT_ID
+        sync: false
+      - key: QUICKBOOKS_CLIENT_SECRET
+        sync: false
+      - key: QUICKBOOKS_ENVIRONMENT
+        value: production
       - key: INGESTION_WEBHOOK_SECRETS
         sync: false
       - key: STRIPE_SECRET_KEY

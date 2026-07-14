@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { AtlasError } from './errors.js';
 
 function basicRecord(type,row){return {type,id:String(row.id),updatedAt:row.updated_at??row.updatedAt??null,checksum:row.etag??null,deleted:Boolean(row.deleted_at||row.deletedAt||row.archived_at||row.archivedAt||row.status==='deleted'),deletedAt:row.deleted_at??row.deletedAt??row.archived_at??row.archivedAt??null,data:{...row,matterId:row.matter?.id??row.matter_id??row.case?.id??row.case_id??null,title:row.description??row.display_number??row.name??row.subject??row.summary??`${type} ${row.id}`}};}
@@ -19,4 +20,41 @@ export class ClioManageConnector extends OAuthCmsConnector {
 
 export class MyCaseOpenApiConnector extends OAuthCmsConnector {
   constructor(options){if(!options.authorizeEndpoint||!options.tokenEndpoint||!options.apiBase)throw new AtlasError('CMS_CONNECTOR_CONFIGURATION_ERROR','MyCase endpoints issued through Open API access are required',500);super({...options,name:'mycase'});}
+}
+
+const quickBooksEntities=['Account','Customer','Vendor','Invoice','Payment','Purchase','Bill','BillPayment','Deposit','JournalEntry','CreditMemo','RefundReceipt'];
+const cents=(value)=>Number.isFinite(Number(value))?Math.round(Number(value)*100):null;
+const quickBooksChecksum=(entity,row)=>createHash('sha256').update(JSON.stringify([entity,row.Id,row.SyncToken,row.MetaData?.LastUpdatedTime,row])).digest('hex');
+const quickBooksEntryType=(entity)=>entity.replace(/([a-z])([A-Z])/g,'$1_$2').toLowerCase();
+
+function normalizeQuickBooksRecord(entity,row){
+  const deleted=row.status==='Deleted';
+  const title=row.DisplayName??row.Name??row.DocNumber??row.PrivateNote??`${entity} ${row.Id}`;
+  const common={title:String(title),entryType:quickBooksEntryType(entity),sourceEntity:entity,currency:row.CurrencyRef?.value??'USD',txnDate:row.TxnDate??null,dueDate:row.DueDate??null,amountMinor:cents(row.TotalAmt??row.Amount),balanceMinor:cents(row.Balance??row.CurrentBalance),accountRef:row.AccountRef?.value??null,customerRef:row.CustomerRef?.value??null,vendorRef:row.VendorRef?.value??null,docNumber:row.DocNumber??null,memo:row.PrivateNote??row.CustomerMemo?.value??null,active:row.Active??null,lineCount:Array.isArray(row.Line)?row.Line.length:0};
+  const contact=entity==='Customer'||entity==='Vendor';
+  return {type:contact?'contact':'accounting',id:`${entity}:${row.Id}`,updatedAt:row.MetaData?.LastUpdatedTime??null,checksum:quickBooksChecksum(entity,row),deleted,deletedAt:deleted?(row.MetaData?.LastUpdatedTime??null):null,data:contact?{...common,contactType:row.CompanyName?'organization':'person',name:row.DisplayName??row.FullyQualifiedName??title,email:row.PrimaryEmailAddr?.Address??null,phone:row.PrimaryPhone?.FreeFormNumber??null,companyName:row.CompanyName??null}:common};
+}
+
+export class QuickBooksOnlineConnector {
+  constructor(options={}){
+    if(!options.clientId||!options.clientSecret)throw new AtlasError('CMS_CONNECTOR_CONFIGURATION_ERROR','QuickBooks client ID and client secret are required',500);
+    this.name='quickbooks';this.clientId=options.clientId;this.clientSecret=options.clientSecret;this.environment=options.environment??'production';this.transport=options.transport??fetch;this.clock=options.clock??(()=>new Date().toISOString());this.pageSize=options.pageSize??500;this.minorVersion=options.minorVersion??75;this.entities=options.entities??quickBooksEntities;
+    this.authorizeEndpoint=options.authorizeEndpoint??'https://appcenter.intuit.com/connect/oauth2';this.tokenEndpoint=options.tokenEndpoint??'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';this.revokeEndpoint=options.revokeEndpoint??'https://developer.api.intuit.com/v2/oauth2/tokens/revoke';this.apiBase=options.apiBase??(this.environment==='sandbox'?'https://sandbox-quickbooks.api.intuit.com':'https://quickbooks.api.intuit.com');
+  }
+  capabilities(){return {oauth2:true,pkce:false,incrementalSync:true,readOnly:true,autoSync:true,resources:['accounting','contact'],sourceEntities:[...this.entities]};}
+  beginAuthorization({state,redirectUri}){const query=new URLSearchParams({client_id:this.clientId,response_type:'code',scope:'com.intuit.quickbooks.accounting',redirect_uri:redirectUri,state});return `${this.authorizeEndpoint}?${query}`;}
+  basicAuthorization(){return `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`;}
+  async tokenRequest(body){const response=await this.transport(this.tokenEndpoint,{method:'POST',headers:{authorization:this.basicAuthorization(),'content-type':'application/x-www-form-urlencoded',accept:'application/json'},body:new URLSearchParams(body)});if(!response.ok)throw new AtlasError('CMS_AUTHORIZATION_FAILED','QuickBooks authorization failed',502,{provider:this.name,status:response.status});return response.json();}
+  credentialSet(tokens,realmId,prior={}){const now=Date.now();return {...prior,...tokens,realmId:String(realmId??prior.realmId??''),expires_at:tokens.expires_in?new Date(now+Number(tokens.expires_in)*1000).toISOString():prior.expires_at,refresh_expires_at:tokens.x_refresh_token_expires_in?new Date(now+Number(tokens.x_refresh_token_expires_in)*1000).toISOString():prior.refresh_expires_at};}
+  async exchangeCode({code,redirectUri,realmId}){if(!realmId)throw new AtlasError('CMS_AUTHORIZATION_FAILED','QuickBooks did not return a company identifier',400,{provider:this.name});const tokens=await this.tokenRequest({grant_type:'authorization_code',code,redirect_uri:redirectUri});return this.credentialSet(tokens,realmId);}
+  async refreshIfNeeded(credentials){const expiresAt=Date.parse(credentials.expires_at??'');if(Number.isFinite(expiresAt)&&expiresAt-Date.now()>300000)return {credentials,rotated:false};if(!credentials.refresh_token)throw new AtlasError('CMS_CREDENTIAL_UNAVAILABLE','QuickBooks refresh token is unavailable',503);const tokens=await this.tokenRequest({grant_type:'refresh_token',refresh_token:credentials.refresh_token});return {credentials:this.credentialSet(tokens,credentials.realmId,credentials),rotated:true};}
+  async requestJson(path,credentials){const response=await this.transport(`${this.apiBase}${path}`,{headers:{authorization:`Bearer ${credentials.access_token}`,accept:'application/json'}});if(!response.ok)throw new AtlasError('CMS_SYNC_PROVIDER_ERROR','QuickBooks synchronization request failed',502,{provider:this.name,status:response.status});return response.json();}
+  async pull({credentials,cursor}){
+    const refreshed=await this.refreshIfNeeded(credentials);const active=refreshed.credentials;if(!active.realmId)throw new AtlasError('CMS_CREDENTIAL_UNAVAILABLE','QuickBooks company identifier is unavailable',503);
+    if(cursor?.mode==='cdc'){
+      const query=new URLSearchParams({entities:this.entities.join(','),changedSince:cursor.changedSince,minorversion:String(this.minorVersion)});const body=await this.requestJson(`/v3/company/${encodeURIComponent(active.realmId)}/cdc?${query}`,active);const responses=body.CDCResponse?.[0]?.QueryResponse??[];const records=[];for(const response of responses)for(const entity of this.entities)for(const row of response[entity]??[])records.push(normalizeQuickBooksRecord(entity,row));if(records.length>=1000)throw new AtlasError('QUICKBOOKS_CDC_LIMIT','QuickBooks returned the maximum change set; run synchronization more frequently',409,{limit:1000});return {records,nextCursor:{mode:'cdc',changedSince:body.time??this.clock()},hasMore:false,...(refreshed.rotated?{credentials:active}:{})};
+    }
+    const position=cursor?.mode==='full'?cursor:{mode:'full',resource:0,startPosition:1,scanStartedAt:this.clock()};const entity=this.entities[position.resource];if(!entity)return {records:[],nextCursor:{mode:'cdc',changedSince:position.scanStartedAt},hasMore:false,...(refreshed.rotated?{credentials:active}:{})};const statement=`SELECT * FROM ${entity} STARTPOSITION ${position.startPosition} MAXRESULTS ${this.pageSize}`;const query=new URLSearchParams({query:statement,minorversion:String(this.minorVersion)});const body=await this.requestJson(`/v3/company/${encodeURIComponent(active.realmId)}/query?${query}`,active);const rows=body.QueryResponse?.[entity]??[];const records=rows.map((row)=>normalizeQuickBooksRecord(entity,row));const sameEntity=rows.length===this.pageSize;const moreEntities=position.resource+1<this.entities.length;const nextCursor=sameEntity?{...position,startPosition:position.startPosition+this.pageSize}:moreEntities?{...position,resource:position.resource+1,startPosition:1}:{mode:'cdc',changedSince:position.scanStartedAt};return {records,nextCursor,hasMore:sameEntity||moreEntities,...(refreshed.rotated?{credentials:active}:{})};
+  }
+  async revoke({credentials}){const token=credentials.refresh_token??credentials.access_token;if(!token)return;const response=await this.transport(this.revokeEndpoint,{method:'POST',headers:{authorization:this.basicAuthorization(),'content-type':'application/json',accept:'application/json'},body:JSON.stringify({token})});if(!response.ok)throw new AtlasError('CMS_DISCONNECT_FAILED','QuickBooks authorization could not be revoked',502,{provider:this.name,status:response.status});}
 }

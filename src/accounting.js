@@ -220,6 +220,9 @@ export class AccountingService {
     const timeEntries = objects.filter((item) => item.type === 'time_entry');
     const expenses = objects.filter((item) => item.type === 'expense');
     const trustTransactions = objects.filter((item) => item.type === 'trust_transaction');
+    const externalAccountingEntries=objects.filter((item)=>item.type==='accounting_entry');
+    const quickBooksEntries=externalAccountingEntries.filter((item)=>item.state?.externalSource?.provider==='quickbooks'&&item.state.externalSource.status==='active');
+    const quickBooksByType=(type)=>quickBooksEntries.filter((item)=>item.state?.entryType===type);
     const trustReceivedMinor = payments.filter((item) => item.state.destinationAccount === 'trust').reduce((sum, item) => sum + Number(item.state.amountMinor ?? 0), 0);
     const trustRefundedMinor = refunds.filter((item) => item.state.sourceAccount === 'trust').reduce((sum, item) => sum + Number(item.state.amountMinor ?? 0), 0);
     const trustAdjustmentsMinor = trustTransactions.reduce((sum, item) => sum + (item.state.direction === 'deposit' ? 1 : -1) * Number(item.state.amountMinor ?? 0), 0);
@@ -234,7 +237,9 @@ export class AccountingService {
       invoices: rows, payments, refunds,
       timeEntries, expenses, trustTransactions, journalEntries: objects.filter((item) => item.type === 'journal_entry'),
       bankConnections: objects.filter((item) => item.type === 'bank_connection'),
-      financingApplications: objects.filter((item) => item.type === 'financing_application')
+      financingApplications: objects.filter((item) => item.type === 'financing_application'),
+      externalAccountingEntries,
+      quickBooks:{recordCount:quickBooksEntries.length,accountCount:quickBooksByType('account').length,invoiceCount:quickBooksByType('invoice').length,billedMinor:quickBooksByType('invoice').reduce((sum,item)=>sum+Number(item.state.amountMinor??0),0),receivableMinor:quickBooksByType('invoice').reduce((sum,item)=>sum+Number(item.state.balanceMinor??0),0),paymentsMinor:quickBooksByType('payment').reduce((sum,item)=>sum+Number(item.state.amountMinor??0),0),expensesMinor:quickBooksEntries.filter((item)=>['purchase','bill'].includes(item.state?.entryType)).reduce((sum,item)=>sum+Number(item.state.amountMinor??0),0),entries:quickBooksEntries.slice().sort((a,b)=>String(b.state?.txnDate??b.updatedAt).localeCompare(String(a.state?.txnDate??a.updatedAt))).slice(0,25)}
     };
   }
 
