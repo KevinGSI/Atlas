@@ -14,6 +14,10 @@ export function loadConfig(env = process.env) {
   if(documentStorageProvider==='postgres'&&!databaseUrl)throw new Error('DATABASE_URL is required for PostgreSQL document storage');
   if(documentStorageProvider==='filesystem'&&!env.DOCUMENT_STORAGE_PATH)throw new Error('DOCUMENT_STORAGE_PATH is required for filesystem document storage');
   if(production&&documentStorageProvider==='memory')throw new Error('Durable document storage is required in production');
+  const fileMalwareScanner=env.FILE_MALWARE_SCANNER||(production?'clamav':'basic');
+  if(!['basic','clamav'].includes(fileMalwareScanner))throw new Error('FILE_MALWARE_SCANNER must be basic or clamav');
+  const clamAvHost=env.CLAMAV_HOST||null;if(fileMalwareScanner==='clamav'&&!clamAvHost)throw new Error('CLAMAV_HOST is required when FILE_MALWARE_SCANNER=clamav');
+  if(production&&fileMalwareScanner!=='clamav')throw new Error('ClamAV malware scanning is required in production');
   const tokenSecret = env.AUTH_TOKEN_SECRET || (production ? null : 'atlas-development-secret-change-me');
   if (!tokenSecret || tokenSecret.length < 32) throw new Error('AUTH_TOKEN_SECRET must contain at least 32 characters');
   const mfaEncryptionKey=env.MFA_ENCRYPTION_KEY||(production?null:`${tokenSecret}:mfa-development`);
@@ -125,6 +129,7 @@ export function loadConfig(env = process.env) {
     documentMaxBytes:positiveInteger(env.DOCUMENT_MAX_BYTES,25_000_000,'DOCUMENT_MAX_BYTES'),
     documentStorageProvider,
     documentStoragePath:env.DOCUMENT_STORAGE_PATH||null,
+    fileMalwareScanner,clamAvHost,clamAvPort:positiveInteger(env.CLAMAV_PORT,3310,'CLAMAV_PORT'),clamAvTimeoutMs:positiveInteger(env.CLAMAV_TIMEOUT_MS,30_000,'CLAMAV_TIMEOUT_MS'),
     documentIndexBatchSize,
     documentIndexIntervalMs:positiveInteger(env.DOCUMENT_INDEX_INTERVAL_MS,60_000,'DOCUMENT_INDEX_INTERVAL_MS'),
     shutdownTimeoutMs: positiveInteger(env.SHUTDOWN_TIMEOUT_MS, 10_000, 'SHUTDOWN_TIMEOUT_MS'),

@@ -21,6 +21,8 @@ test('Render Blueprint is valid and wires migrations, readiness, and PostgreSQL'
   assert.equal(service.envVars.find((item)=>item.key==='AI_CONTENT_ENCRYPTION_KEY').sync,false);
   assert.equal(service.envVars.find((item)=>item.key==='CMS_CREDENTIAL_ENCRYPTION_KEY').sync,false);
   assert.equal(service.envVars.find((item)=>item.key==='CMS_SYNC_ENABLED').value,true);
+  assert.equal(service.envVars.find((item)=>item.key==='FILE_MALWARE_SCANNER').value,'clamav');
+  assert.equal(service.envVars.find((item)=>item.key==='CLAMAV_HOST').sync,false);
   assert.equal(service.envVars.find((item)=>item.key==='GOOGLE_WORKSPACE_CLIENT_ID').sync,false);
   assert.equal(service.envVars.find((item)=>item.key==='GOOGLE_WORKSPACE_CLIENT_SECRET').sync,false);
   assert.equal(service.envVars.find((item)=>item.key==='MICROSOFT_365_CLIENT_ID').sync,false);
@@ -32,6 +34,8 @@ test('Render Blueprint is valid and wires migrations, readiness, and PostgreSQL'
   assert.equal(worker.envVars.find((item)=>item.key==='DATABASE_URL').fromDatabase.name,'atlas-postgres');
   assert.equal(worker.envVars.find((item)=>item.key==='AI_PROVIDER').value,'openai');
   assert.equal(worker.envVars.find((item)=>item.key==='AI_MODEL').value,'gpt-4.1-mini');
+  assert.equal(worker.envVars.find((item)=>item.key==='FILE_MALWARE_SCANNER').value,'clamav');
+  assert.equal(worker.envVars.find((item)=>item.key==='CLAMAV_HOST').sync,false);
   const workerSource=await readFile('scripts/intelligence-worker.js','utf8');assert.match(workerSource,/SituationalPlaybookEngine/);
 });
 
@@ -57,6 +61,10 @@ test('local Docker passes interchangeable AI configuration to the API and native
   assert.equal(compose.services.api.environment.CMS_SYNC_ENABLED, '${CMS_SYNC_ENABLED:-true}');
   assert.equal(compose.services.api.environment.GOOGLE_WORKSPACE_CLIENT_ID, '${GOOGLE_WORKSPACE_CLIENT_ID:-}');
   assert.equal(compose.services.api.environment.MICROSOFT_365_CLIENT_ID, '${MICROSOFT_365_CLIENT_ID:-}');
+  assert.equal(compose.services.api.environment.FILE_MALWARE_SCANNER,'clamav');
+  assert.equal(compose.services.api.environment.CLAMAV_HOST,'clamav');
+  assert.equal(compose.services.clamav.image,'clamav/clamav:1.4');
+  assert.equal(compose.services.api.depends_on.clamav.condition,'service_healthy');
   assert.equal(compose.services['intelligence-worker'].environment.AI_WEB_SEARCH_ENABLED, undefined);
   assert.equal(compose.services['intelligence-worker'].command[1], 'scripts/intelligence-worker.js');
 });

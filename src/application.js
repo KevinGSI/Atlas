@@ -27,6 +27,7 @@ import { SmsAssistantService } from './sms-assistant.js';
 import { FirmExportService } from './firm-export.js';
 import { StripeCheckoutProvider } from './payment-provider-adapters.js';
 import { AtlasFileService, FileSystemBlobStore, InMemoryBlobStore, RepositoryBlobStore } from './file-storage.js';
+import { createFileSecurityScanner } from './file-security.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -53,7 +54,8 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const webResearch=createWebResearchProvider(config,dependencies);
   const ingestion = new AtlasIngestionService(runtime.repository);
   const blobStore=dependencies.blobStore??(config.documentStorageProvider==='postgres'?new RepositoryBlobStore(runtime.repository):config.documentStorageProvider==='filesystem'?new FileSystemBlobStore(config.documentStoragePath):new InMemoryBlobStore());
-  const files=new AtlasFileService(service,ingestion,blobStore,{maxBytes:config.documentMaxBytes});
+  const fileSecurityScanner=createFileSecurityScanner(config,dependencies);
+  const files=new AtlasFileService(service,ingestion,blobStore,{maxBytes:config.documentMaxBytes,fileSecurityScanner});
   const intelligenceProviders = new IntelligenceProviderRegistry();
   for (const [name, provider] of Object.entries(dependencies.intelligenceProviders ?? {})) intelligenceProviders.register(name, provider);
   if(selectedModel?.analyzeFile&&!dependencies.intelligenceProviders?.['document-analysis'])intelligenceProviders.register('document-analysis',new DocumentIntelligenceProvider(selectedModel,blobStore));
@@ -70,7 +72,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const externalConnectorsConfigured=config.clioClientId||config.myCaseClientId||config.googleWorkspaceClientId||config.microsoft365ClientId;
   if(config.production&&externalConnectorsConfigured&&!dependencies.credentialVault&&!config.cmsCredentialEncryptionKey)throw new Error('CMS_CREDENTIAL_ENCRYPTION_KEY or a managed credentialVault is required for external connections in production');
   const credentialVault=dependencies.credentialVault??(config.cmsCredentialEncryptionKey?new RepositoryCredentialVault(runtime.repository,new AesGcmContentCipher({keys:{[config.cmsCredentialEncryptionKeyId]:config.cmsCredentialEncryptionKey},activeKeyId:config.cmsCredentialEncryptionKeyId})):new InMemoryCredentialVault());
-  const cms=new CmsCoexistenceService(runtime.repository,cmsConnectors,credentialVault,undefined,{blobStore,maxAttachmentBytes:config.documentMaxBytes});
+  const cms=new CmsCoexistenceService(runtime.repository,cmsConnectors,credentialVault,undefined,{blobStore,maxAttachmentBytes:config.documentMaxBytes,fileSecurityScanner});
   const migration=new CmsExportMigrationService(service);
   const paymentProviders=new ProviderRegistry('Payment');
   const bankProviders=new ProviderRegistry('Bank connection');

@@ -17,6 +17,8 @@ export function evaluateLaunchReadiness(env = process.env) {
   requireValue('CMS_CREDENTIAL_ENCRYPTION_KEY', 'External credential encryption configured');
   const durableDocuments=env.DOCUMENT_STORAGE_PROVIDER==='postgres'||env.DOCUMENT_STORAGE_PROVIDER==='filesystem'&&configured(env.DOCUMENT_STORAGE_PATH);
   checks.push({name:'Durable document storage configured',passed:durableDocuments});if(!durableDocuments)missing.push('DOCUMENT_STORAGE_PROVIDER');
+  const malwareProtection=env.FILE_MALWARE_SCANNER==='clamav'&&configured(env.CLAMAV_HOST);
+  checks.push({name:'Fail-closed malware scanning configured',passed:malwareProtection});if(!malwareProtection)missing.push('FILE_MALWARE_SCANNER=clamav and CLAMAV_HOST');
   const google = configured(env.GOOGLE_WORKSPACE_CLIENT_ID) && configured(env.GOOGLE_WORKSPACE_CLIENT_SECRET);
   const microsoft = configured(env.MICROSOFT_365_CLIENT_ID) && configured(env.MICROSOFT_365_CLIENT_SECRET);
   checks.push({ name: 'At least one production mailbox provider configured', passed: google || microsoft });

@@ -24,10 +24,15 @@ services:
       MICROSOFT_365_CLIENT_ID: ${MICROSOFT_365_CLIENT_ID:-}
       MICROSOFT_365_CLIENT_SECRET: ${MICROSOFT_365_CLIENT_SECRET:-}
       MICROSOFT_365_TENANT: ${MICROSOFT_365_TENANT:-organizations}
+      FILE_MALWARE_SCANNER: clamav
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
     ports:
       - "3000:3000"
     depends_on:
       postgres:
+        condition: service_healthy
+      clamav:
         condition: service_healthy
     command: ["sh", "-c", "node scripts/migrate.js && node src/server.js"]
 
@@ -43,8 +48,13 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       AI_CONTENT_ENCRYPTION_KEY: ${AI_CONTENT_ENCRYPTION_KEY:-}
       AI_CONTENT_ENCRYPTION_KEY_ID: ${AI_CONTENT_ENCRYPTION_KEY_ID:-primary}
+      FILE_MALWARE_SCANNER: clamav
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
     depends_on:
       postgres:
+        condition: service_healthy
+      clamav:
         condition: service_healthy
     command: ["node", "scripts/intelligence-worker.js"]
 
@@ -63,6 +73,15 @@ services:
       retries: 10
     volumes:
       - atlas-postgres:/var/lib/postgresql/data
+
+  clamav:
+    image: clamav/clamav:1.4
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --ping 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
 volumes:
   atlas-postgres:

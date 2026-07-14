@@ -27,6 +27,12 @@ services:
         value: 25000000
       - key: DOCUMENT_STORAGE_PROVIDER
         value: postgres
+      - key: FILE_MALWARE_SCANNER
+        value: clamav
+      - key: CLAMAV_HOST
+        sync: false
+      - key: CLAMAV_PORT
+        value: 3310
       - key: CORS_ORIGINS
         sync: false
       - key: AUTH_TOKEN_SECRET
@@ -106,6 +112,12 @@ services:
         sync: false
       - key: AI_CONTENT_ENCRYPTION_KEY
         sync: false
+      - key: FILE_MALWARE_SCANNER
+        value: clamav
+      - key: CLAMAV_HOST
+        sync: false
+      - key: CLAMAV_PORT
+        value: 3310
 
 databases:
   - name: atlas-postgres

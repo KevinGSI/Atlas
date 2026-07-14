@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { AtlasError, required } from './errors.js';
+import { BasicFileSecurityScanner } from './file-security.js';
 
 const SAFE_MEDIA_TYPES = new Set([
   'application/pdf',
@@ -85,7 +86,7 @@ export class FileSystemBlobStore {
 }
 
 export class AtlasFileService {
-  constructor(atlas, ingestion, blobStore, { maxBytes = 25_000_000 } = {}) {
+  constructor(atlas, ingestion, blobStore, { maxBytes = 25_000_000, fileSecurityScanner = new BasicFileSecurityScanner() } = {}) {
     if (typeof blobStore?.write !== 'function' || typeof blobStore?.read !== 'function') {
       throw new AtlasError('BLOB_STORE_INVALID', 'Blob store must implement write and read', 500);
     }
@@ -93,6 +94,7 @@ export class AtlasFileService {
     this.ingestion = ingestion;
     this.blobStore = blobStore;
     this.maxBytes = maxBytes;
+    this.fileSecurityScanner=fileSecurityScanner;
   }
 
   async upload(workspaceId, input, actorId) {
@@ -101,6 +103,7 @@ export class AtlasFileService {
     if (!SAFE_MEDIA_TYPES.has(mediaType)) throw new AtlasError('FILE_TYPE_NOT_ALLOWED', 'This file type is not allowed', 415);
     const content = decodeBase64(input.contentBase64);
     if (content.length > this.maxBytes) throw new AtlasError('FILE_TOO_LARGE', `Files may not exceed ${this.maxBytes} bytes`, 413);
+    const securityScan=await this.fileSecurityScanner.scan({content,filename,mediaType,workspaceId});
     const sha256 = createHash('sha256').update(content).digest('hex');
     const storageRef = await this.blobStore.write({ workspaceId, sha256, content });
     return this.ingestion.ingestDocument(workspaceId, {
@@ -112,7 +115,8 @@ export class AtlasFileService {
         size: content.length,
         sha256,
         storageRef,
-        documentType: input.documentType ?? null
+        documentType: input.documentType ?? null,
+        securityScan
       }, actorId);
   }
 

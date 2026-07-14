@@ -54,7 +54,7 @@ export class AtlasIngestionService {
       await repository.createObject(email);
       const documents=[];
       for(const item of attachments){
-        const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:'incoming_attachment',title:required(item.filename,'filename'),state:{storageRef:item.storageRef,sha256:item.sha256,mediaType:item.mediaType,size:item.size,extractionStatus:'pending'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
+        const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:'incoming_attachment',title:required(item.filename,'filename'),state:{storageRef:item.storageRef,sha256:item.sha256,mediaType:item.mediaType,size:item.size,securityScan:item.securityScan??null,extractionStatus:'pending'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
         await repository.createObject(document); documents.push(document);
         await repository.createRelationship({id:createId('rel'),workspaceId,fromObjectId:email.id,toObjectId:document.id,type:'has_attachment',attributes:{},createdAt:now});
       }
@@ -91,7 +91,7 @@ export class AtlasIngestionService {
       const existing=await repository.findIngestionRecord(workspaceId,connector,externalId);
       if(existing)return {ingestion:existing,duplicate:true,root:await repository.getObject(workspaceId,existing.rootObjectId)};
       if(input.matterId)await repository.getObject(workspaceId,input.matterId);
-      const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:'uploaded_document',title:required(input.filename,'filename'),state:{...file,documentType:input.documentType??null,uploadedAt:input.uploadedAt??now,extractionStatus:'pending'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
+      const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:'uploaded_document',title:required(input.filename,'filename'),state:{...file,documentType:input.documentType??null,uploadedAt:input.uploadedAt??now,securityScan:input.securityScan??null,extractionStatus:'pending'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
       await repository.createObject(document);
       const event={id:createId('evt'),workspaceId,parentObjectId:document.id,type:'attachment.received',actorId,source:`connector:${connector}`,confidence:1,visibility:'workspace',relatedObjectIds:input.matterId?[input.matterId]:[],data:{externalId,filename:document.title,mediaType:file.mediaType},occurredAt:input.uploadedAt??now,createdAt:now};
       await repository.createEvent(event);

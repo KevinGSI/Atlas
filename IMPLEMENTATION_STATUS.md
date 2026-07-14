@@ -1,6 +1,17 @@
-# Atlas Core 0.52.0 — Connected Mail Attachment Intelligence
+# Atlas Core 0.53.0 — Quarantined File Security
 
 ## Verified as implemented
+
+- Direct uploads and connected-mail attachments cross one provider-neutral file-security boundary before storage
+- Declared PDF, DOCX, text, CSV, JPEG, and PNG types are checked against their actual bytes
+- Files receive a clean scan verdict before durable blob writes, canonical document creation, or native intelligence work
+- A functional ClamAV `INSTREAM` adapter scans in memory without first persisting unverified content
+- Malware detections, scanner outages, timeouts, and ambiguous responses fail closed
+- Production configuration and launch readiness require ClamAV and a private scanner host
+- Local Docker provisions ClamAV; hosted deployments expose scanner configuration without embedding credentials
+- Canonical documents retain the successful provider verdict and whether malware scanning occurred
+- Local basic checks are explicitly limited to development signature verification and the standard antivirus test signature
+- External scanner operation, signature freshness, alert response, periodic rescanning, and independent assurance remain deployment work
 
 - Gmail downloads supported message attachments through its read-only OAuth API
 - Microsoft 365 lists attachment metadata first and downloads supported non-inline files individually

@@ -1,8 +1,16 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.52.0` closes the connected-mail attachment gap. Read-only Gmail and Microsoft 365 connectors download supported non-inline files, validate and store them inside the isolated firm workspace, create canonical email-to-document relationships, and route every safe attachment into the same native intelligence and encrypted source-passage pipeline as a direct Atlas upload.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.53.0` adds a fail-closed file-security boundary for direct uploads and connected-mail attachments. Atlas verifies declared file signatures and requires a clean, provider-neutral scan before durable storage, canonical cataloging, or native intelligence. Production requires the replaceable ClamAV adapter; local development retains basic deterministic checks without pretending they are production antivirus coverage.
 
 ## Implemented
+
+- Pre-storage file quarantine boundary for direct uploads and connected-mail attachments
+- PDF, DOCX, text, CSV, JPEG, and PNG signature verification against declared media type
+- Provider-neutral malware-scanner contract with functional ClamAV `INSTREAM` adapter
+- Production startup and launch readiness fail closed without configured ClamAV scanning
+- Scanner outages, timeouts, detections, and ambiguous verdicts prevent file acceptance
+- Clean scan verdict retained with the canonical document for review and audit context
+- Local Docker ClamAV service and hosted private-scanner configuration boundaries
 
 - Gmail and Microsoft 365 attachment retrieval through read-only OAuth connections
 - Bounded provider downloads with filename, media-type, base64, byte-size, and digest validation
@@ -267,7 +275,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-This starts PostgreSQL, applies migrations, starts both the Atlas API and native intelligence worker, and exposes Atlas at `http://localhost:3000`. Atlas fails closed if the AI provider is selected but either required AI secret is missing.
+This starts PostgreSQL and ClamAV, applies migrations, starts both the Atlas API and native intelligence worker, and exposes Atlas at `http://localhost:3000`. Atlas waits for both infrastructure services to become healthy. It fails closed if the AI provider is selected but either required AI secret is missing, or if production file scanning is not configured.
 
 ## Health endpoints
 
@@ -293,10 +301,11 @@ The feed returns source provenance, linked observations, proposed actions, and t
 ## Render staging deployment
 
 1. Push this repository to GitHub.
-2. In Render, create a Blueprint from the repository's `render.yaml`.
-3. Set `CORS_ORIGINS` to the exact staging frontend origin.
-4. Deploy. Render provisions managed PostgreSQL, runs `node scripts/migrate.js`, starts the container, and checks `/ready`.
-5. Use only synthetic data until the security milestones in `IMPLEMENTATION_STATUS.md` are complete.
+2. Provision a private ClamAV service reachable from the Atlas services and retain its private hostname.
+3. In Render, create a Blueprint from the repository's `render.yaml`.
+4. Set `CORS_ORIGINS` to the exact staging frontend origin and supply every `sync: false` value, including `CLAMAV_HOST` for both services.
+5. Deploy. Render provisions managed PostgreSQL, runs the launch gate and migrations, starts the container, and checks `/ready`. The Blueprint intentionally does not claim to provision the external scanner.
+6. Use only synthetic data until the security milestones in `IMPLEMENTATION_STATUS.md` are complete.
 
 ## Manual production-like commands
 
@@ -306,6 +315,9 @@ export HOST=0.0.0.0
 export DATABASE_URL=postgresql://user:password@host:5432/atlas
 export CORS_ORIGINS=https://staging.example.com
 export AUTH_TOKEN_SECRET=replace-with-at-least-32-random-characters
+export MFA_ENCRYPTION_KEY=replace-with-base64-encoded-32-byte-key
+export FILE_MALWARE_SCANNER=clamav
+export CLAMAV_HOST=private-clamav-hostname
 pnpm migrate
 pnpm start
 ```
@@ -356,7 +368,7 @@ Native intelligence runs beneath chat and direct platform workflows. Material ob
 
 Atlas does not silently retrain a hosted model on firm data. The digital twin learns through governed canonical events: incoming work updates the shared firm graph, accepted observations become canonical knowledge, and every authorized interface—including the continuously flowing `What do you need?` conversation—reads that same current twin. The interface shows only the current question and Atlas response while preserving the saved multi-turn conversation context for immediate follow-up replies. Public research remains outside the twin unless an authorized workflow later reviews and deliberately stores a result.
 
-Incoming connector emails enter through `POST /v1/workspaces/:workspaceId/ingestions/email`. Attachment metadata points to an external blob reference; binary storage, malware scanning, PDF parsing, and OCR are replaceable adapters rather than database blobs or vendor-specific domain code.
+Incoming connector emails enter through the read-only provider synchronization boundary or `POST /v1/workspaces/:workspaceId/ingestions/email`. Provider-downloaded attachments are accepted only after file-type validation and the configured clean scanner verdict, then stored as firm-isolated canonical documents. Binary storage, malware scanning, PDF parsing, and OCR remain replaceable adapters rather than vendor-specific domain code. See `docs/FILE_SECURITY.md` for the exact acceptance sequence and operational limits.
 
 Phone and standalone-document connectors use these authenticated routes:
 
