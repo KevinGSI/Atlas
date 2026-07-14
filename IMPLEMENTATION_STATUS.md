@@ -301,6 +301,7 @@
 - Live integration derives the complete application-table contract from migration SQL and checks canonical persistence, rate-limit persistence, awareness receipts, transactional rollback, and immutable timeline triggers
 - Complete repository verification runs automatically on every main-branch push and pull request
 - GitHub workflows use the package manifest as the single pnpm version source
+- CodeQL security analysis uses the maintained Node 24-compatible v4 action runtime
 - Fail-closed live-test command requiring an explicit database URL
 - PostgreSQL 16 CI service with health checks and locked dependency installation
 - Candidate observation previews inside attorney awareness cards
