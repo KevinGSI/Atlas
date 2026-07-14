@@ -2,5 +2,6 @@ node_modules/
 .env
 coverage/
 *.log
+.atlas-local-demo.pid
 .DS_Store
 atlas-core-*.zip
