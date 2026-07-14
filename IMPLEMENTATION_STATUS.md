@@ -1,6 +1,16 @@
-# Atlas Core 0.49.0 — Semantic Document Retrieval
+# Atlas Core 0.50.0 — Automatic Semantic Backfill
 
 ## Verified as implemented
+
+- Existing document observations are automatically added to semantic retrieval without re-uploading source files
+- Repeat-safe indexing skips findings already embedded by the configured model
+- Rejected findings are never indexed and each backfill query remains pinned to one firm workspace
+- Bounded batches prevent a historical firm corpus from monopolizing the intelligence worker
+- Background indexing runs beside native event processing and stops through the same graceful-shutdown signal
+- A manual `backfill:document-knowledge` command can drain historical work during controlled deployment operations
+- Backfill preserves document title, observation provenance, provider, model, dimensions, and creation time
+- Model changes create a new index generation instead of silently mixing incompatible vectors
+- PostgreSQL selects missing embeddings with a workspace-scoped, parameterized anti-join
 
 - “What do you need?” retrieves relevant document findings even when a lawyer uses different wording
 - Provider-neutral batched embedding contract with OpenAI as the first adapter

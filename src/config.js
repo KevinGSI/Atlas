@@ -63,6 +63,7 @@ export function loadConfig(env = process.env) {
   const twilioAuthToken=env.TWILIO_AUTH_TOKEN||null;const voicePublicBaseUrl=env.VOICE_PUBLIC_BASE_URL||null;
   if(Boolean(twilioAuthToken)!==Boolean(voicePublicBaseUrl))throw new Error('TWILIO_AUTH_TOKEN and VOICE_PUBLIC_BASE_URL must be configured together');
   if(voicePublicBaseUrl&&!voicePublicBaseUrl.startsWith('https://'))throw new Error('VOICE_PUBLIC_BASE_URL must use HTTPS');
+  const documentIndexBatchSize=positiveInteger(env.DOCUMENT_INDEX_BATCH_SIZE,50,'DOCUMENT_INDEX_BATCH_SIZE');if(documentIndexBatchSize>100)throw new Error('DOCUMENT_INDEX_BATCH_SIZE must not exceed 100');
   const twilioAccountSid=env.TWILIO_ACCOUNT_SID||null;const twilioMessagingFrom=env.TWILIO_MESSAGING_FROM||null;
   if(Boolean(twilioAccountSid)!==Boolean(twilioMessagingFrom))throw new Error('TWILIO_ACCOUNT_SID and TWILIO_MESSAGING_FROM must be configured together');
   if(twilioAccountSid&&!twilioAuthToken)throw new Error('TWILIO_AUTH_TOKEN is required for outbound messaging');
@@ -124,6 +125,8 @@ export function loadConfig(env = process.env) {
     documentMaxBytes:positiveInteger(env.DOCUMENT_MAX_BYTES,25_000_000,'DOCUMENT_MAX_BYTES'),
     documentStorageProvider,
     documentStoragePath:env.DOCUMENT_STORAGE_PATH||null,
+    documentIndexBatchSize,
+    documentIndexIntervalMs:positiveInteger(env.DOCUMENT_INDEX_INTERVAL_MS,60_000,'DOCUMENT_INDEX_INTERVAL_MS'),
     shutdownTimeoutMs: positiveInteger(env.SHUTDOWN_TIMEOUT_MS, 10_000, 'SHUTDOWN_TIMEOUT_MS'),
     corsOrigins
   };

@@ -1,8 +1,13 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.49.0` adds persistent semantic document retrieval: “What do you need?” can locate authorized document findings despite different wording, while retaining the originating document, case, page or section, confidence, and attorney-review status. OpenAI is the initial embedding adapter, while vector storage, cosine ranking, tenancy, citations, safety, and human review remain provider-neutral Atlas services.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.50.0` makes semantic retrieval operational for existing as well as newly analyzed document findings. A bounded, repeat-safe background indexer fills missing vectors firm by firm, while a controlled backfill command can drain historical work during deployment. OpenAI is the initial embedding adapter; Atlas retains storage, tenancy, ranking, citations, safety, and review control.
 
 ## Implemented
+
+- Automatic background semantic indexing for existing document findings
+- Repeat-safe, firm-scoped, model-aware backfill with rejected-result exclusion
+- Bounded worker batches and graceful shutdown
+- Controlled historical backfill command for deployment operations
 
 - Hybrid semantic and structured document retrieval across the authorized firm twin
 - Persistent workspace-scoped vectors linked to canonical document observations

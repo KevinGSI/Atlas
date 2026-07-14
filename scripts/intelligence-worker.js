@@ -6,6 +6,7 @@ import { IntelligenceProjectionService } from '../src/intelligence-projection.js
 import { AtlasResolver } from '../src/resolution.js';
 import { SituationalPlaybookEngine } from '../src/situational-awareness.js';
 import { RepositoryBlobStore } from '../src/file-storage.js';
+import { DocumentKnowledgeIndexer, runDocumentKnowledgeBackfill } from '../src/document-knowledge.js';
 
 const config=loadConfig(process.env);
 if(!config.databaseUrl)throw new Error('DATABASE_URL is required for the intelligence worker');
@@ -18,4 +19,6 @@ providers.register('configured-model',new StructuredModelIntelligenceProvider(mo
 const intelligence=new AtlasIntelligenceRuntime(runtime.repository,providers,{providerName:config.intelligenceProvider??'configured-model',projector:new IntelligenceProjectionService(),resolver:new AtlasResolver(runtime.repository),playbooks:new SituationalPlaybookEngine()});
 const controller=new AbortController();
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>controller.abort());
-try{await runIntelligenceWorker(intelligence,{signal:controller.signal,onError:(error)=>console.error(error.code??'INTELLIGENCE_WORKER_ERROR',error.message)});}finally{await runtime.close();}
+const onError=(error)=>console.error(error.code??'INTELLIGENCE_WORKER_ERROR',error.message);
+const backfill=typeof model.embedTexts==='function'?runDocumentKnowledgeBackfill(new DocumentKnowledgeIndexer(runtime.repository,model),{signal:controller.signal,intervalMs:config.documentIndexIntervalMs,limit:config.documentIndexBatchSize,onError}):Promise.resolve();
+try{await Promise.all([runIntelligenceWorker(intelligence,{signal:controller.signal,onError}),backfill]);}finally{await runtime.close();}

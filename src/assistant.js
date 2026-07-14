@@ -58,7 +58,7 @@ export class AtlasToolRegistry {
         return {data:result,sources:result.objects.map(source)};
       }
       case 'search_document_knowledge': {
-        const query=required(args.query,'query');const limit=boundedLimit(args.limit,20);let results;let usage;if(typeof this.embeddingProvider?.embedTexts==='function'){const embedded=await this.embeddingProvider.embedTexts([query]);results=await this.service.searchSemanticDocumentKnowledge(workspaceId,query,embedded.vectors[0],embedded.model,limit);usage=embedded.usage;}else results=await this.service.searchDocumentKnowledge(workspaceId,query,limit);
+        const query=required(args.query,'query');const limit=boundedLimit(args.limit,20);let results;let usage;if(typeof this.embeddingProvider?.embedTexts==='function'){const embedded=await this.embeddingProvider.embedTexts([query]);results=await this.service.searchSemanticDocumentKnowledge(workspaceId,query,embedded.vectors[0],embedded.indexModel??embedded.model,limit);usage=embedded.usage;}else results=await this.service.searchDocumentKnowledge(workspaceId,query,limit);
         const sources=results.map(item=>({sourceId:item.citationId,sourceType:'document_knowledge',objectId:item.sourceObjectId,observationId:item.observationId??null,title:item.documentTitle,documentType:item.documentType,matterId:item.matterId,matterTitle:item.matterTitle,kind:item.kind,confidence:item.confidence,reviewStatus:item.reviewStatus,sourceLocation:item.sourceLocation}));
         return {data:{results,count:results.length,retrievalMode:usage?'semantic':'structured'},sources,...(usage?{usage}:{})};
       }

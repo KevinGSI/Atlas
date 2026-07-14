@@ -1,6 +1,6 @@
 {
   "name": "atlas-core",
-  "version": "0.49.0",
+  "version": "0.50.0",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "type": "module",
@@ -10,6 +10,7 @@
     "migrate": "node scripts/migrate.js",
     "encrypt-ai-content": "node scripts/encrypt-ai-content.js",
     "worker:intelligence": "node scripts/intelligence-worker.js",
+    "backfill:document-knowledge": "node scripts/backfill-document-knowledge.js",
     "test": "node --test test/*.test.js",
     "test:postgres": "node scripts/test-postgres.js",
     "test:ai": "node scripts/test-ai-provider.js",

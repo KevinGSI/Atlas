@@ -25,7 +25,7 @@ export class IntelligenceProjectionService {
       id:createId('ino'),workspaceId:job.workspaceId,jobId:job.id,sourceObjectId:job.objectId,kind:item.kind,data:item.data,
       confidence:item.confidence,sourceLocation:item.sourceLocation??null,provider,status:'candidate',reviewedBy:null,reviewedAt:null,createdAt:this.clock()
     })));
-    if(normalized.knowledgeEmbeddings)await Promise.all(observations.map((observation,index)=>repository.createDocumentKnowledgeEmbedding({id:createId('dke'),workspaceId:job.workspaceId,observationId:observation.id,provider:normalized.knowledgeEmbeddings.provider,model:normalized.knowledgeEmbeddings.model,dimensions:normalized.knowledgeEmbeddings.dimensions,embedding:normalized.knowledgeEmbeddings.vectors[index],createdAt:this.clock()})));
+    if(normalized.knowledgeEmbeddings)await Promise.all(observations.map((observation,index)=>repository.createDocumentKnowledgeEmbedding({id:createId('dke'),workspaceId:job.workspaceId,observationId:observation.id,provider:normalized.knowledgeEmbeddings.provider,model:normalized.knowledgeEmbeddings.indexModel??normalized.knowledgeEmbeddings.model,dimensions:normalized.knowledgeEmbeddings.dimensions,embedding:normalized.knowledgeEmbeddings.vectors[index],createdAt:this.clock()})));
     const actionProposals = await Promise.all(normalized.actionProposals.map((item) => repository.createAiActionProposal({
       id:createId('aap'),workspaceId:job.workspaceId,runId:null,intelligenceJobId:job.id,originType:'intelligence',proposedBy:null,
       actionType:item.actionType,input:item.input,status:'pending',version:1,decidedBy:null,resultObjectId:null,createdAt:this.clock(),decidedAt:null
