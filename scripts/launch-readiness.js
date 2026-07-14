@@ -15,7 +15,8 @@ export function evaluateLaunchReadiness(env = process.env) {
   const aiEncryption = configured(env.AI_CONTENT_ENCRYPTION_KEY) || configured(env.AI_CONTENT_ENCRYPTION_KEYS);
   checks.push({ name: 'AI content encryption configured', passed: aiEncryption }); if (!aiEncryption) missing.push('AI_CONTENT_ENCRYPTION_KEY');
   requireValue('CMS_CREDENTIAL_ENCRYPTION_KEY', 'External credential encryption configured');
-  requireValue('DOCUMENT_STORAGE_PATH', 'Durable document storage configured');
+  const durableDocuments=env.DOCUMENT_STORAGE_PROVIDER==='postgres'||env.DOCUMENT_STORAGE_PROVIDER==='filesystem'&&configured(env.DOCUMENT_STORAGE_PATH);
+  checks.push({name:'Durable document storage configured',passed:durableDocuments});if(!durableDocuments)missing.push('DOCUMENT_STORAGE_PROVIDER');
   const google = configured(env.GOOGLE_WORKSPACE_CLIENT_ID) && configured(env.GOOGLE_WORKSPACE_CLIENT_SECRET);
   const microsoft = configured(env.MICROSOFT_365_CLIENT_ID) && configured(env.MICROSOFT_365_CLIENT_SECRET);
   checks.push({ name: 'At least one production mailbox provider configured', passed: google || microsoft });

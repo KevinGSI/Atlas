@@ -58,7 +58,19 @@ export class OpenAiResponsesProvider {
     if (!this.model) throw new AtlasError('AI_PROVIDER_CONFIGURATION_ERROR', 'OpenAI model is required', 500);
   }
   capabilities() {
-    return { toolCalling: true, streaming: false, structuredOutput: false, providerState: true };
+    return { toolCalling: true, streaming: false, structuredOutput: false, providerState: true, documentUnderstanding: true, pdfVision: true };
+  }
+  async analyzeFile({content,filename,mediaType,instruction,context}) {
+    const image=mediaType==='image/jpeg'||mediaType==='image/png';
+    const dataUrl=`data:${mediaType};base64,${Buffer.from(content).toString('base64')}`;
+    const filePart=image?{type:'input_image',image_url:dataUrl,detail:'high'}:{type:'input_file',filename,file_data:dataUrl,...(mediaType==='application/pdf'?{detail:'high'}:{})};
+    let response;
+    try{response=await this.transport(`${this.baseUrl}/responses`,{method:'POST',headers:{authorization:`Bearer ${this.apiKey}`,'content-type':'application/json'},body:JSON.stringify({model:this.model,input:[{role:'user',content:[filePart,{type:'input_text',text:`${instruction}\nAuthorized Atlas context: ${JSON.stringify(context??{})}`}]}],text:{format:{type:'json_object'}},store:false})});}
+    catch{throw new AtlasError('AI_PROVIDER_UNAVAILABLE','AI document provider is unavailable',503,{provider:'openai'});}
+    if(!response.ok)throw new AtlasError(response.status===429?'AI_PROVIDER_RATE_LIMITED':'AI_PROVIDER_ERROR','AI document analysis failed',response.status===429?503:502,{provider:'openai',status:response.status});
+    let body;try{body=await response.json();}catch{throw new AtlasError('AI_PROVIDER_INVALID_RESPONSE','AI document provider returned invalid JSON',502,{provider:'openai'});}
+    const text=outputText(Array.isArray(body.output)?body.output:[]);let result;try{result=JSON.parse(text);}catch{throw new AtlasError('AI_PROVIDER_INVALID_RESPONSE','AI document provider returned invalid structured output',502,{provider:'openai'});}
+    return {...result,provider:'openai',model:body.model??this.model,usage:{inputTokens:body.usage?.input_tokens??0,outputTokens:body.usage?.output_tokens??0,totalTokens:body.usage?.total_tokens??0}};
   }
   async complete({ messages, tools, state }) {
     let response;

@@ -51,6 +51,13 @@ export class InMemoryBlobStore {
   async delete(reference) { this.#items.delete(reference); }
 }
 
+export class RepositoryBlobStore {
+  constructor(repository,clock=()=>new Date().toISOString()){if(typeof repository?.createDocumentBlob!=='function'||typeof repository?.getDocumentBlob!=='function')throw new AtlasError('BLOB_STORE_INVALID','Repository blob methods are required',500);this.repository=repository;this.clock=clock;}
+  async write({workspaceId,sha256,content}){await this.repository.createDocumentBlob(workspaceId,sha256,content,this.clock());return `atlas-blob://${workspaceId}/${sha256}`;}
+  async read(reference){const match=/^atlas-blob:\/\/([^/]+)\/([a-f0-9]{64})$/.exec(reference);if(!match)throw new AtlasError('FILE_REFERENCE_INVALID','Stored file reference is invalid',500);return (await this.repository.getDocumentBlob(safeWorkspaceId(match[1]),match[2])).content;}
+  async delete(reference){const match=/^atlas-blob:\/\/([^/]+)\/([a-f0-9]{64})$/.exec(reference);if(match)await this.repository.deleteDocumentBlob(safeWorkspaceId(match[1]),match[2]);}
+}
+
 export class FileSystemBlobStore {
   constructor(root) {
     if (!root) throw new AtlasError('BLOB_STORE_INVALID', 'A file storage path is required', 500);

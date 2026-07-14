@@ -7,7 +7,7 @@ import { IdentityService, TokenService } from './identity.js';
 import { AtlasAssistant, AtlasToolRegistry } from './assistant.js';
 import { createAiProviderRegistry, createWebResearchProvider } from './ai-providers.js';
 import { AesGcmContentCipher, createContentCipher } from './content-security.js';
-import { AtlasIntelligenceRuntime, IntelligenceProviderRegistry, StructuredModelIntelligenceProvider } from './intelligence.js';
+import { AtlasIntelligenceRuntime, DocumentIntelligenceProvider, IntelligenceProviderRegistry, StructuredModelIntelligenceProvider } from './intelligence.js';
 import { IntelligenceProjectionService } from './intelligence-projection.js';
 import { AtlasIngestionService } from './ingestion.js';
 import { AtlasResolver } from './resolution.js';
@@ -26,7 +26,7 @@ import { CmsExportMigrationService } from './migration-import.js';
 import { SmsAssistantService } from './sms-assistant.js';
 import { FirmExportService } from './firm-export.js';
 import { StripeCheckoutProvider } from './payment-provider-adapters.js';
-import { AtlasFileService, FileSystemBlobStore, InMemoryBlobStore } from './file-storage.js';
+import { AtlasFileService, FileSystemBlobStore, InMemoryBlobStore, RepositoryBlobStore } from './file-storage.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -50,14 +50,14 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const providers = createAiProviderRegistry(config, dependencies);
   const selectedModel=dependencies.aiModel ?? providers.resolve(config.aiProvider);
   const webResearch=createWebResearchProvider(config,dependencies);
+  const ingestion = new AtlasIngestionService(runtime.repository);
+  const blobStore=dependencies.blobStore??(config.documentStorageProvider==='postgres'?new RepositoryBlobStore(runtime.repository):config.documentStorageProvider==='filesystem'?new FileSystemBlobStore(config.documentStoragePath):new InMemoryBlobStore());
+  const files=new AtlasFileService(service,ingestion,blobStore,{maxBytes:config.documentMaxBytes});
   const intelligenceProviders = new IntelligenceProviderRegistry();
   for (const [name, provider] of Object.entries(dependencies.intelligenceProviders ?? {})) intelligenceProviders.register(name, provider);
+  if(selectedModel?.analyzeFile&&!dependencies.intelligenceProviders?.['document-analysis'])intelligenceProviders.register('document-analysis',new DocumentIntelligenceProvider(selectedModel,blobStore));
   if(selectedModel&&!dependencies.intelligenceProviders?.['configured-model'])intelligenceProviders.register('configured-model',new StructuredModelIntelligenceProvider(selectedModel));
   const intelligence = new AtlasIntelligenceRuntime(runtime.repository, intelligenceProviders, { providerName: config.intelligenceProvider, projector: new IntelligenceProjectionService(), resolver: new AtlasResolver(runtime.repository), playbooks:new SituationalPlaybookEngine(dependencies.nativeCapabilities) });
-  const ingestion = new AtlasIngestionService(runtime.repository);
-  const blobStore=dependencies.blobStore??(config.documentStoragePath?new FileSystemBlobStore(config.documentStoragePath):new InMemoryBlobStore());
-  if(config.production&&!dependencies.blobStore&&!config.documentStoragePath)throw new Error('DOCUMENT_STORAGE_PATH or a managed blobStore is required in production');
-  const files=new AtlasFileService(service,ingestion,blobStore,{maxBytes:config.documentMaxBytes});
   const firmExport = new FirmExportService(runtime.repository);
   const webhooks = new IngestionWebhookVerifier(config.ingestionWebhookSecrets);
   const cmsConnectors=new CmsConnectorRegistry();

@@ -72,6 +72,10 @@ export class PostgresRepository {
     this.pool = pool;
   }
 
+  async createDocumentBlob(workspaceId,sha256,content,createdAt){const r=await this.executor.query('INSERT INTO atlas_document_blob (workspace_id,sha256,content,size,created_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (workspace_id,sha256) DO UPDATE SET sha256=EXCLUDED.sha256 RETURNING workspace_id,sha256,size,created_at',[workspaceId,sha256,content,content.length,createdAt]);return {workspaceId:r.rows[0].workspace_id,sha256:r.rows[0].sha256,size:Number(r.rows[0].size),createdAt:iso(r.rows[0].created_at)};}
+  async getDocumentBlob(workspaceId,sha256){const r=await this.executor.query('SELECT workspace_id,sha256,content,size,created_at FROM atlas_document_blob WHERE workspace_id=$1 AND sha256=$2',[workspaceId,sha256]);if(!r.rows[0])throw new AtlasError('FILE_NOT_FOUND','Stored file was not found',404);return {workspaceId:r.rows[0].workspace_id,sha256:r.rows[0].sha256,content:Buffer.from(r.rows[0].content),size:Number(r.rows[0].size),createdAt:iso(r.rows[0].created_at)};}
+  async deleteDocumentBlob(workspaceId,sha256){const r=await this.executor.query('DELETE FROM atlas_document_blob WHERE workspace_id=$1 AND sha256=$2 RETURNING sha256',[workspaceId,sha256]);return Boolean(r.rows[0]);}
+
   async transaction(work) {
     const client = await this.pool.connect();
     try {

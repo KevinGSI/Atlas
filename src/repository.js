@@ -37,16 +37,17 @@ export class InMemoryRepository {
   #mfaFactors = new Map();
   #securityEvents = new Map();
   #workspaceSecurityPolicies = new Map();
+  #documentBlobs = new Map();
 
   async transaction(work) {
-    const markerSnapshot=new Set(this.#automationMarkers);const leaseSnapshot=new Map(this.#schedulerLeases);const canonicalEventSnapshot=new Map(this.#canonicalEvents);const canonicalDeliverySnapshot=new Map(this.#canonicalDeliveries);const mfaSnapshot=new Map(this.#mfaFactors);const securityEventSnapshot=new Map(this.#securityEvents);const workspaceSecurityPolicySnapshot=new Map(this.#workspaceSecurityPolicies);
+    const markerSnapshot=new Set(this.#automationMarkers);const leaseSnapshot=new Map(this.#schedulerLeases);const canonicalEventSnapshot=new Map(this.#canonicalEvents);const canonicalDeliverySnapshot=new Map(this.#canonicalDeliveries);const mfaSnapshot=new Map(this.#mfaFactors);const securityEventSnapshot=new Map(this.#securityEvents);const workspaceSecurityPolicySnapshot=new Map(this.#workspaceSecurityPolicies);const documentBlobSnapshot=new Map(this.#documentBlobs);
     const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#workspaceInvitations, this.#subscriptions, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts]
       .map((map) => new Map([...map].map(([key, value]) => [key, clone(value)])));
     const beforeObjects=new Map([...this.#objects].map(([key,value])=>[key,JSON.stringify(value)]));const beforeRelationships=new Set(this.#relationships.keys());const beforeEvents=new Set(this.#canonicalEvents.keys());
     try { const result=await work(this);const mutated=new Set();for(const [id,value] of this.#objects)if(beforeObjects.get(id)!==JSON.stringify(value))mutated.add(id);for(const [id,relationship] of this.#relationships)if(!beforeRelationships.has(id)){mutated.add(relationship.fromObjectId);mutated.add(relationship.toObjectId);}const covered=new Set([...this.#canonicalEvents].filter(([id])=>!beforeEvents.has(id)).flatMap(([,event])=>event.affectedObjectIds));const missing=[...mutated].filter((id)=>!covered.has(id));if(missing.length)throw new AtlasError('CANONICAL_EVENT_REQUIRED','Material canonical mutations require event coverage',500,{objectIds:missing});return result; }
     catch (error) {
       [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#workspaceInvitations, this.#subscriptions, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts] = snapshot;
-      this.#automationMarkers=markerSnapshot;this.#schedulerLeases=leaseSnapshot;this.#canonicalEvents=canonicalEventSnapshot;this.#canonicalDeliveries=canonicalDeliverySnapshot;this.#mfaFactors=mfaSnapshot;this.#securityEvents=securityEventSnapshot;this.#workspaceSecurityPolicies=workspaceSecurityPolicySnapshot;
+      this.#automationMarkers=markerSnapshot;this.#schedulerLeases=leaseSnapshot;this.#canonicalEvents=canonicalEventSnapshot;this.#canonicalDeliveries=canonicalDeliverySnapshot;this.#mfaFactors=mfaSnapshot;this.#securityEvents=securityEventSnapshot;this.#workspaceSecurityPolicies=workspaceSecurityPolicySnapshot;this.#documentBlobs=documentBlobSnapshot;
       throw error;
     }
   }
@@ -56,6 +57,10 @@ export class InMemoryRepository {
     return clone(workspace);
   }
   listWorkspaces(){return [...this.#workspaces.values()].map(clone);}
+
+  createDocumentBlob(workspaceId,sha256,content,createdAt){this.getWorkspace(workspaceId);const key=`${workspaceId}:${sha256}`;if(!this.#documentBlobs.has(key))this.#documentBlobs.set(key,{workspaceId,sha256,content:Buffer.from(content),size:content.length,createdAt});return {workspaceId,sha256,size:content.length,createdAt};}
+  getDocumentBlob(workspaceId,sha256){const value=this.#documentBlobs.get(`${workspaceId}:${sha256}`);if(!value)throw new AtlasError('FILE_NOT_FOUND','Stored file was not found',404);return {...value,content:Buffer.from(value.content)};}
+  deleteDocumentBlob(workspaceId,sha256){return this.#documentBlobs.delete(`${workspaceId}:${sha256}`);}
 
   getWorkspace(id) {
     const workspace = this.#workspaces.get(id);

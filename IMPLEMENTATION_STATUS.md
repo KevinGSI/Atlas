@@ -1,6 +1,15 @@
-# Atlas Core 0.46.0 — Secure Canonical Document Storage
+# Atlas Core 0.47.0 — Native Document Understanding
 
 ## Verified as implemented
+
+- Stored PDF, DOCX, text, CSV, JPEG, and PNG content routes into native intelligence without waiting for chat
+- Exact-trigger routing ensures document bytes reach a file-capable provider before the generic event model
+- OpenAI is the initial file-understanding adapter using private direct file inputs with `store: false`
+- The stable `analyzeFile` contract remains provider-neutral and replaceable by another model vendor
+- Document analysis extracts classifications, entities, matter clues, facts, deadlines, duties, conflicts, risks, recommendations, and reviewable work
+- Source locations and confidence flow into the existing candidate-observation and attorney-review lifecycle
+- Shared PostgreSQL blob storage lets the API and intelligence worker read the same firm-isolated content
+- Migration `0026_document_blobs.sql` enforces workspace-scoped content addressing, byte-size integrity, and revoked public access
 
 - Authenticated document upload from the real Documents workspace, not only metadata entry
 - Firm- and case-scoped canonical document records with native `attachment.received` events and intelligence jobs

@@ -21,6 +21,7 @@ test('production defaults to a cloud-compatible listener', () => {
   assert.equal(config.aiWebSearchEnabled, false);
   assert.equal(config.aiWebSearchContextSize, 'medium');
   assert.equal(config.documentMaxBytes,25_000_000);
+  assert.equal(config.documentStorageProvider,'postgres');
 });
 
 test('AI provider configuration is explicit and provider-specific credentials stay isolated', () => {
@@ -75,6 +76,8 @@ test('embedded payment processing requires complete Stripe credentials and a sec
 test('production refuses to start without PostgreSQL', () => {
   assert.throws(() => loadConfig({ NODE_ENV: 'production' }), /DATABASE_URL is required/);
 });
+
+test('document storage providers fail closed when their durable dependency is absent',()=>{assert.throws(()=>loadConfig({DOCUMENT_STORAGE_PROVIDER:'postgres'}),/DATABASE_URL is required/);assert.throws(()=>loadConfig({DOCUMENT_STORAGE_PROVIDER:'filesystem'}),/DOCUMENT_STORAGE_PATH is required/);assert.equal(loadConfig({DOCUMENT_STORAGE_PROVIDER:'memory'}).documentStorageProvider,'memory');});
 
 test('production rejects wildcard CORS', () => {
   assert.throws(() => loadConfig({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://example/atlas', AUTH_TOKEN_SECRET: 'a'.repeat(32),MFA_ENCRYPTION_KEY:Buffer.alloc(32,9).toString('base64'), CORS_ORIGINS: '*' }), /Wildcard CORS/);

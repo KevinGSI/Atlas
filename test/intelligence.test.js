@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AtlasIntelligenceRuntime, IntelligenceProviderRegistry, StructuredModelIntelligenceProvider, runIntelligenceWorker } from '../src/intelligence.js';
+import { AtlasIntelligenceRuntime, DocumentIntelligenceProvider, IntelligenceProviderRegistry, StructuredModelIntelligenceProvider, runIntelligenceWorker } from '../src/intelligence.js';
 import { InMemoryRepository } from '../src/repository.js';
 import { AtlasService } from '../src/service.js';
 import { IntelligenceProjectionService } from '../src/intelligence-projection.js';
@@ -100,6 +100,8 @@ test('capability routing selects providers by native event type',()=>{
   assert.equal(registry.resolveFor('email.received').name,'communications');
   assert.equal(registry.resolveFor('attachment.received').name,'documents');
 });
+
+test('stored document bytes route to file intelligence before a preferred wildcard model',async()=>{const content=Buffer.from('court notice');const sha256=(await import('node:crypto')).createHash('sha256').update(content).digest('hex');let analyzed;const documentProvider=new DocumentIntelligenceProvider({async analyzeFile(input){analyzed=input;return {observations:[{kind:'deadline',data:{title:'Response due'},confidence:.9}],actionProposals:[]};}},{async read(){return content;}});const wildcard={capabilities(){return {triggers:['*']};},async analyze(){throw new Error('wildcard should not own document bytes');}};const registry=new IntelligenceProviderRegistry().register('document-analysis',documentProvider).register('configured-model',wildcard);assert.equal(registry.resolveFor('attachment.received','configured-model').name,'document-analysis');const result=await documentProvider.analyze({event:{document:{id:'obj_doc',title:'notice.pdf',state:{storageRef:'atlas-blob://wsp/sha',sha256,size:content.length,mediaType:'application/pdf'}}},context:{workspaceId:'wsp_1'}});assert.equal(analyzed.filename,'notice.pdf');assert.equal(result.observations[0].kind,'deadline');});
 
 test('background worker drains queued intelligence until aborted',async()=>{
   let calls=0;const controller=new AbortController();const runtime={async processNext(){calls+=1;if(calls===2)controller.abort();return calls===1?{id:'job'}:null;}};

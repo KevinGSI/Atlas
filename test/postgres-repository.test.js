@@ -19,6 +19,8 @@ test('PostgreSQL workspace adapter uses parameterized SQL and maps rows', async 
   assert.deepEqual(calls[0].values, ['wsp_1', 'Atlas', 1, timestamp, timestamp]);
 });
 
+test('PostgreSQL document blobs are content-addressed and workspace scoped',async()=>{const calls=[];const content=Buffer.from('private file');const row={workspace_id:'wsp_1',sha256:'a'.repeat(64),content,size:content.length,created_at:timestamp};const pool={async query(sql,values){calls.push({sql,values});return {rows:[row]};}};const repository=new PostgresRepository(pool);await repository.createDocumentBlob('wsp_1',row.sha256,content,timestamp);const stored=await repository.getDocumentBlob('wsp_1',row.sha256);assert.deepEqual(stored.content,content);assert.match(calls[0].sql,/ON CONFLICT \(workspace_id,sha256\)/);assert.deepEqual(calls[1].values,['wsp_1',row.sha256]);});
+
 test('PostgreSQL transactions commit and release dedicated clients', async () => {
   const calls = [];
   const client = { async query(sql) { calls.push(sql); return { rows: [] }; }, release() { calls.push('RELEASE'); } };

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AtlasFileService, InMemoryBlobStore } from '../src/file-storage.js';
+import { AtlasFileService, InMemoryBlobStore, RepositoryBlobStore } from '../src/file-storage.js';
 import { AtlasIngestionService } from '../src/ingestion.js';
 import { InMemoryRepository } from '../src/repository.js';
 import { AtlasService } from '../src/service.js';
@@ -53,3 +53,5 @@ test('download rejects cross-firm and externally managed references',async()=>{
   const external=await atlas.createObject(workspace.id,{dimension:'document',type:'incoming_attachment',title:'external.pdf',state:{storageRef:'provider://file/1'}});
   await assert.rejects(()=>files.download(workspace.id,external.id),error=>error.code==='FILE_NOT_AVAILABLE');
 });
+
+test('repository blob storage is shared durable storage without provider lock-in',async()=>{const repository=new InMemoryRepository();const atlas=new AtlasService(repository);const workspace=await atlas.createWorkspace({name:'Shared Files'});const store=new RepositoryBlobStore(repository,()=> '2026-07-13T12:00:00.000Z');const content=Buffer.from('shared worker bytes');const sha256=(await import('node:crypto')).createHash('sha256').update(content).digest('hex');const reference=await store.write({workspaceId:workspace.id,sha256,content});assert.deepEqual(await store.read(reference),content);assert.equal((await repository.getDocumentBlob(workspace.id,sha256)).size,content.length);});

@@ -1,4 +1,11 @@
 import { AtlasError } from './errors.js';
+import { createHash } from 'node:crypto';
+
+export class DocumentIntelligenceProvider {
+  constructor(model,blobStore){if(typeof model?.analyzeFile!=='function')throw new AtlasError('INTELLIGENCE_PROVIDER_INVALID','Document intelligence requires a file-capable model',500);if(typeof blobStore?.read!=='function')throw new AtlasError('BLOB_STORE_INVALID','Document intelligence requires readable storage',500);this.model=model;this.blobStore=blobStore;}
+  capabilities(){return {triggers:['attachment.received'],documentUnderstanding:true,providerNeutralModel:true};}
+  async analyze({event,context}){const document=event.document;if(!document?.state?.storageRef)throw new AtlasError('DOCUMENT_CONTENT_UNAVAILABLE','Document content is unavailable',409);const content=await this.blobStore.read(document.state.storageRef);if(content.length!==document.state.size||createHash('sha256').update(content).digest('hex')!==document.state.sha256)throw new AtlasError('FILE_INTEGRITY_FAILED','Stored file integrity verification failed',500);const result=await this.model.analyzeFile({content,filename:document.title,mediaType:document.state.mediaType,context,instruction:'Analyze this authorized law-firm document. Return JSON only with arrays observations and actionProposals plus awareness. Extract classification, parties and entities, matter clues, source-supported facts, dates and deadlines, duties, conflicts, risks, and recommendations. Observation kinds are classification, entity, matter_match, fact, deadline, duty, conflict, risk, recommendation. Every observation requires kind, data, confidence from 0 to 1, and sourceLocation with page or section when available. Allowed action types are create_task, create_document, and draft_email; they create internal review work only and must never send, file, publish, delete, or take another external action. Awareness requires category document_upload, priority, headline, and summary.'});if(!result||!Array.isArray(result.observations)||!Array.isArray(result.actionProposals))throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Document provider returned invalid intelligence',502);return result;}
+}
 
 export class StructuredModelIntelligenceProvider {
   constructor(model, options={}) { if(typeof model?.complete!=='function')throw new AtlasError('INTELLIGENCE_PROVIDER_INVALID','Structured model provider requires a model',500);this.model=model;this.triggers=options.triggers??['*']; }
@@ -22,8 +29,10 @@ export class IntelligenceProviderRegistry {
   resolveFor(triggerType, preferredName = null) {
     if (preferredName) {
       const preferred=this.resolve(preferredName);const triggers=preferred.capabilities()?.triggers;
-      if (!triggers || triggers.includes('*') || triggers.includes(triggerType)) return {name:preferredName,provider:preferred};
+      if (triggers?.includes(triggerType)) return {name:preferredName,provider:preferred};
     }
+    for(const [name,provider] of this.#providers){const triggers=provider.capabilities()?.triggers;if(triggers?.includes(triggerType))return {name,provider};}
+    if(preferredName){const preferred=this.resolve(preferredName);const triggers=preferred.capabilities()?.triggers;if(!triggers||triggers.includes('*'))return {name:preferredName,provider:preferred};}
     for(const [name,provider] of this.#providers){const triggers=provider.capabilities()?.triggers;if(!triggers||triggers.includes('*')||triggers.includes(triggerType))return {name,provider};}
     throw new AtlasError('INTELLIGENCE_PROVIDER_NOT_FOUND','No intelligence provider supports this trigger',503,{triggerType});
   }

@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.46.0` adds real, access-controlled document upload and verified retrieval to the canonical Documents workspace. Files are content-addressed by SHA-256, scoped to one firm and case, constrained by type and size, stored through an interchangeable blob-store boundary, and queued into native intelligence without trusting a user-supplied storage reference.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.47.0` completes the first native document-understanding path: firm-isolated file bytes are durably shared between the API and intelligence worker, verified before use, and analyzed through an interchangeable file-capable AI contract. OpenAI is the initial adapter, but storage, routing, safety, canonical observations, and human review remain Atlas-owned.
 
 ## Implemented
 

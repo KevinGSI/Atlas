@@ -9,6 +9,11 @@ export function loadConfig(env = process.env) {
   const production = nodeEnv === 'production';
   const databaseUrl = env.DATABASE_URL || null;
   if (production && !databaseUrl) throw new Error('DATABASE_URL is required in production');
+  const documentStorageProvider=env.DOCUMENT_STORAGE_PROVIDER||(databaseUrl?'postgres':env.DOCUMENT_STORAGE_PATH?'filesystem':'memory');
+  if(!['postgres','filesystem','memory'].includes(documentStorageProvider))throw new Error('DOCUMENT_STORAGE_PROVIDER must be postgres, filesystem, or memory');
+  if(documentStorageProvider==='postgres'&&!databaseUrl)throw new Error('DATABASE_URL is required for PostgreSQL document storage');
+  if(documentStorageProvider==='filesystem'&&!env.DOCUMENT_STORAGE_PATH)throw new Error('DOCUMENT_STORAGE_PATH is required for filesystem document storage');
+  if(production&&documentStorageProvider==='memory')throw new Error('Durable document storage is required in production');
   const tokenSecret = env.AUTH_TOKEN_SECRET || (production ? null : 'atlas-development-secret-change-me');
   if (!tokenSecret || tokenSecret.length < 32) throw new Error('AUTH_TOKEN_SECRET must contain at least 32 characters');
   const mfaEncryptionKey=env.MFA_ENCRYPTION_KEY||(production?null:`${tokenSecret}:mfa-development`);
@@ -112,6 +117,7 @@ export function loadConfig(env = process.env) {
     maxBodyBytes: positiveInteger(env.MAX_BODY_BYTES, 1_048_576, 'MAX_BODY_BYTES'),
     migrationMaxBodyBytes:positiveInteger(env.MIGRATION_MAX_BODY_BYTES,20_000_000,'MIGRATION_MAX_BODY_BYTES'),
     documentMaxBytes:positiveInteger(env.DOCUMENT_MAX_BYTES,25_000_000,'DOCUMENT_MAX_BYTES'),
+    documentStorageProvider,
     documentStoragePath:env.DOCUMENT_STORAGE_PATH||null,
     shutdownTimeoutMs: positiveInteger(env.SHUTDOWN_TIMEOUT_MS, 10_000, 'SHUTDOWN_TIMEOUT_MS'),
     corsOrigins
