@@ -28,6 +28,8 @@ export function evaluateLaunchReadiness(env = process.env) {
   let publicUrl = false;
   try { publicUrl = new URL(env.PUBLIC_BASE_URL).protocol === 'https:'; } catch {}
   checks.push({ name: 'Public HTTPS origin configured', passed: publicUrl }); if (!publicUrl) missing.push('PUBLIC_BASE_URL');
+  const proxyDecision = env.TRUST_PROXY === 'true' || env.TRUST_PROXY === 'false';
+  checks.push({ name: 'Trusted proxy behavior explicitly configured', passed: proxyDecision }); if (!proxyDecision) missing.push('TRUST_PROXY=true or TRUST_PROXY=false');
   const tokenLength = String(env.AUTH_TOKEN_SECRET ?? '').length >= 32;
   checks.push({ name: 'Authentication secret meets minimum length', passed: tokenLength }); if (!tokenLength && configured(env.AUTH_TOKEN_SECRET)) missing.push('AUTH_TOKEN_SECRET (32+ characters)');
   return { ready: missing.length === 0, checks, missing: [...new Set(missing)] };

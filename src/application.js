@@ -28,6 +28,7 @@ import { FirmExportService } from './firm-export.js';
 import { StripeCheckoutProvider } from './payment-provider-adapters.js';
 import { AtlasFileService, FileSystemBlobStore, InMemoryBlobStore, RepositoryBlobStore } from './file-storage.js';
 import { createFileSecurityScanner } from './file-security.js';
+import { RepositoryRequestRateLimiter } from './rate-limit.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -58,6 +59,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const blobStore=dependencies.blobStore??(config.documentStorageProvider==='postgres'?new RepositoryBlobStore(runtime.repository):config.documentStorageProvider==='filesystem'?new FileSystemBlobStore(config.documentStoragePath):new InMemoryBlobStore());
   const fileSecurityScanner=createFileSecurityScanner(config,dependencies);
   const ready=createApplicationReadiness(runtime,fileSecurityScanner);
+  const rateLimiter=dependencies.rateLimiter??new RepositoryRequestRateLimiter(runtime.repository,config.tokenSecret,{authRequests:config.rateLimitAuthRequests,aiRequests:config.rateLimitAiRequests,fileRequests:config.rateLimitFileRequests,writeRequests:config.rateLimitWriteRequests,webhookRequests:config.rateLimitWebhookRequests});
   const files=new AtlasFileService(service,ingestion,blobStore,{maxBytes:config.documentMaxBytes,fileSecurityScanner});
   const intelligenceProviders = new IntelligenceProviderRegistry();
   for (const [name, provider] of Object.entries(dependencies.intelligenceProviders ?? {})) intelligenceProviders.register(name, provider);
@@ -98,7 +100,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     repository: runtime.repository,
     contentCipher
   });
-  const server = createAtlasServer(service, { config, ready, identity, assistant, ingestion, files, webhooks, cms, migration, accounting, voice, sms, telephony, firmExport });
+  const server = createAtlasServer(service, { config, ready, rateLimiter, identity, assistant, ingestion, files, webhooks, cms, migration, accounting, voice, sms, telephony, firmExport });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, resolve);

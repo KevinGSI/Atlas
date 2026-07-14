@@ -12,7 +12,7 @@ export function loadLocalEnvironment(path = '.env') {
 export async function main(env = process.env, logger = console) {
   const app = await startAtlas(env);
   const address = app.address;
-  logger.log(`Atlas Core 0.54.0 listening on http://${address.address}:${address.port}`);
+  logger.log(`Atlas Phase 1 1.0.0-rc.1 listening on http://${address.address}:${address.port}`);
   let stopping = false;
   const shutdown = async (signal) => {
     if (stopping) return;

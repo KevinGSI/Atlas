@@ -159,6 +159,17 @@ test('PostgreSQL login throttling atomically increments a hashed principal', asy
   assert.match(calls[1].sql, /DELETE FROM atlas_login_throttle/);
 });
 
+test('PostgreSQL request limiting atomically consumes a hashed fixed-window bucket',async()=>{
+  const calls=[];
+  const row={key_hash:'a'.repeat(64),scope:'ai',request_count:3,window_started_at:timestamp,expires_at:'2026-07-10T12:01:00.000Z',updated_at:timestamp};
+  const pool={async query(sql,values){calls.push({sql,values});return {rows:[row]};}};
+  const repository=new PostgresRepository(pool);
+  const bucket=await repository.consumeRateLimitBucket({keyHash:'a'.repeat(64),scope:'ai',now:timestamp,windowSeconds:60});
+  assert.equal(bucket.count,3);assert.equal(bucket.scope,'ai');
+  assert.match(calls[0].sql,/INSERT INTO atlas_rate_limit_bucket/);assert.match(calls[0].sql,/ON CONFLICT \(key_hash\) DO UPDATE/);assert.match(calls[0].sql,/request_count\+1/);
+  assert.deepEqual(calls[0].values,['a'.repeat(64),'ai',timestamp,60]);
+});
+
 test('PostgreSQL password reset stores only hashes and locks tokens before consumption', async () => {
   const calls = [];
   const row = { id: 'rst_1', user_id: 'usr_1', token_hash: 'hashed-reset', expires_at: timestamp, created_at: timestamp, used_at: null };

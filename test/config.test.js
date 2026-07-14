@@ -106,4 +106,7 @@ test('configuration validates positive numeric limits', () => {
   assert.throws(() => loadConfig({ CMS_SYNC_INTERVAL_MS: '0' }), /CMS_SYNC_INTERVAL_MS must be a positive integer/);
   assert.throws(() => loadConfig({ SITUATIONAL_SWEEP_INTERVAL_MS: '0' }), /SITUATIONAL_SWEEP_INTERVAL_MS must be a positive integer/);
   assert.throws(() => loadConfig({ DOCUMENT_MAX_BYTES: '0' }), /DOCUMENT_MAX_BYTES must be a positive integer/);
+  assert.throws(() => loadConfig({ RATE_LIMIT_AI_REQUESTS: '0' }), /RATE_LIMIT_AI_REQUESTS must be a positive integer/);
 });
+
+test('trusted proxy and distributed request-limit configuration is explicit',()=>{const defaults=loadConfig({});assert.equal(defaults.trustProxy,false);assert.deepEqual([defaults.rateLimitAuthRequests,defaults.rateLimitAiRequests,defaults.rateLimitFileRequests,defaults.rateLimitWriteRequests,defaults.rateLimitWebhookRequests],[30,30,20,120,300]);const configured=loadConfig({TRUST_PROXY:'true',RATE_LIMIT_AUTH_REQUESTS:'10',RATE_LIMIT_AI_REQUESTS:'11',RATE_LIMIT_FILE_REQUESTS:'12',RATE_LIMIT_WRITE_REQUESTS:'13',RATE_LIMIT_WEBHOOK_REQUESTS:'14'});assert.equal(configured.trustProxy,true);assert.deepEqual([configured.rateLimitAuthRequests,configured.rateLimitAiRequests,configured.rateLimitFileRequests,configured.rateLimitWriteRequests,configured.rateLimitWebhookRequests],[10,11,12,13,14]);});

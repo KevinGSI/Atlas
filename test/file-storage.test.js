@@ -57,6 +57,19 @@ test('a scanner rejection occurs before file storage, cataloging, or native inte
   await assert.rejects(()=>blobStore.read(`atlas-blob://${workspace.id}/${sha256}`),(error)=>error.code==='FILE_NOT_FOUND');
 });
 
+test('a blocked malicious upload creates an append-only security event and a deduplicated attorney alert',async()=>{
+  const {repository,atlas,workspace,files}=await fixture();
+  const content=Buffer.from('X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*');
+  const input={filename:'danger.txt',mediaType:'text/plain',contentBase64:content.toString('base64')};
+  await assert.rejects(()=>files.upload(workspace.id,input,'usr_attorney'),(error)=>error.code==='FILE_MALWARE_DETECTED');
+  await assert.rejects(()=>files.upload(workspace.id,input,'usr_attorney'),(error)=>error.code==='FILE_MALWARE_DETECTED');
+  assert.equal((await repository.listObjects(workspace.id,{dimension:'document'})).length,0);
+  const events=await repository.listSecurityEvents(workspace.id);assert.equal(events.length,2);assert.ok(events.every(item=>item.type==='file.upload_blocked'&&item.outcome==='blocked'));
+  assert.equal(JSON.stringify(events).includes('contentBase64'),false);assert.equal(JSON.stringify(events).includes('EICAR-STANDARD'),false);
+  const alerts=await atlas.whileYouWereGone(workspace.id,'usr_attorney');assert.equal(alerts.length,1);assert.equal(alerts[0].category,'security_alert');assert.equal(alerts[0].priority,'urgent');assert.match(alerts[0].summary,/blocked before storage or cataloging/);
+  assert.equal((await repository.listIntelligenceJobs(workspace.id)).filter(item=>item.triggerType==='file.security.blocked').length,1);
+});
+
 test('download rejects cross-firm and externally managed references',async()=>{
   const {atlas,workspace,files}=await fixture();
   const other=await atlas.createWorkspace({name:'Other Firm'});

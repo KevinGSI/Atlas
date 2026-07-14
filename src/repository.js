@@ -40,6 +40,7 @@ export class InMemoryRepository {
   #securityEvents = new Map();
   #workspaceSecurityPolicies = new Map();
   #documentBlobs = new Map();
+  #rateLimitBuckets = new Map();
 
   async transaction(work) {
     const markerSnapshot=new Set(this.#automationMarkers);const leaseSnapshot=new Map(this.#schedulerLeases);const canonicalEventSnapshot=new Map(this.#canonicalEvents);const canonicalDeliverySnapshot=new Map(this.#canonicalDeliveries);const mfaSnapshot=new Map(this.#mfaFactors);const securityEventSnapshot=new Map(this.#securityEvents);const workspaceSecurityPolicySnapshot=new Map(this.#workspaceSecurityPolicies);const documentBlobSnapshot=new Map(this.#documentBlobs);
@@ -204,6 +205,8 @@ export class InMemoryRepository {
   clearLoginThrottle(principalHash) {
     this.#loginThrottles.delete(principalHash);
   }
+
+  consumeRateLimitBucket({keyHash,scope,now,windowSeconds}){const current=this.#rateLimitBuckets.get(keyHash);const nowMs=new Date(now).getTime();const reset=!current||new Date(current.expiresAt).getTime()<=nowMs;const value={keyHash,scope,count:reset?1:current.count+1,windowStartedAt:reset?now:current.windowStartedAt,expiresAt:reset?new Date(nowMs+windowSeconds*1000).toISOString():current.expiresAt,updatedAt:now};this.#rateLimitBuckets.set(keyHash,value);return clone(value);}
 
   updateUserPassword(id, passwordHash) {
     const user = this.getUser(id);

@@ -12,7 +12,7 @@ Atlas treats every direct upload and connected-mail attachment as untrusted unti
 6. Compute the SHA-256 digest and write to firm-isolated, content-addressed storage.
 7. Persist the clean security verdict with the canonical document and queue native document intelligence.
 
-A type mismatch, detected signature, scanner outage, timeout, or ambiguous scanner response prevents file acceptance. Atlas does not create a document or intelligence job for an unaccepted direct upload. Connected mail remains available when an individual attachment has an unsafe type, invalid signature, excessive size, or detected malware; the email records its imported and skipped counts. A scanner outage blocks the connected-mail synchronization batch so attachments are never silently accepted without inspection.
+A type mismatch, detected signature, scanner outage, timeout, or ambiguous scanner response prevents file acceptance. Atlas does not create a document-understanding job for an unaccepted direct upload. A suspicious type mismatch or malware verdict creates an append-only firm security event and a deduplicated, attorney-targeted `While You Were Gone` alert without retaining file bytes. Connected mail remains available when an individual attachment has an unsafe type, invalid signature, excessive size, or detected malware; the email records its imported and skipped counts. A scanner outage blocks the connected-mail synchronization batch so attachments are never silently accepted without inspection.
 
 ## Replaceable scanner contract
 
@@ -29,4 +29,4 @@ CLAMAV_TIMEOUT_MS=30000
 
 Atlas application readiness probes PostgreSQL first and then sends ClamAV's bounded `PING` command over the private scanner connection. `/ready` returns `503 FILE_SCANNER_UNAVAILABLE` unless the scanner responds with exactly `PONG`. `/live` remains a process-only liveness endpoint so an orchestrator can distinguish a running process from an instance that must not receive firm traffic.
 
-The local Docker stack includes a ClamAV service. A hosted deployment must supply a private, reachable ClamAV service and maintain its engine and signature updates. Atlas does not claim daily rescanning, content disarm and reconstruction, operational alert response, or independent malware-control assurance until those systems and procedures are deployed and verified.
+The local Docker stack includes a ClamAV service. A hosted deployment must supply a private, reachable ClamAV service and maintain its engine and signature updates. Atlas implements immediate detection alerting but does not claim daily rescanning, content disarm and reconstruction, staffed operational response, or independent malware-control assurance until those systems and procedures are deployed and verified.

@@ -17,12 +17,24 @@ services:
         value: production
       - key: HOST
         value: 0.0.0.0
+      - key: TRUST_PROXY
+        value: true
       - key: PUBLIC_BASE_URL
         sync: false
       - key: DATABASE_POOL_SIZE
         value: 10
       - key: MAX_BODY_BYTES
         value: 1048576
+      - key: RATE_LIMIT_AUTH_REQUESTS
+        value: 30
+      - key: RATE_LIMIT_AI_REQUESTS
+        value: 30
+      - key: RATE_LIMIT_FILE_REQUESTS
+        value: 20
+      - key: RATE_LIMIT_WRITE_REQUESTS
+        value: 120
+      - key: RATE_LIMIT_WEBHOOK_REQUESTS
+        value: 300
       - key: DOCUMENT_MAX_BYTES
         value: 25000000
       - key: DOCUMENT_STORAGE_PROVIDER

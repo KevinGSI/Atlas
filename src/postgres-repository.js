@@ -44,6 +44,7 @@ function passwordReset(row) {
 function loginThrottle(row) {
   return { principalHash: row.principal_hash, failedCount: row.failed_count, windowStartedAt: iso(row.window_started_at), lockedUntil: iso(row.locked_until), updatedAt: iso(row.updated_at) };
 }
+function rateLimitBucket(row){return {keyHash:row.key_hash,scope:row.scope,count:Number(row.request_count),windowStartedAt:iso(row.window_started_at),expiresAt:iso(row.expires_at),updatedAt:iso(row.updated_at)};}
 function mfaFactor(row){return {userId:row.user_id,encryptedSecret:row.encrypted_secret,enabled:row.enabled,recoveryCodeHashes:row.recovery_code_hashes,createdAt:iso(row.created_at),verifiedAt:iso(row.verified_at),updatedAt:iso(row.updated_at)};}
 function securityEvent(row){return {id:row.id,userId:row.user_id,workspaceId:row.workspace_id,type:row.type,outcome:row.outcome,ipAddress:row.ip_address,userAgent:row.user_agent,details:row.details,createdAt:iso(row.created_at)};}
 function aiRun(row) {
@@ -270,6 +271,8 @@ export class PostgresRepository {
   async clearLoginThrottle(principalHash) {
     await this.executor.query('DELETE FROM atlas_login_throttle WHERE principal_hash = $1', [principalHash]);
   }
+
+  async consumeRateLimitBucket({keyHash,scope,now,windowSeconds}){const result=await this.executor.query(`INSERT INTO atlas_rate_limit_bucket (key_hash,scope,request_count,window_started_at,expires_at,updated_at) VALUES ($1,$2,1,$3,$3::timestamptz+$4*interval '1 second',$3) ON CONFLICT (key_hash) DO UPDATE SET scope=EXCLUDED.scope,request_count=CASE WHEN atlas_rate_limit_bucket.expires_at<=EXCLUDED.updated_at THEN 1 ELSE atlas_rate_limit_bucket.request_count+1 END,window_started_at=CASE WHEN atlas_rate_limit_bucket.expires_at<=EXCLUDED.updated_at THEN EXCLUDED.window_started_at ELSE atlas_rate_limit_bucket.window_started_at END,expires_at=CASE WHEN atlas_rate_limit_bucket.expires_at<=EXCLUDED.updated_at THEN EXCLUDED.expires_at ELSE atlas_rate_limit_bucket.expires_at END,updated_at=EXCLUDED.updated_at RETURNING *`,[keyHash,scope,now,windowSeconds]);return rateLimitBucket(result.rows[0]);}
 
   async updateUserPassword(id, passwordHash) {
     const result = await this.executor.query(

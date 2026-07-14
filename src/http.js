@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { isIP } from 'node:net';
 import { AtlasError } from './errors.js';
 import { phaseOneAsset } from './phase-one-web.js';
 
@@ -34,7 +35,7 @@ function securityHeaders(requestId) {
   };
 }
 
-function requestContext(request){return {ipAddress:request.socket?.remoteAddress??null,userAgent:request.headers?.['user-agent']??null};}
+export function requestContext(request,config={}){let ipAddress=request.socket?.remoteAddress??null;if(config.trustProxy){const forwarded=String(request.headers?.['x-forwarded-for']??'').split(',')[0].trim();if(isIP(forwarded))ipAddress=forwarded;}if(typeof ipAddress==='string'&&ipAddress.startsWith('::ffff:')&&isIP(ipAddress.slice(7))===4)ipAddress=ipAddress.slice(7);return {ipAddress,userAgent:request.headers?.['user-agent']??null};}
 
 function corsHeaders(request, config) {
   const origin=request.headers?.origin;
@@ -189,6 +190,7 @@ function route(method, pathname) {
 export function createAtlasHandler(service, options = {}) {
   const config = options.config ?? { maxBodyBytes: 1_048_576, corsOrigins: [] };
   const ready = options.ready ?? (async () => true);
+  const rateLimiter=options.rateLimiter??null;
   const identity = options.identity;
   const assistant = options.assistant;
   const ingestion = options.ingestion;
@@ -210,6 +212,7 @@ export function createAtlasHandler(service, options = {}) {
       const url = new URL(request.url, 'http://atlas.local');
       const match = route(request.method, url.pathname);
       if (!match) throw new AtlasError('ROUTE_NOT_FOUND', 'Route not found', 404);
+      const context=requestContext(request,config);
       const [workspaceId, objectId] = match.params;
       const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
@@ -218,17 +221,18 @@ export function createAtlasHandler(service, options = {}) {
           ? 'workspace:read' : ['createMembership','inviteMember','listWorkspaceInvitations','listWorkspaceSecurityEvents','listWorkspaceSessions','revokeWorkspaceSessions','deactivateMembership','reactivateMembership','getWorkspaceSecurityPolicy','updateWorkspaceSecurityPolicy','createFirmExport'].includes(match.name) ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
+      if(rateLimiter)await rateLimiter.check({routeName:match.name,method:request.method,userId:user?.id??null,ipAddress:context.ipAddress});
       let result;
       switch (match.name) {
         case 'frontendIndex': case 'frontendApp': case 'templateEditor': case 'templateEditorApp': return sendAsset(response,await phaseOneAsset(match.name),headers);
         case 'paymentPage': case 'paymentApp': return sendPaymentAsset(response,await phaseOneAsset(match.name),headers);
         case 'stripePaymentWebhook': {if(!accounting)throw new AtlasError('PAYMENT_PROVIDER_NOT_CONFIGURED','Payment processing is not configured',503);result=await accounting.processPaymentWebhook('stripe',await readRawBody(request,config.maxBodyBytes),request.headers?.['stripe-signature']);break;}
         case 'stripePaymentCheckout': {if(!accounting)throw new AtlasError('PAYMENT_PROVIDER_NOT_CONFIGURED','Payment processing is not configured',503);result=await accounting.paymentCheckoutConfiguration('stripe',workspaceId);break;}
-        case 'health': case 'live': result = { status: 'ok', version: '0.54.0' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.54.0' }; break;
+        case 'health': case 'live': result = { status: 'ok', version: '1.0.0-rc.1' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '1.0.0-rc.1' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'registerFirm': result = await identity.registerFirm(await readJson(request,config.maxBodyBytes)); break;
-        case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes),requestContext(request)); break;
+        case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes),context); break;
         case 'refresh': result = await identity.refresh(await readJson(request, config.maxBodyBytes)); break;
         case 'logout': result = await identity.logout(await readJson(request, config.maxBodyBytes)); break;
         case 'requestPasswordReset': result = await identity.requestPasswordReset(await readJson(request, config.maxBodyBytes)); break;
@@ -330,6 +334,7 @@ export function createAtlasHandler(service, options = {}) {
     } catch (error) {
       const known = error instanceof AtlasError;
       const status = known ? error.status : (request.url === '/ready' ? 503 : 500);
+      if(known&&error.code==='RATE_LIMITED'&&Number.isInteger(error.details?.retryAfterSeconds))headers={...headers,'retry-after':String(error.details.retryAfterSeconds)};
       send(response, status, {
         error: { code: known ? error.code : (status === 503 ? 'NOT_READY' : 'INTERNAL_ERROR'), message: known ? error.message : (status === 503 ? 'Service is not ready' : 'Internal server error'), ...(known && error.details ? { details: error.details } : {}) }
       }, headers);

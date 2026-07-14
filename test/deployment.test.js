@@ -28,6 +28,12 @@ test('Render Blueprint is valid and wires migrations, readiness, and PostgreSQL'
   assert.equal(service.envVars.find((item)=>item.key==='MICROSOFT_365_CLIENT_ID').sync,false);
   assert.equal(service.envVars.find((item)=>item.key==='MICROSOFT_365_CLIENT_SECRET').sync,false);
   assert.equal(service.envVars.find((item)=>item.key==='INGESTION_WEBHOOK_SECRETS').sync,false);
+  assert.equal(service.envVars.find((item)=>item.key==='TRUST_PROXY').value,true);
+  assert.equal(service.envVars.find((item)=>item.key==='RATE_LIMIT_AUTH_REQUESTS').value,30);
+  assert.equal(service.envVars.find((item)=>item.key==='RATE_LIMIT_AI_REQUESTS').value,30);
+  assert.equal(service.envVars.find((item)=>item.key==='RATE_LIMIT_FILE_REQUESTS').value,20);
+  assert.equal(service.envVars.find((item)=>item.key==='RATE_LIMIT_WRITE_REQUESTS').value,120);
+  assert.equal(service.envVars.find((item)=>item.key==='RATE_LIMIT_WEBHOOK_REQUESTS').value,300);
   assert.equal(blueprint.databases[0].name, 'atlas-postgres');
   const worker=blueprint.services.find((item)=>item.type==='worker');
   assert.equal(worker.dockerCommand,'node scripts/intelligence-worker.js');
@@ -74,3 +80,5 @@ test('CI provisions real PostgreSQL and fails closed without its integration URL
 test('manual OpenAI evaluation consumes GitHub secrets without embedding them',async()=>{const source=await readFile('.github/workflows/openai-evaluation.yml','utf8');const workflow=YAML.parse(source);const job=workflow.jobs['evaluate-openai'];assert.equal(job.env.AI_PROVIDER,'openai');assert.equal(job.env.AI_MODEL,'gpt-4.1-mini');assert.match(String(job.env.OPENAI_API_KEY),/secrets\.OPENAI_API_KEY/);assert.match(String(job.env.AI_CONTENT_ENCRYPTION_KEY),/secrets\.AI_CONTENT_ENCRYPTION_KEY/);assert.equal(job.steps.at(-1).run,'pnpm test:ai');assert.equal(source.includes('sk-'),false);});
 
 test('manual staging workflow verifies a deployed Atlas URL from GitHub Secrets',async()=>{const source=await readFile('.github/workflows/staging-smoke.yml','utf8');const workflow=YAML.parse(source);const job=workflow.jobs['smoke-test'];assert.match(String(job.env.STAGING_BASE_URL),/secrets\.STAGING_BASE_URL/);assert.equal(job.steps.at(-1).run,'pnpm test:staging');const script=await readFile('scripts/test-staging.js','utf8');assert.match(script,/STAGING_BASE_URL/);});
+
+test('security analysis uses Node 24-compatible maintained action runtimes',async()=>{const source=await readFile('.github/workflows/security-analysis.yml','utf8');assert.match(source,/actions\/checkout@v6/);assert.match(source,/actions\/setup-node@v6/);assert.match(source,/pnpm\/action-setup@v4\.4\.0/);assert.doesNotMatch(source,/actions\/(?:checkout|setup-node)@v4/);});

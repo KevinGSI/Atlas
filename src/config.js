@@ -77,6 +77,7 @@ export function loadConfig(env = process.env) {
     production,
     host: env.HOST ?? (production ? '0.0.0.0' : '127.0.0.1'),
     port: positiveInteger(env.PORT, 3000, 'PORT'),
+    trustProxy:env.TRUST_PROXY==='true',
     databaseUrl,
     tokenSecret,
     mfaEncryptionKey,
@@ -133,6 +134,11 @@ export function loadConfig(env = process.env) {
     documentIndexBatchSize,
     documentIndexIntervalMs:positiveInteger(env.DOCUMENT_INDEX_INTERVAL_MS,60_000,'DOCUMENT_INDEX_INTERVAL_MS'),
     shutdownTimeoutMs: positiveInteger(env.SHUTDOWN_TIMEOUT_MS, 10_000, 'SHUTDOWN_TIMEOUT_MS'),
+    rateLimitAuthRequests:positiveInteger(env.RATE_LIMIT_AUTH_REQUESTS,30,'RATE_LIMIT_AUTH_REQUESTS'),
+    rateLimitAiRequests:positiveInteger(env.RATE_LIMIT_AI_REQUESTS,30,'RATE_LIMIT_AI_REQUESTS'),
+    rateLimitFileRequests:positiveInteger(env.RATE_LIMIT_FILE_REQUESTS,20,'RATE_LIMIT_FILE_REQUESTS'),
+    rateLimitWriteRequests:positiveInteger(env.RATE_LIMIT_WRITE_REQUESTS,120,'RATE_LIMIT_WRITE_REQUESTS'),
+    rateLimitWebhookRequests:positiveInteger(env.RATE_LIMIT_WEBHOOK_REQUESTS,300,'RATE_LIMIT_WEBHOOK_REQUESTS'),
     corsOrigins
   };
 }

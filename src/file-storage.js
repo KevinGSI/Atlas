@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { AtlasError, required } from './errors.js';
 import { BasicFileSecurityScanner } from './file-security.js';
+import { FileSecurityIncidentService, isBlockedFileSecurityCode } from './file-security-incidents.js';
 
 const SAFE_MEDIA_TYPES = new Set([
   'application/pdf',
@@ -86,7 +87,7 @@ export class FileSystemBlobStore {
 }
 
 export class AtlasFileService {
-  constructor(atlas, ingestion, blobStore, { maxBytes = 25_000_000, fileSecurityScanner = new BasicFileSecurityScanner() } = {}) {
+  constructor(atlas, ingestion, blobStore, { maxBytes = 25_000_000, fileSecurityScanner = new BasicFileSecurityScanner(), fileSecurityIncidents = new FileSecurityIncidentService(atlas.repository,atlas.clock) } = {}) {
     if (typeof blobStore?.write !== 'function' || typeof blobStore?.read !== 'function') {
       throw new AtlasError('BLOB_STORE_INVALID', 'Blob store must implement write and read', 500);
     }
@@ -95,6 +96,7 @@ export class AtlasFileService {
     this.blobStore = blobStore;
     this.maxBytes = maxBytes;
     this.fileSecurityScanner=fileSecurityScanner;
+    this.fileSecurityIncidents=fileSecurityIncidents;
   }
 
   async upload(workspaceId, input, actorId) {
@@ -103,8 +105,10 @@ export class AtlasFileService {
     if (!SAFE_MEDIA_TYPES.has(mediaType)) throw new AtlasError('FILE_TYPE_NOT_ALLOWED', 'This file type is not allowed', 415);
     const content = decodeBase64(input.contentBase64);
     if (content.length > this.maxBytes) throw new AtlasError('FILE_TOO_LARGE', `Files may not exceed ${this.maxBytes} bytes`, 413);
-    const securityScan=await this.fileSecurityScanner.scan({content,filename,mediaType,workspaceId});
     const sha256 = createHash('sha256').update(content).digest('hex');
+    let securityScan;
+    try{securityScan=await this.fileSecurityScanner.scan({content,filename,mediaType,workspaceId});}
+    catch(error){if(isBlockedFileSecurityCode(error?.code))await this.fileSecurityIncidents.record({workspaceId,actorId,filename,mediaType,sha256,error,source:'atlas-upload'});throw error;}
     const storageRef = await this.blobStore.write({ workspaceId, sha256, content });
     return this.ingestion.ingestDocument(workspaceId, {
         connector: 'atlas-upload',

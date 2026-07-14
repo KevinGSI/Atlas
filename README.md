@@ -1,8 +1,12 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.54.0` makes the production readiness endpoint depend on live file security as well as PostgreSQL. Atlas sends a bounded private ClamAV `PING`, accepts only `PONG`, and returns a stable unavailable response without exposing the scanner hostname. File scanning remains provider-neutral and fail closed before storage, canonical cataloging, or native intelligence.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `1.0.0-rc.1` is the code-complete Phase 1 launch candidate. It combines the continuously aware digital twin, connected legal-work platform, production persistence and deployment boundaries, shared request-rate protection, and fail-closed file security in one release. See [Phase 1 launch](docs/PHASE_ONE_LAUNCH.md) for the exact code-complete and external-deployment boundary.
 
 ## Implemented
+
+- Multi-instance-safe PostgreSQL request limits for authentication, AI, files and migration, writes, and signed webhooks
+- HMAC-only rate-limit identifiers, explicit trusted-proxy handling, stable `429` responses, and `Retry-After` guidance
+- Append-only security events and deduplicated homepage alerts when a suspicious upload or connected-email attachment is blocked before storage
 
 - Composite application readiness requiring both PostgreSQL and the file-security provider
 - Bounded ClamAV `PING` transport with an exact `PONG` requirement

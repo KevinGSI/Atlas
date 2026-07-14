@@ -1,6 +1,16 @@
-# Atlas Core 0.54.0 — Live File-Security Readiness
+# Atlas Phase 1 1.0.0-rc.1 — Code-Complete Launch Candidate
 
 ## Verified as implemented
+
+- One consolidated Phase 1 launch candidate rather than another incremental Core milestone
+- Shared PostgreSQL fixed-window request protection across authentication, AI, files/imports, workspace writes, and signed webhooks
+- HMAC-derived bucket identifiers that do not persist raw users, emails, or client addresses
+- Proxy-aware address handling that trusts forwarding headers only when the deployment explicitly enables it
+- Stable `429 RATE_LIMITED` responses with bounded `Retry-After` guidance
+- Suspicious direct uploads and connected-email attachments create append-only security events before any bytes are retained
+- Deduplicated high/urgent `While You Were Gone` alerts tell the responsible attorney that Atlas blocked a file
+- Node 24-compatible maintained GitHub checkout and setup actions in the security workflow
+- Phase 1 launch definition and explicit external pilot gates in `docs/PHASE_ONE_LAUNCH.md`
 
 - Application readiness now requires both PostgreSQL and the configured file-security provider
 - ClamAV readiness uses its bounded private `PING` protocol and accepts only an exact `PONG`
@@ -287,8 +297,8 @@
 - Malformed provider-output failure handling
 - Fail-closed live provider command with JSON report
 - Disposable-schema live PostgreSQL integration harness
-- All 17 migrations applied in order and verified idempotent on rerun
-- Live checks for 25 tables, canonical persistence, awareness receipts, transactional rollback, and immutable timeline triggers
+- All 29 migrations discovered and checksum-verified in order, with idempotent rerun behavior covered by the migration harness
+- Live integration checks cover 36 application tables, canonical persistence, rate-limit persistence, awareness receipts, transactional rollback, and immutable timeline triggers
 - Fail-closed live-test command requiring an explicit database URL
 - PostgreSQL 16 CI service with health checks and locked dependency installation
 - Candidate observation previews inside attorney awareness cards
@@ -340,7 +350,8 @@
 
 ## Verification completed here
 
-- 329 canonical tests passed locally across the complete non-live Atlas Core surface
+- 340 Phase 1 tests passed locally with 0 failures; 1 dedicated live-PostgreSQL test correctly skipped because this workspace supplied no database URL
+- Repository verification passed across 152 required launch files, 45 source modules, and 36 database tables
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection
 - Live AI command environment and failure behavior verified locally
@@ -383,17 +394,16 @@
 - Clio developer application approval, real user authorization, or production API data
 - MyCase Advanced Tier/Open API enablement, issued endpoints, or real API data
 - Other CMS vendors not yet supplied as adapters
-- Live PostgreSQL execution of migrations `0014`, `0015`, `0016`, and `0017`
+- Live PostgreSQL execution was not available inside this local release workspace; the dedicated GitHub PostgreSQL workflow applies all 29 migrations against PostgreSQL 16
 - A real mailbox, telephony provider, document store, or production AI model processing an event end to end
 - Deployment of the connected homepage against a public production environment
-- Live local network-listener execution in this restricted workspace (`listen EPERM`)
-- Execution of the new integration harness against a real PostgreSQL daemon; this workspace supplied neither `TEST_DATABASE_URL` nor a database service
+- Execution of the integration harness against a real PostgreSQL daemon in this workspace; no `TEST_DATABASE_URL` or database service was supplied to this release gate
 - Execution of `pnpm test:ai` against a paid production model was not part of this automated regression run
 - A live paid OpenAI web-search request was not executed by the automated suite; its transport contract was verified with simulated provider responses to prevent unplanned spend
-- Execution result of the GitHub OpenAI workflow; it will exist only after this commit is pushed and the workflow is manually run
+- Execution of the GitHub OpenAI workflow for this launch-candidate commit; it can run only after the commit is pushed and the workflow is manually started
 - Real vendor webhook delivery; no mailbox, telephony, or document vendor credentials were supplied here
 - Execution against a public staging deployment; `STAGING_BASE_URL` has not been supplied and Atlas has not yet been deployed
-- A production KMS/HSM-backed vault, sustained rate-limit behavior, or large-firm migration volumes
+- A production KMS/HSM-backed vault, production load/abuse testing of the rate policy, or large-firm migration volumes
 - Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
 
 ## Safety boundary
