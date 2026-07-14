@@ -1,9 +1,13 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.53.0` adds a fail-closed file-security boundary for direct uploads and connected-mail attachments. Atlas verifies declared file signatures and requires a clean, provider-neutral scan before durable storage, canonical cataloging, or native intelligence. Production requires the replaceable ClamAV adapter; local development retains basic deterministic checks without pretending they are production antivirus coverage.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.54.0` makes the production readiness endpoint depend on live file security as well as PostgreSQL. Atlas sends a bounded private ClamAV `PING`, accepts only `PONG`, and returns a stable unavailable response without exposing the scanner hostname. File scanning remains provider-neutral and fail closed before storage, canonical cataloging, or native intelligence.
 
 ## Implemented
 
+- Composite application readiness requiring both PostgreSQL and the file-security provider
+- Bounded ClamAV `PING` transport with an exact `PONG` requirement
+- Stable `503 FILE_SCANNER_UNAVAILABLE` response without private scanner-host disclosure
+- Process-only liveness kept separate from traffic-acceptance readiness
 - Pre-storage file quarantine boundary for direct uploads and connected-mail attachments
 - PDF, DOCX, text, CSV, JPEG, and PNG signature verification against declared media type
 - Provider-neutral malware-scanner contract with functional ClamAV `INSTREAM` adapter

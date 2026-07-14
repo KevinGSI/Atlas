@@ -33,6 +33,8 @@ function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
 }
 
+export function createApplicationReadiness(runtime,fileSecurityScanner){return async()=>{await runtime.ready();await fileSecurityScanner.ready();return true;};}
+
 export async function startAtlas(env = process.env, dependencies = {}) {
   const config = loadConfig(env);
   const runtime = dependencies.runtime ?? (config.databaseUrl
@@ -55,6 +57,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const ingestion = new AtlasIngestionService(runtime.repository);
   const blobStore=dependencies.blobStore??(config.documentStorageProvider==='postgres'?new RepositoryBlobStore(runtime.repository):config.documentStorageProvider==='filesystem'?new FileSystemBlobStore(config.documentStoragePath):new InMemoryBlobStore());
   const fileSecurityScanner=createFileSecurityScanner(config,dependencies);
+  const ready=createApplicationReadiness(runtime,fileSecurityScanner);
   const files=new AtlasFileService(service,ingestion,blobStore,{maxBytes:config.documentMaxBytes,fileSecurityScanner});
   const intelligenceProviders = new IntelligenceProviderRegistry();
   for (const [name, provider] of Object.entries(dependencies.intelligenceProviders ?? {})) intelligenceProviders.register(name, provider);
@@ -95,7 +98,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     repository: runtime.repository,
     contentCipher
   });
-  const server = createAtlasServer(service, { config, ready: runtime.ready, identity, assistant, ingestion, files, webhooks, cms, migration, accounting, voice, sms, telephony, firmExport });
+  const server = createAtlasServer(service, { config, ready, identity, assistant, ingestion, files, webhooks, cms, migration, accounting, voice, sms, telephony, firmExport });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, resolve);

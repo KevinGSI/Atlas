@@ -1,6 +1,13 @@
-# Atlas Core 0.53.0 — Quarantined File Security
+# Atlas Core 0.54.0 — Live File-Security Readiness
 
 ## Verified as implemented
+
+- Application readiness now requires both PostgreSQL and the configured file-security provider
+- ClamAV readiness uses its bounded private `PING` protocol and accepts only an exact `PONG`
+- Scanner connection failures, timeouts, oversized responses, and ambiguous health responses return unavailable
+- `/ready` reports `503 FILE_SCANNER_UNAVAILABLE` without exposing the private scanner hostname
+- `/live` remains process liveness so infrastructure can distinguish running from traffic-ready
+- Injected file-security providers must implement both scanning and readiness contracts
 
 - Direct uploads and connected-mail attachments cross one provider-neutral file-security boundary before storage
 - Declared PDF, DOCX, text, CSV, JPEG, and PNG types are checked against their actual bytes
@@ -333,7 +340,7 @@
 
 ## Verification completed here
 
-- 209 canonical tests passed locally across the complete non-live Atlas Core surface
+- 329 canonical tests passed locally across the complete non-live Atlas Core surface
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection
 - Live AI command environment and failure behavior verified locally

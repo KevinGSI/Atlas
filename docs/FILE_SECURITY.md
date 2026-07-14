@@ -27,4 +27,6 @@ CLAMAV_PORT=3310
 CLAMAV_TIMEOUT_MS=30000
 ```
 
+Atlas application readiness probes PostgreSQL first and then sends ClamAV's bounded `PING` command over the private scanner connection. `/ready` returns `503 FILE_SCANNER_UNAVAILABLE` unless the scanner responds with exactly `PONG`. `/live` remains a process-only liveness endpoint so an orchestrator can distinguish a running process from an instance that must not receive firm traffic.
+
 The local Docker stack includes a ClamAV service. A hosted deployment must supply a private, reachable ClamAV service and maintain its engine and signature updates. Atlas does not claim daily rescanning, content disarm and reconstruction, operational alert response, or independent malware-control assurance until those systems and procedures are deployed and verified.

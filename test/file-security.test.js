@@ -5,9 +5,25 @@ import {
   BasicFileSecurityScanner,
   ClamAvFileSecurityScanner,
   clamAvInstream,
+  clamAvPing,
   createFileSecurityScanner,
   inspectFileSignature
 } from '../src/file-security.js';
+
+test('ClamAV readiness transport sends PING and requires a bounded PONG response',async()=>{
+  const writes=[];
+  class Socket extends EventEmitter {
+    setTimeout(value){this.timeout=value;}
+    write(value){writes.push(Buffer.from(value));queueMicrotask(()=>this.emit('data',Buffer.from('PONG\0')));return true;}
+    destroy(){this.destroyed=true;}
+  }
+  const socket=new Socket();
+  const verdict=await clamAvPing({host:'clamav',port:3310,timeoutMs:3210,connect:()=>{queueMicrotask(()=>socket.emit('connect'));return socket;}});
+  assert.equal(verdict,'PONG');
+  assert.equal(writes[0].toString('binary'),'zPING\0');
+  assert.equal(socket.timeout,3210);
+  assert.equal(socket.destroyed,true);
+});
 
 test('ClamAV transport streams the protocol command, bounded chunks, and terminator',async()=>{
   const writes=[];
@@ -58,9 +74,19 @@ test('ClamAV malware, unavailable service, and ambiguous responses all fail clos
   await assert.rejects(()=>ambiguous.scan({content:Buffer.from('%PDF-safe'),mediaType:'application/pdf'}),(error)=>error.code==='FILE_SCANNER_INVALID_RESPONSE'&&error.status===503);
 });
 
+test('ClamAV readiness accepts only PONG and fails closed on unavailable or ambiguous health',async()=>{
+  const healthy=new ClamAvFileSecurityScanner({host:'clamav',healthTransport:async()=> 'PONG'});
+  assert.equal(await healthy.ready(),true);
+  const unavailable=new ClamAvFileSecurityScanner({host:'clamav',healthTransport:async()=>{throw new Error('offline');}});
+  await assert.rejects(()=>unavailable.ready(),(error)=>error.code==='FILE_SCANNER_UNAVAILABLE'&&error.status===503);
+  const ambiguous=new ClamAvFileSecurityScanner({host:'clamav',healthTransport:async()=> 'WAIT'});
+  await assert.rejects(()=>ambiguous.ready(),(error)=>error.code==='FILE_SCANNER_UNAVAILABLE'&&error.status===503);
+});
+
 test('scanner selection is injectable and production ClamAV configuration is explicit',()=>{
-  const injected={async scan(){return {status:'clean'};}};
+  const injected={async scan(){return {status:'clean'};},async ready(){return true;}};
   assert.equal(createFileSecurityScanner({fileMalwareScanner:'clamav'},{fileSecurityScanner:injected}),injected);
+  assert.throws(()=>createFileSecurityScanner({fileMalwareScanner:'basic'},{fileSecurityScanner:{async scan(){}}}),(error)=>error.code==='FILE_SCANNER_CONFIGURATION_ERROR');
   assert.equal(createFileSecurityScanner({fileMalwareScanner:'basic'}).capabilities().provider,'atlas-basic');
   assert.equal(createFileSecurityScanner({fileMalwareScanner:'clamav',clamAvHost:'clamav',clamAvPort:3310,clamAvTimeoutMs:5000},{clamAvTransport:async()=> 'stream: OK'}).capabilities().provider,'clamav');
 });

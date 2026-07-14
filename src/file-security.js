@@ -25,10 +25,37 @@ export function inspectFileSignature({ content, mediaType }) {
 
 export class BasicFileSecurityScanner {
   capabilities() { return { fileSignatureVerification: true, malwareScanning: false, provider: 'atlas-basic' }; }
+  async ready() { return true; }
   async scan(input) {
     inspectFileSignature(input);
     return { status: 'clean', provider: 'atlas-basic', engineVersion: null, signature: null, malwareScanned: false };
   }
+}
+
+export function clamAvPing({ host, port, timeoutMs = 5_000, connect = netConnect }) {
+  return new Promise((resolve, reject) => {
+    let response = '';
+    let settled = false;
+    let socket;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      socket?.destroy();
+      if (error) reject(error); else resolve(value);
+    };
+    try { socket = connect({ host, port }); }
+    catch (error) { finish(error); return; }
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => socket.write(Buffer.from('zPING\0')));
+    socket.on('data', (chunk) => {
+      response += chunk.toString('utf8');
+      if (response.length > 128) { finish(new Error('ClamAV ping response exceeded limit')); return; }
+      if (response.includes('\0') || response.includes('\n')) finish(null, response.replace(/\0/g, '').trim());
+    });
+    socket.once('timeout', () => finish(new Error('ClamAV readiness probe timed out')));
+    socket.once('error', (error) => finish(error));
+    socket.once('end', () => response ? finish(null, response.replace(/\0/g, '').trim()) : finish(new Error('ClamAV returned no readiness response')));
+  });
 }
 
 export function clamAvInstream({ host, port, content, timeoutMs = 30_000, connect = netConnect }) {
@@ -73,9 +100,17 @@ export class ClamAvFileSecurityScanner {
     this.port = options.port ?? 3310;
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.transport = options.transport ?? clamAvInstream;
+    this.healthTransport = options.healthTransport ?? clamAvPing;
     if (!this.host) throw new AtlasError('FILE_SCANNER_CONFIGURATION_ERROR', 'ClamAV host is required', 500);
   }
   capabilities() { return { fileSignatureVerification: true, malwareScanning: true, provider: 'clamav', protocol: 'INSTREAM' }; }
+  async ready() {
+    let verdict;
+    try { verdict = await this.healthTransport({ host: this.host, port: this.port, timeoutMs: Math.min(this.timeoutMs, 5_000) }); }
+    catch { throw new AtlasError('FILE_SCANNER_UNAVAILABLE', 'Malware scanner readiness check failed', 503, { provider: 'clamav' }); }
+    if (String(verdict ?? '').trim() !== 'PONG') throw new AtlasError('FILE_SCANNER_UNAVAILABLE', 'Malware scanner readiness check did not return PONG', 503, { provider: 'clamav' });
+    return true;
+  }
   async scan(input) {
     inspectFileSignature(input);
     let verdict;
@@ -90,7 +125,10 @@ export class ClamAvFileSecurityScanner {
 }
 
 export function createFileSecurityScanner(config, dependencies = {}) {
-  if (dependencies.fileSecurityScanner) return dependencies.fileSecurityScanner;
-  if (config.fileMalwareScanner === 'clamav') return new ClamAvFileSecurityScanner({ host: config.clamAvHost, port: config.clamAvPort, timeoutMs: config.clamAvTimeoutMs, transport: dependencies.clamAvTransport });
+  if (dependencies.fileSecurityScanner) {
+    if (typeof dependencies.fileSecurityScanner.scan !== 'function' || typeof dependencies.fileSecurityScanner.ready !== 'function') throw new AtlasError('FILE_SCANNER_CONFIGURATION_ERROR', 'File security scanner must implement scan and ready', 500);
+    return dependencies.fileSecurityScanner;
+  }
+  if (config.fileMalwareScanner === 'clamav') return new ClamAvFileSecurityScanner({ host: config.clamAvHost, port: config.clamAvPort, timeoutMs: config.clamAvTimeoutMs, transport: dependencies.clamAvTransport, healthTransport: dependencies.clamAvHealthTransport });
   return new BasicFileSecurityScanner();
 }

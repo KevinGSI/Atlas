@@ -17,7 +17,7 @@ for (const file of requiredFiles) {
 }
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-if (pkg.version !== '0.53.0') failures.push(`expected version 0.53.0, got ${pkg.version}`);
+if (pkg.version !== '0.54.0') failures.push(`expected version 0.54.0, got ${pkg.version}`);
 
 const migration = await readFile('db/migrations/0001_initial.sql', 'utf8');
 for (const table of ['atlas_workspace', 'atlas_object', 'atlas_relationship', 'atlas_timeline_event']) {
@@ -103,7 +103,9 @@ if (!render.includes('FILE_MALWARE_SCANNER') || !render.includes('CLAMAV_HOST'))
 const compose=await readFile('docker-compose.yml','utf8');
 if(!compose.includes('clamav/clamav:1.4')||!compose.includes('FILE_MALWARE_SCANNER: clamav'))failures.push('local ClamAV service or scanner configuration is missing');
 const fileSecurity=await readFile('src/file-security.js','utf8');
-if(!fileSecurity.includes('zINSTREAM\\0')||!fileSecurity.includes('FILE_SCANNER_UNAVAILABLE')||!fileSecurity.includes('FILE_SIGNATURE_MISMATCH'))failures.push('fail-closed file security adapter is incomplete');
+if(!fileSecurity.includes('zINSTREAM\\0')||!fileSecurity.includes('zPING\\0')||!fileSecurity.includes("!== 'PONG'")||!fileSecurity.includes('FILE_SCANNER_UNAVAILABLE')||!fileSecurity.includes('FILE_SIGNATURE_MISMATCH'))failures.push('fail-closed file security adapter or readiness probe is incomplete');
+const application=await readFile('src/application.js','utf8');
+if(!application.includes('createApplicationReadiness')||!application.includes('fileSecurityScanner.ready()'))failures.push('application readiness does not cover file security');
 
 const testFiles = (await readdir('test'))
   .filter((name) => name.endsWith('.test.js'))
