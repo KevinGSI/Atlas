@@ -117,7 +117,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const voice=new VoiceAssistantService(service,{intentProvider:voiceIntentProvider});
   const telephony=dependencies.telephonyAdapter??(config.twilioAuthToken?new TwilioVoiceAdapter({authToken:config.twilioAuthToken,publicBaseUrl:config.voicePublicBaseUrl,accountSid:config.twilioAccountSid,messagingFrom:config.twilioMessagingFrom,transport:dependencies.telephonyTransport}):null);
   const sms=new SmsAssistantService(service,{intentProvider:voiceIntentProvider,messagingProvider:dependencies.messagingProvider??telephony});
-  const caseCommunications=new CaseCommunicationsService(service,{model:selectedModel,sms});
+  const caseCommunications=new CaseCommunicationsService(service,{model:selectedModel,sms,emailSender:({workspaceId,emailDraft,targetUserId})=>cms.sendApprovedEmailDraft(workspaceId,emailDraft,targetUserId)});
   const social=new SocialMediaService(service,selectedModel);
   const marketingPublicSources=new ProviderRegistry('Marketing public data');
   const marketingAdProviders=new ProviderRegistry('Advertising');

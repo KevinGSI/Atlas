@@ -23,3 +23,5 @@ test('case workspace places durable live legal research immediately after Timeli
   assert.match(script, /relatedToMatter\(item,matter\.id\)/);
   assert.match(script, /event\.key==='Enter'&&!event\.shiftKey&&!event\.isComposing/);
 });
+
+test('firm-wide legal research exposes its prepared drafts in the unified Workspace',async()=>{const script=await readFile(new URL('web/phase-one/app.js',root),'utf8');assert.match(script,/Open prepared work in Workspace/);assert.match(script,/showView\('workspace'\)/);assert.match(script,/workspaceFilter/);assert.match(script,/action\.actionType==='create_document'/);});

@@ -53,7 +53,8 @@ export function buildCanonicalContext({rootObjectId,objects,relationships=[],eve
   const contextEvents=events.filter(event=>ids.has(event.parentObjectId)||(event.relatedObjectIds??[]).some(id=>ids.has(id)));
   const contextObservations=observations.filter(observation=>ids.has(observation.sourceObjectId)||matterIds.includes(observation.matterId));
   const observationIds=new Set(contextObservations.map(observation=>observation.id));
-  const contextActions=actions.filter(action=>ids.has(action.resultObjectId)||matterIds.includes(action.input?.matterId)||referencesAny(action.input,ids));
+  const objectReferencedActionIds=new Set(contextObjects.flatMap(object=>object.state?.proposedActionIds??[]));
+  const contextActions=actions.filter(action=>objectReferencedActionIds.has(action.id)||ids.has(action.resultObjectId)||matterIds.includes(action.input?.matterId)||referencesAny(action.input,ids));
   const actionIds=new Set(contextActions.map(action=>action.id));
   const contextAwareness=awareness.filter(item=>ids.has(item.sourceObjectId)||(item.observationIds??[]).some(id=>observationIds.has(id))||(item.actionProposalIds??[]).some(id=>actionIds.has(id)));
   const rootMatterId=canonicalMatterId(root,byId);

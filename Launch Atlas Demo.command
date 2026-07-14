@@ -4,7 +4,7 @@ set -euo pipefail
 unsetopt BG_NICE
 
 PROJECT_DIR="${0:A:h}"
-DEMO_URL="http://127.0.0.1:3000/?build=1.0.0-rc.1"
+DEMO_URL="http://127.0.0.1:3000/?build=1.0.0-rc.1-communication-1"
 HEALTH_URL="http://127.0.0.1:3000/health"
 BUNDLED_NODE="/Users/kevinmeredith/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
 LOG_FILE="$PROJECT_DIR/atlas-local-demo.log"
@@ -19,9 +19,17 @@ export DOCUMENT_STORAGE_PATH="${DOCUMENT_STORAGE_PATH:-$PROJECT_DIR/.atlas-data/
 cd "$PROJECT_DIR"
 
 if /usr/bin/curl --silent --fail "$HEALTH_URL" >/dev/null 2>&1; then
-  echo "Atlas is already running. Opening the demo now."
-  /usr/bin/open "$DEMO_URL"
-  exit 0
+  if [[ -f "$PID_FILE" ]] && [[ "$(<"$PID_FILE")" == <-> ]] && kill -0 "$(<"$PID_FILE")" >/dev/null 2>&1; then
+    echo "Atlas is already running from this launcher. Opening the demo now."
+    /usr/bin/open "$DEMO_URL"
+    exit 0
+  fi
+  echo "An earlier manually started Atlas server is still using port 3000."
+  echo "Run 'Stop Atlas Demo.command' once, then run this launcher again."
+  echo "This prevents the browser from silently reopening outdated backend code."
+  echo
+  read -k 1 "?Press any key to close."
+  exit 1
 fi
 
 if [[ -x "$BUNDLED_NODE" ]]; then

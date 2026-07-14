@@ -14,8 +14,9 @@ async function fixture(){
   const sent=[];const messagingProvider={describe(){return {provider:'fake-sms'};},async sendMessage(input){sent.push(input);return {id:'sent',status:'queued'};}};
   const sms=new SmsAssistantService(atlas,{messagingProvider,clock:()=>now});
   const modelCalls=[];const model={async complete(input){modelCalls.push(input);return {text:JSON.stringify({subject:'A case update',body:'I am writing with an update for your review.'})};}};
-  const service=new CaseCommunicationsService(atlas,{model,sms,clock:()=>now});
-  return {repository,atlas,workspace,matter,client,sms,modelCalls,sent,service};
+  const sentEmails=[];const emailSender=async input=>{sentEmails.push(input);return {draft:input.emailDraft,status:'sent',provider:'fake-mail'};};
+  const service=new CaseCommunicationsService(atlas,{model,sms,emailSender,clock:()=>now});
+  return {repository,atlas,workspace,matter,client,sms,modelCalls,sent,sentEmails,service};
 }
 
 async function addCaseContact(atlas,workspaceId,matter,{title,type,role,email=null,phone=null}){
@@ -141,4 +142,18 @@ test('contactId is a selector but direct recipient overrides remain forbidden fo
     ()=>service.createMeetingDraft(workspace.id,matter.id,{contactId:client.id,email:'attacker@example.test',meetingType:'phone',proposedSlots:['2026-07-20T14:00:00.000Z','2026-07-21T16:30:00.000Z'],timeZone:'America/New_York'},'usr_attorney')
   ];
   for(const attempt of attempts)await assert.rejects(attempt,error=>error.code==='CASE_COMMUNICATION_RECIPIENT_OVERRIDE_FORBIDDEN');
+});
+
+test('an explicit no-case choice creates firm-level canonical drafts and events without inventing a case',async()=>{
+  const {atlas,workspace,client,service,modelCalls}=await fixture();const directory=await service.firmDirectory(workspace.id);assert.ok(directory.contacts.some(contact=>contact.id===client.id));
+  const email=await service.createFirmEmailDraft(workspace.id,{contactId:client.id,instructions:'Send a general availability update.'},'usr_attorney');assert.equal(email.draft.parentObjectId,null);assert.equal(email.draft.state.scope,'firm');assert.equal(email.draft.state.matterId,null);assert.equal(email.draft.state.contactId,client.id);assert.equal(modelCalls.at(-1).context.scope,'firm');
+  const text=await service.createFirmTextDraft(workspace.id,{contactId:client.id,instructions:'Ask for a convenient callback time.'},'usr_attorney');assert.equal(text.draft.parentObjectId,null);assert.equal(text.draft.state.scope,'firm');assert.equal(text.draft.state.matterId,null);
+  const call=await service.prepareFirmCall(workspace.id,{contactId:client.id},'usr_attorney');assert.equal(call.attempt.parentObjectId,null);assert.equal(call.attempt.state.scope,'firm');assert.equal(call.dialUri,'tel:5550102026');
+  const events=await atlas.listEvents(workspace.id);assert.ok(events.some(event=>event.parentObjectId===email.draft.id&&event.type==='communication.email_draft_created'));assert.ok(events.some(event=>event.parentObjectId===text.draft.id&&event.type==='communication.text_draft_created'));assert.ok(events.some(event=>event.parentObjectId===call.attempt.id&&event.type==='communication.call_prepared'));
+});
+
+test('firm-level communication can be linked to a selected case later and approved email remains scope checked',async()=>{
+  const {atlas,workspace,matter,client,service,sentEmails}=await fixture();const created=await service.createFirmEmailDraft(workspace.id,{contactId:client.id,instructions:'Prepare a general message.'},'usr_attorney');await service.sendFirmEmailDraft(workspace.id,created.draft.id,{version:created.draft.version,confirm:true},'usr_attorney');assert.equal(sentEmails.length,1);assert.equal(sentEmails[0].emailDraft.id,created.draft.id);
+  const relationship=await service.linkFirmCommunicationToMatter(workspace.id,created.draft.id,matter.id,'usr_attorney');assert.equal(relationship.fromObjectId,matter.id);assert.equal(relationship.toObjectId,created.draft.id);assert.equal(relationship.type,'matter_communication');
+  await assert.rejects(()=>service.sendEmailDraft(workspace.id,matter.id,created.draft.id,{version:created.draft.version,confirm:true},'usr_attorney'),error=>error.code==='EMAIL_DRAFT_CASE_MISMATCH');
 });

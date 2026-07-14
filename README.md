@@ -1,6 +1,6 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `1.0.0-rc.1` is the code-complete Phase 1 launch candidate. It combines the continuously aware digital twin, connected legal-work platform, production persistence and deployment boundaries, shared request-rate protection, and fail-closed file security in one release. See [Phase 1 launch](docs/PHASE_ONE_LAUNCH.md) for the exact code-complete and external-deployment boundary.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `1.0.0-rc.1` is the code-complete Phase 1 launch candidate. It combines the continuously aware digital twin, connected legal-work platform, production persistence and deployment boundaries, shared request-rate protection, and fail-closed file security in one release. The [Atlas Product Constitution](docs/ATLAS_PRODUCT_CONSTITUTION.md) is the highest-level product source of truth, and the [Business Model](docs/BUSINESS_MODEL.md) records the approved commercial structure without inventing unresolved prices. See [Phase 1 launch](docs/PHASE_ONE_LAUNCH.md) for the exact code-complete and external-deployment boundary.
 
 ## Implemented
 

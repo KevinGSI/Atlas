@@ -4,7 +4,7 @@ import { GoogleWorkspaceConnector, Microsoft365Connector } from '../src/mail-pro
 
 function response(body, status = 200) { return { ok: status >= 200 && status < 300, status, async json() { return body; } }; }
 
-test('Google Workspace requests read-only mail and review-gated calendar consent and normalizes Gmail', async () => {
+test('Google Workspace requests read plus approved-send mail and review-gated calendar consent and normalizes Gmail', async () => {
   const calls = [];
   const transport = async (url, options = {}) => {
     calls.push({ url: String(url), options });
@@ -20,7 +20,7 @@ test('Google Workspace requests read-only mail and review-gated calendar consent
   const connector = new GoogleWorkspaceConnector({ clientId: 'google-client', clientSecret: 'secret', transport, clock: () => Date.parse('2026-07-13T12:00:00.000Z') });
   const authorization = connector.beginAuthorization({ state: 'state', codeChallenge: 'challenge', redirectUri: 'https://atlas.example/v1/cms/oauth/callback' });
   assert.match(authorization, /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth/);
-  assert.match(authorization, /gmail\.readonly/); assert.match(authorization, /calendar\.events/); assert.doesNotMatch(authorization,/gmail\.modify|gmail\.send/); assert.match(authorization, /access_type=offline/);
+  assert.match(authorization, /gmail\.readonly/); assert.match(authorization, /calendar\.events/); assert.match(authorization,/gmail\.send/); assert.doesNotMatch(authorization,/gmail\.modify/); assert.match(authorization, /access_type=offline/);
   const batch = await connector.pull({ credentials: { access_token: 'google-token', expires_at: Date.parse('2026-07-13T13:00:00.000Z') } });
   assert.equal(batch.records[0].type, 'email'); assert.equal(batch.records[0].data.from, 'client@example.com'); assert.equal(batch.records[0].data.bodyText, 'Please review the attached response.');
   assert.equal(batch.nextCursor.resource, 'calendar'); assert.equal(calls.at(-1).options.headers.authorization, 'Bearer google-token');
@@ -45,7 +45,7 @@ test('Microsoft 365 retains Graph delta links for real incremental email and cal
 
 test('Microsoft 365 rejects untrusted continuation URLs and safely rebuilds expired delta state',async()=>{const connector=new Microsoft365Connector({clientId:'id',clientSecret:'secret',transport:async()=>response({value:[]}),clock:()=>Date.parse('2026-07-14T12:00:00.000Z')});await assert.rejects(()=>connector.pull({credentials:{access_token:'token'},cursor:{resource:'email',nextUrl:'https://attacker.example/steal',since:'2026-07-01T00:00:00.000Z'}}),(error)=>error.code==='MAIL_SYNC_PROVIDER_ERROR');const calls=[];const recovering=new Microsoft365Connector({clientId:'id',clientSecret:'secret',transport:async(url)=>{calls.push(String(url));if(String(url).includes('$deltatoken=expired'))return response({},410);return response({'@odata.deltaLink':'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=fresh',value:[]});},clock:()=>Date.parse('2026-07-14T12:00:00.000Z')});const batch=await recovering.pull({credentials:{access_token:'token'},cursor:{resource:'email',emailDeltaUrl:'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$deltatoken=expired',since:'2026-07-13T12:00:00.000Z',syncStartedAt:'2026-07-14T11:00:00.000Z'}});assert.equal(calls.length,2);assert.match(calls[1],/messages\/delta/);assert.equal(batch.nextCursor.emailDeltaUrl.includes('fresh'),true);assert.equal(batch.nextCursor.resource,'calendar');});
 
-test('mail provider capabilities remain read-only and provider-neutral', () => {
+test('mail provider capabilities remain provider-neutral with only approval-gated writes', () => {
   for (const connector of [new GoogleWorkspaceConnector({ clientId: 'a', clientSecret: 'b' }), new Microsoft365Connector({ clientId: 'a', clientSecret: 'b' })]) {
     assert.deepEqual(connector.capabilities().resources, ['email', 'calendar']);
     assert.equal(connector.capabilities().readOnly, true);
@@ -53,7 +53,14 @@ test('mail provider capabilities remain read-only and provider-neutral', () => {
   }
   assert.equal(new Microsoft365Connector({clientId:'a',clientSecret:'b'}).capabilities().calendarWriteAfterApproval,true);
   assert.equal(new GoogleWorkspaceConnector({clientId:'a',clientSecret:'b'}).capabilities().calendarWriteAfterApproval,true);
-  assert.equal(new Microsoft365Connector({clientId:'a',clientSecret:'b'}).capabilities().mailReadOnly,true);
+  assert.equal(new Microsoft365Connector({clientId:'a',clientSecret:'b'}).capabilities().mailWriteAfterApproval,true);
+  assert.equal(new GoogleWorkspaceConnector({clientId:'a',clientSecret:'b'}).capabilities().mailWriteAfterApproval,true);
+});
+
+test('Google and Microsoft send only an approved canonical draft through provider-native APIs',async()=>{
+  const draft={id:'obj_email_1',type:'email_draft',title:'Case update',state:{status:'pending_review',recipients:['client@example.com'],subject:'Case update',body:'Please review the attached update.'}};
+  const googleCalls=[];const google=new GoogleWorkspaceConnector({clientId:'id',clientSecret:'secret',transport:async(url,options)=>{googleCalls.push({url:String(url),options});return response({id:'gmail-message-1',threadId:'gmail-thread-1'});}});const googleResult=await google.sendEmail({credentials:{access_token:'token'},emailDraft:draft});assert.equal(googleResult.externalId,'gmail-message-1');assert.equal(googleCalls[0].url,'https://gmail.googleapis.com/gmail/v1/users/me/messages/send');const mime=Buffer.from(JSON.parse(googleCalls[0].options.body).raw,'base64url').toString();assert.match(mime,/To: client@example\.com/);assert.match(mime,/Subject: Case update/);
+  const microsoftCalls=[];const microsoft=new Microsoft365Connector({clientId:'id',clientSecret:'secret',transport:async(url,options)=>{microsoftCalls.push({url:String(url),options});return response(null,202);}});const microsoftResult=await microsoft.sendEmail({credentials:{access_token:'token'},emailDraft:draft});assert.equal(microsoftResult.status,'sent');assert.equal(microsoftCalls[0].url,'https://graph.microsoft.com/v1.0/me/sendMail');const payload=JSON.parse(microsoftCalls[0].options.body);assert.equal(payload.message.toRecipients[0].emailAddress.address,'client@example.com');assert.equal(payload.saveToSentItems,true);
 });
 
 test('Google Workspace creates one private approved event without inviting attendees',async()=>{const calls=[];const transport=async(url,options={})=>{calls.push({url:String(url),options});const payload=JSON.parse(options.body);return response({id:payload.id,summary:payload.summary,description:payload.description,start:payload.start,end:payload.end,location:payload.location,status:'confirmed',htmlLink:'https://calendar.google.com/calendar/event?eid=approved',updated:'2026-07-14T12:01:00.000Z',etag:'google-v1'},201);};const connector=new GoogleWorkspaceConnector({clientId:'id',clientSecret:'secret',transport,clock:()=>Date.parse('2026-07-14T12:00:00.000Z')});const calendarEvent={id:'obj_calendar_google_1',type:'calendar_event',title:'Client deposition',state:{startsAt:'2026-07-21T14:00:00.000Z',endsAt:'2026-07-21T16:00:00.000Z',location:'Conference Room',description:'Prepare exhibits',attendees:['client@example.com'],reminderMinutesBeforeStart:30}};const created=await connector.createCalendarEvent({credentials:{access_token:'token'},calendarEvent});assert.match(calls[0].url,/googleapis\.com\/calendar\/v3\/calendars\/primary\/events\?sendUpdates=none/);assert.equal(calls[0].options.method,'POST');const payload=JSON.parse(calls[0].options.body);assert.equal(payload.attendees,undefined);assert.equal(payload.visibility,'private');assert.equal(payload.extendedProperties.private.atlasEventId,calendarEvent.id);assert.equal(payload.reminders.overrides[0].minutes,30);assert.equal(created.record.data.startsAt,'2026-07-21T14:00:00.000Z');assert.match(created.record.data.webLink,/calendar\.google\.com/);});

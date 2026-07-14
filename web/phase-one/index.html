@@ -36,12 +36,16 @@
     .command-center-grid .command-console .transcript:not(:empty){min-height:0}
     .command-center-grid .flowing-chat{display:block}
     .command-center-grid .flowing-chat .chat-composer{position:static;padding-top:10px;background:white}
-    /* Keep the homepage Attorney Inbox level with the Native Firm Twin. */
-    #view-dashboard>.command-center-grid{align-items:stretch}
+    /* Keep the homepage Attorney Inbox equal in width and height to What do you need. */
+    #view-dashboard>.command-center-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
     #view-dashboard>.command-center-grid>.command-console{grid-column:1;grid-row:1;height:100%}
     #view-dashboard>.command-center-grid>.command-rail{display:contents}
     #view-dashboard>.command-center-grid>.command-rail>#reviewInbox{grid-column:2;grid-row:1;display:flex;min-height:0;height:100%;flex-direction:column}
     #view-dashboard>.command-center-grid>.command-rail>#reviewInbox .feed{flex:1;min-height:0;max-height:390px;overflow-y:auto;scrollbar-gutter:stable}
+    #reviewInbox,#reviewInbox .feed,#reviewInbox .item,#reviewInbox .item>div,#reviewInbox .actions,#reviewInbox .proposal,#reviewInbox .proposal header,#reviewInbox .proposal footer{min-width:0;max-width:100%}
+    #reviewInbox .item{overflow:hidden}
+    #reviewInbox .item h3,#reviewInbox .item p,#reviewInbox .item small,#reviewInbox .pill,#reviewInbox .command-console-badge,#reviewInbox .decision,#reviewInbox .case-link,#reviewInbox .proposal header strong,#reviewInbox .proposal pre{max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+    #reviewInbox .proposal pre{white-space:pre-wrap;overflow-x:hidden}
     #view-dashboard>.command-center-grid>.command-rail>.rail-panel{grid-column:2;grid-row:2}
     .workspace,.workspace main,.view,.card,.proposal,.object-card,.rail-panel{min-width:0;max-width:100%}
     .workspace input,.workspace textarea,.workspace select{min-width:0;max-width:100%}
@@ -49,6 +53,7 @@
     .section-head>*{min-width:0}
     button{max-width:100%;white-space:normal;overflow-wrap:anywhere}
     @media(max-width:1050px){
+      #view-dashboard>.command-center-grid{grid-template-columns:minmax(0,1fr)}
       #view-dashboard>.command-center-grid>.command-console,#view-dashboard>.command-center-grid>.command-rail>#reviewInbox,#view-dashboard>.command-center-grid>.command-rail>.rail-panel{grid-column:1;grid-row:auto;height:auto}
       #view-dashboard>.command-center-grid>.command-rail>#reviewInbox .feed{max-height:none}
     }
@@ -86,6 +91,88 @@
     .matter-document-upload{margin:0 0 18px;padding:20px;border:1px solid #c7d5e4;border-radius:14px;background:#f8fbfe}.matter-document-upload h2{margin:4px 0}.document-drop-zone{display:grid;place-items:center;gap:7px;margin:14px 0;padding:28px 18px;border:2px dashed #9bafc5;border-radius:13px;background:white;text-align:center;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s}.document-drop-zone strong{font-size:17px;color:var(--navy)}.document-drop-zone span,.document-drop-zone small{color:var(--muted);font-weight:500}.document-drop-zone:hover,.document-drop-zone:focus-visible,.document-drop-zone.is-dragging{outline:0;border-color:#315985;background:#eef4fa;box-shadow:0 0 0 4px #31598516}.document-selection{display:grid;gap:5px;margin:0 0 14px;padding-left:20px;color:var(--muted);font-size:12px}.matter-tab-grid{margin-top:14px}.document-provenance{display:grid;gap:3px;margin:10px 0;padding:9px 10px;border-radius:8px;background:#f5f8fb;font-size:12px}.document-provenance strong{color:var(--navy)}.document-provenance span{color:var(--muted)}
     .matter-communication-panel{margin:0 0 18px;padding:20px;border:1px solid #c7d5e4;border-radius:14px;background:#f8fbfe}.matter-communication-panel h2{margin:4px 0}.matter-client-contact{display:grid;grid-template-columns:minmax(210px,.55fr) minmax(0,1fr);gap:18px;align-items:center;margin:14px 0;padding:14px;border:1px solid var(--line);border-radius:11px;background:white}.matter-client-contact div{display:grid;gap:3px}.matter-client-contact strong{font:20px Georgia,serif;color:var(--navy)}.matter-client-contact span,.matter-client-contact p{color:var(--muted);font-size:12px}.matter-client-contact p{margin:0;line-height:1.5}.matter-communication-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;align-items:stretch}.matter-communication-action{display:flex;min-width:0;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:11px;background:white}.matter-communication-action label{display:grid;gap:6px;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.02em}.matter-communication-action select{width:100%;min-width:0;background:white;color:var(--ink)}.matter-communication-recipient-detail{min-height:32px;color:var(--muted);font-size:11px;line-height:1.4}.matter-communication-actions button{width:100%;min-height:46px;margin-top:auto;color:var(--navy);border-color:#9eb1c7;background:white}.matter-communication-actions button:not(:disabled):hover,.matter-communication-actions button:not(:disabled):focus-visible{border-color:var(--navy);box-shadow:0 6px 18px #142b4a16}.matter-communication-composer{margin-top:16px;padding:16px;background:white}.matter-communication-composer h3{margin:4px 0}.matter-communication-status{margin:14px 0 0;padding:10px 12px;border-radius:8px;background:#eef4fa;color:#264d75;font-size:13px;font-weight:700}.communication-preview{white-space:pre-wrap;max-height:160px;overflow:auto}.contact-directory-tools{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.35fr);gap:12px;margin:18px 0 4px;padding:14px;border:1px solid var(--line);border-radius:11px;background:#f8fafc}.contact-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.contact-details{display:grid;gap:5px;margin-top:10px}.contact-details a{color:#245a8d;font-weight:750;text-decoration:none}.contact-details a:hover,.contact-details a:focus-visible{text-decoration:underline}.contact-type-pill{background:#eef3f9;color:#274e79}.contact-case{margin-top:9px}@media(max-width:1000px){.matter-communication-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.matter-client-contact,.matter-communication-actions,.contact-directory-tools{grid-template-columns:minmax(0,1fr)}}
   </style>
+  <style id="atlas-awareness-cards">
+    #reviewInbox .section-head{align-items:flex-start}
+    #reviewInbox .feed{gap:14px;padding:2px 4px 8px 0}
+    #reviewInbox .awareness-card{display:block;padding:0;border:1px solid #d5deea;border-left:5px solid #2f6fed;border-radius:14px;background:#fff;box-shadow:0 8px 24px #1220330a;overflow:hidden}
+    #reviewInbox .awareness-card[data-priority="urgent"]{border-left-color:#b42318}
+    #reviewInbox .awareness-card[data-priority="high"]{border-left-color:#d97706}
+    .awareness-card-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid #e8edf3;background:#f8fafc}
+    .awareness-labels{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
+    .awareness-priority{padding:4px 7px;border-radius:999px;color:#315679;background:#eaf1ff;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+    [data-priority="urgent"] .awareness-priority{color:#9f2d20;background:#fff1ef}
+    [data-priority="high"] .awareness-priority{color:#8a4b08;background:#fff7e8}
+    .awareness-card-header time{flex:0 0 auto;color:var(--muted);font-size:10px;font-weight:700}
+    .awareness-card-body{display:grid;gap:10px;padding:15px}
+    #reviewInbox .awareness-card-body h3{margin:0;font:700 19px/1.25 var(--atlas-heading);color:var(--atlas-text)}
+    #reviewInbox .awareness-summary{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+    .awareness-subject{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;padding:9px 10px;border-radius:9px;background:#eef4fb;color:var(--muted);font-size:12px}
+    .awareness-subject strong{color:#294d73;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+    .awareness-record-link{min-width:0;padding:0;border:0;color:#245a8d;background:transparent;font-size:12px;font-weight:800;text-align:left;text-decoration:underline;text-underline-offset:2px}
+    .awareness-prepared{display:grid;gap:8px;margin-top:2px;padding-top:12px;border-top:1px solid #edf1f5}
+    .awareness-prepared h4{margin:0;color:#315679;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+    .awareness-prepared .proposal{margin:0;padding:11px;border-radius:10px;box-shadow:none}
+    .awareness-prepared .proposal pre{max-height:120px;margin:9px 0;line-height:1.5}
+    .awareness-findings{border-top:1px solid #edf1f5;padding-top:10px}
+    .awareness-findings summary{color:#315679;font-size:12px;font-weight:800;cursor:pointer;list-style-position:inside}
+    .awareness-findings[open] summary{margin-bottom:9px}
+    .awareness-card-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-top:1px solid #e8edf3;background:#fbfcfe}
+    .awareness-card-footer small{color:var(--muted);font-size:10px}
+    .awareness-card-footer button{padding:7px 10px;color:#315679;font-size:11px}
+    @media(max-width:600px){.awareness-card-header,.awareness-card-footer{align-items:flex-start;flex-direction:column}.awareness-card-footer button{width:100%}}
+  </style>
+  <style id="atlas-workspace-communication-activity">
+    .workspace-communication-activity{position:fixed;z-index:60;top:88px;right:22px;width:min(430px,calc(100vw - 44px));max-height:calc(100dvh - 110px);overflow:auto;border:1px solid #b9c8d9;border-radius:18px;background:#fff;box-shadow:0 24px 70px #102a4338}
+    .workspace-communication-activity>header{position:sticky;z-index:2;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid #e5ebf2;background:#f8fbff}
+    .workspace-communication-activity>header h2{margin:4px 0 0;font:26px var(--atlas-heading)}
+    .workspace-communication-activity>header button{padding:3px 9px;border:0;color:#52647b;background:transparent;font-size:28px;line-height:1}
+    .workspace-communication-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:12px 16px;border-bottom:1px solid #e8edf3;background:#fbfcfe}
+    .workspace-communication-progress span{padding:7px 5px;border-radius:7px;color:#7a8799;background:#edf1f5;font-size:9px;font-weight:800;text-align:center}
+    .workspace-communication-progress span.complete{color:#1f624e;background:#e8f5ef}
+    .workspace-communication-body{display:grid;gap:13px;padding:18px 20px}
+    .workspace-communication-recipient{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 9px;padding:12px;border:1px solid #d6e0eb;border-radius:11px;background:#f6f9fc;font-size:12px}
+    .workspace-communication-recipient strong{font-size:15px}.workspace-communication-recipient span:last-child{grid-column:1/-1;color:#52647b;overflow-wrap:anywhere}
+    .workspace-communication-instruction{padding:11px 12px;border-left:4px solid #2f6fed;border-radius:8px;background:#eef4ff}
+    .workspace-communication-instruction p{margin:4px 0 0;color:#52647b;font-size:12px;line-height:1.45}
+    .workspace-communication-working{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;align-items:center;padding:16px;border-radius:11px;background:#f5f8fc}
+    .workspace-communication-working i{grid-row:1/3;width:13px;height:13px;border:2px solid #b8c8da;border-top-color:#2f6fed;border-radius:50%;animation:atlas-spin .8s linear infinite}.workspace-communication-working span{color:#65748a;font-size:11px}
+    @keyframes atlas-spin{to{transform:rotate(360deg)}}
+    .workspace-communication-preview{display:grid;gap:10px;padding:14px;border:1px solid #c8d6e5;border-radius:12px;background:white}
+    .workspace-communication-preview h3,.workspace-communication-preview p{margin:0}.workspace-communication-preview textarea{min-height:150px;resize:vertical}.workspace-communication-preview small{color:#65748a;line-height:1.45}
+    .workspace-communication-status{margin:0;padding:9px 11px;border-radius:8px;color:#315679;background:#eef4fa;font-size:12px;font-weight:700}
+    .workspace-communication-status.error{color:#9f2d20;background:#fff1ef}
+    .workspace-communication-complete{display:grid;gap:8px;padding:15px;border:1px solid #b7d9ca;border-radius:11px;color:#24644e;background:#f2faf6}.workspace-communication-prepare{width:100%}
+    .workspace-communication-preview .button-link,.connected-app-toolbar .button-link{display:inline-flex;align-items:center;justify-content:center;padding:9px 12px;border:1px solid #b8c8da;border-radius:8px;color:#204f7a;background:#fff;font-size:12px;font-weight:800;text-decoration:none}
+    .connected-communication-workspace{margin-top:18px;overflow:hidden;border:1px solid #ccd8e5;border-radius:14px;background:#fff}.connected-app-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 18px;border-bottom:1px solid #dce4ed;background:#f8fafc}.connected-app-toolbar h2{margin:4px 0 0;font-size:22px}.connected-mail-shell{display:grid;grid-template-columns:150px minmax(230px,32%) minmax(0,1fr);min-height:470px}.connected-mail-shell>nav{display:flex;flex-direction:column;gap:4px;padding:18px 10px;border-right:1px solid #dce4ed;background:#f5f7fa}.connected-mail-shell>nav strong{padding:5px 9px;color:#53657b;font-size:11px;text-transform:uppercase}.connected-mail-shell>nav button{border:0;text-align:left;background:transparent}.connected-mail-shell>nav button.active{color:#174f82;background:#dfeeff}.connected-message-list{overflow:auto;max-height:550px;border-right:1px solid #dce4ed}.connected-message-list>button{display:grid;width:100%;gap:4px;padding:14px;border:0;border-bottom:1px solid #e5eaf0;background:#fff;text-align:left}.connected-message-list>button.active{background:#edf5ff;box-shadow:inset 3px 0 #2f6fed}.connected-message-list span,.connected-message-list small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.connected-message-list small{color:#718096}.connected-reading-pane{min-width:0;padding:24px;overflow-wrap:anywhere}.connected-reading-pane h2{margin:13px 0 5px}.connected-reading-pane>div{margin:22px 0;white-space:pre-wrap;line-height:1.6}.connected-calendar-shell{display:grid;grid-template-columns:190px minmax(0,1fr);min-height:470px}.connected-calendar-shell>aside{display:grid;align-content:start;gap:12px;padding:20px;border-right:1px solid #dce4ed;background:#f5f7fa}.connected-calendar-shell>section{padding:20px}.connected-calendar-heading{display:flex;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid #dce4ed}.connected-agenda article{display:grid;grid-template-columns:180px minmax(0,1fr);gap:18px;padding:15px 4px;border-bottom:1px solid #e5eaf0}.connected-agenda article>div{display:grid;gap:5px}.connected-agenda time,.connected-agenda span{color:#617188;font-size:12px}.connected-agenda button{width:max-content;padding:5px 8px}
+    .event-case-linker{display:flex;align-items:center;gap:7px;margin-top:9px}.event-case-linker select{max-width:260px;padding:6px 8px;font-size:11px}.event-case-linker button{padding:6px 9px;font-size:11px}
+    @media(max-width:900px){.connected-mail-shell{grid-template-columns:110px minmax(190px,40%) minmax(0,1fr)}.connected-calendar-shell{grid-template-columns:150px minmax(0,1fr)}}
+    @media(max-width:600px){.workspace-communication-activity{top:74px;right:10px;width:calc(100vw - 20px);max-height:calc(100dvh - 84px)}.workspace-communication-progress{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:700px){.connected-mail-shell,.connected-calendar-shell{display:block}.connected-mail-shell>nav,.connected-calendar-shell>aside{display:none}.connected-message-list{max-height:230px;border-right:0;border-bottom:1px solid #dce4ed}.connected-reading-pane{padding:18px}.connected-agenda article{grid-template-columns:1fr}.connected-app-toolbar{align-items:flex-start;flex-direction:column}}
+  </style>
+  <style id="atlas-selected-template">
+    /* Applied from atlas-template-settings (4).json — Harbor */
+    :root{--navy:#102a43;--navy2:#173f68;--line:#d5deea;--muted:#617188;--atlas-accent:#2f6fed;--atlas-accent-soft:#eaf1ff;--atlas-background:#eef3f8;--atlas-surface:#ffffff;--atlas-text:#122033;--atlas-success:#1b8a63;--atlas-radius:18px;--atlas-heading:Iowan Old Style,Palatino Linotype,Georgia,serif}
+    body{color:var(--atlas-text);background:var(--atlas-background);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    .app-shell{grid-template-columns:228px minmax(0,1fr)}
+    .sidebar{color:#eff6ff;background:linear-gradient(180deg,#102a43 0%,color-mix(in srgb,#102a43,#000 14%) 100%)}
+    .sidebar .brand,.sidebar-foot button{color:#eff6ff}.firm small,.nav button{color:color-mix(in srgb,#eff6ff,transparent 20%)}
+    .nav button{border-radius:10px}.nav button.active,.nav button:hover{color:#eff6ff;background:color-mix(in srgb,#eff6ff,transparent 88%)}
+    .topbar{background:color-mix(in srgb,#ffffff,transparent 8%)}
+    .card,.object-card,.metric,.rail-panel,.proposal,.matter-row{border-color:#d5deea;border-radius:18px;background:#ffffff;box-shadow:0 10px 30px #1220330f}
+    input,textarea,select{border-color:#d5deea;border-radius:10px;color:#122033;background:#ffffff}
+    button{border-color:#d5deea;border-radius:10px;color:#122033;background:#ffffff}
+    button.primary,.tabs button.active{border-color:#2f6fed;color:#ffffff;background:#2f6fed}
+    .suggestions button,.case-link,.sources a,.metric-action small{color:#2f6fed}
+    .pill,.command-console-badge{color:#2f6fed}.command-console-badge{background:#eaf1ff}
+    .metric-action .metric-icon,.message.user{color:#2f6fed;background:#eaf1ff}
+    .message.atlas,.twin-message.atlas{background:color-mix(in srgb,#ffffff,#eef3f8 35%)}
+    .command-console:before{background:linear-gradient(90deg,#102a43,#2f6fed)}
+    .command-deck{border-radius:18px;color:#ffffff;background:radial-gradient(circle at 86% 12%,color-mix(in srgb,#2f6fed,#fff 12%) 0,transparent 34%),linear-gradient(135deg,#102a43,color-mix(in srgb,#2f6fed,#102a43 46%));box-shadow:0 18px 48px #1220331c}
+    .command-readiness i,.live-status i{background:#1b8a63}
+    h1,h2,h3,.brand,.topbar h2,.command-deck h1,.command-console h2,.rail-panel h2,.review-center h2,.metric strong{font-family:var(--atlas-heading)}
+    @media(max-width:800px){.app-shell{grid-template-columns:190px minmax(0,1fr)}}
+    @media(max-width:600px){.app-shell{grid-template-columns:150px minmax(0,1fr)}}
+  </style>
 </head>
 <body><main class="shell">
   <div class="brand">Atlas</div>
@@ -116,4 +203,4 @@
     <section id="view-settings" class="view hidden"><section class="card"><div class="section-head"><div><span class="pill">Firm administration</span><h1>Settings</h1></div><span class="command-console-badge">Firm scoped</span></div><p class="muted">Configure this firm’s security, connected systems, migration, and data controls. Owners and administrators manage team accounts from <strong>Account Info → Manage Users</strong>.</p></section></section>
     <section id="view-placeholder" class="view hidden"><section class="card empty"><h2 id="placeholderTitle">Not available</h2><p>This area is not enabled for the current firm.</p></section></section>
   </main></div><aside id="twinDock" class="twin-dock collapsed" aria-label="Atlas digital twin"><header><button id="twinToggle" class="twin-launcher" type="button" aria-expanded="false" aria-controls="twinPanel" aria-label="Open Atlas"><span class="twin-launcher-title">Atlas</span><span class="twin-launcher-action" aria-hidden="true">×</span></button></header><div id="twinPanel" class="twin-panel"><div id="twinTranscript" class="twin-transcript" aria-live="polite"></div><form id="twinForm" class="twin-form"><label class="sr-only" for="twinInput">Ask Atlas from anywhere</label><input id="twinInput" required maxlength="12000" placeholder="Ask Atlas from anywhere…"><button id="twinSubmit" class="primary" type="submit">Ask</button></form><div id="twinStatus" class="muted"></div></div></aside></section>
-</main><script defer src="./app.js?v=1.0.0-rc.1-account-profiles-1"></script></body></html>
+</main><script defer src="./app.js?v=1.0.0-rc.1-communication-1"></script></body></html>

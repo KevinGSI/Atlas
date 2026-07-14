@@ -4,9 +4,10 @@ import { createHash } from 'node:crypto';
 
 const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/calendar.events'
 ];
-const MICROSOFT_SCOPES = ['offline_access', 'Mail.Read', 'Calendars.ReadWrite'];
+const MICROSOFT_SCOPES = ['offline_access', 'Mail.Read', 'Mail.Send', 'Calendars.ReadWrite'];
 const DOWNLOADABLE_MEDIA_TYPES=new Set(['application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain','text/csv','image/jpeg','image/png']);
 
 function expiresAt(value, now = Date.now()) {
@@ -148,7 +149,8 @@ class MailOAuthConnector extends OAuthCmsConnector {
       options.headers.authorization=`Bearer ${current.access_token}`;response = await this.transport(url, options);
     }
     if (!response.ok) throw new AtlasError('MAIL_SYNC_PROVIDER_ERROR', 'Mailbox provider synchronization failed', 502, { provider: this.name, status: response.status });
-    return { body: await response.json(), credentials: current };
+    let body=null;if(response.status!==202&&response.status!==204)body=await response.json();
+    return { body, credentials: current };
   }
   async providerJson(url,credentials,additionalHeaders={}){return this.providerRequest(url,credentials,{headers:additionalHeaders});}
   initialSince() { return new Date(this.clock() - 30 * 86_400_000).toISOString(); }
@@ -165,7 +167,14 @@ export class GoogleWorkspaceConnector extends MailOAuthConnector {
     url.searchParams.set('prompt', 'consent');
     return url.toString();
   }
-  capabilities(){return {...super.capabilities(),calendarWriteAfterApproval:true,mailReadOnly:true};}
+  capabilities(){return {...super.capabilities(),calendarWriteAfterApproval:true,mailWriteAfterApproval:true};}
+  async sendEmail({credentials,emailDraft}){
+    const state=emailDraft?.state??{};const recipient=state.recipients?.[0];if(emailDraft?.type!=='email_draft'||!recipient||!state.subject||!state.body)throw new AtlasError('EMAIL_DRAFT_INVALID','A canonical reviewed email draft is required',400);
+    const safeHeader=value=>String(value).replace(/[\r\n]+/g,' ').trim();const mime=[`To: ${safeHeader(recipient)}`,`Subject: ${safeHeader(state.subject)}`,'MIME-Version: 1.0','Content-Type: text/plain; charset="UTF-8"','',String(state.body)].join('\r\n');
+    const result=await this.providerRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',credentials,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({raw:Buffer.from(mime).toString('base64url')})});
+    if(!result.body?.id)throw new AtlasError('EMAIL_SEND_PROVIDER_ERROR','Gmail did not confirm the approved email',502,{provider:'google'});
+    return {provider:'google',externalId:result.body.id,threadId:result.body.threadId??null,status:'sent',credentials:result.credentials};
+  }
   async createCalendarEvent({credentials,calendarEvent}){
     const state=calendarEvent?.state??{};if(calendarEvent?.type!=='calendar_event'||!state.startsAt||!state.endsAt)throw new AtlasError('CALENDAR_EVENT_INVALID','A canonical approved calendar event is required',400);
     const id=googleEventId(calendarEvent.id);const url=`https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none`;
@@ -214,7 +223,13 @@ export class Microsoft365Connector extends MailOAuthConnector {
     const tenant = options.tenant ?? 'organizations';
     super({ ...options, name: 'microsoft', authorizeEndpoint: `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/authorize`, tokenEndpoint: `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`, apiBase: 'https://graph.microsoft.com/v1.0', scopes: MICROSOFT_SCOPES, resources: [] });
   }
-  capabilities(){return {...super.capabilities(),calendarWriteAfterApproval:true,mailReadOnly:true};}
+  capabilities(){return {...super.capabilities(),calendarWriteAfterApproval:true,mailWriteAfterApproval:true};}
+  async sendEmail({credentials,emailDraft}){
+    const state=emailDraft?.state??{};const recipients=state.recipients??[];if(emailDraft?.type!=='email_draft'||!recipients.length||!state.subject||!state.body)throw new AtlasError('EMAIL_DRAFT_INVALID','A canonical reviewed email draft is required',400);
+    const payload={message:{subject:state.subject,body:{contentType:'Text',content:state.body},toRecipients:recipients.map(address=>({emailAddress:{address}}))},saveToSentItems:true};
+    const result=await this.providerRequest('https://graph.microsoft.com/v1.0/me/sendMail',credentials,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+    return {provider:'microsoft',externalId:null,threadId:null,status:'sent',credentials:result.credentials};
+  }
   async createCalendarEvent({credentials,calendarEvent}){
     const state=calendarEvent?.state??{};if(calendarEvent?.type!=='calendar_event'||!state.startsAt||!state.endsAt)throw new AtlasError('CALENDAR_EVENT_INVALID','A canonical approved calendar event is required',400);
     const payload={subject:calendarEvent.title,body:{contentType:'Text',content:state.description??'Created by Atlas after attorney approval.'},start:{dateTime:graphDateTime(state.startsAt),timeZone:'UTC'},end:{dateTime:graphDateTime(state.endsAt),timeZone:'UTC'},location:{displayName:state.location??''},isAllDay:Boolean(state.isAllDay),isReminderOn:true,reminderMinutesBeforeStart:state.reminderMinutesBeforeStart??15,showAs:'busy',transactionId:graphTransactionId(calendarEvent.id),categories:['Atlas']};
