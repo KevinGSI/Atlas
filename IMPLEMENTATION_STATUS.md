@@ -180,6 +180,11 @@
 - Case-owned invoices, time entries, expenses, payments, refunds, trust transactions, and balanced journals
 - Derived billed, paid, receivable, unbilled-time, unbilled-expense, trust-received, and trust-balance metrics
 - First-class Accounting sidebar workspace and per-case Billing tab
+- Ten independently routed Billing pages: Dashboard, Time entries, Expenses, Requested funds, Invoices, Legacy Reconciliation, Payment plans, Account activity, Trust accounting, and Billing guide
+- Working forms and canonical ledgers for time, expenses, requested funds, invoices, historical reconciliation, installment plans, and trust activity
+- Payment-plan schedules are review records and never authorize automatic charges
+- Legacy reconciliation records historical payment, source system, reference, destination, notes, and reconciliation time without moving money
+- Trust overdraft prevention is calculated per client so one client's balance can never support another client's disbursement
 - ACH, card, and Zelle payment rails modeled without Atlas storing raw card or online-banking credentials
 - Hosted/tokenized processor adapter boundary for card and ACH collection
 - External Zelle confirmation and reconciliation workflow without Atlas claiming network participation or custody
@@ -359,7 +364,7 @@
 
 ## Verification completed here
 
-- 365 Phase 1 tests passed locally with 0 failures; 1 dedicated live-PostgreSQL test correctly skipped because this workspace supplied no database URL
+- 370 Phase 1 tests passed locally with 0 failures; 1 dedicated live-PostgreSQL test correctly skipped because this workspace supplied no database URL
 - Repository verification passed across 153 required launch files, 47 source modules, and 37 migration-derived database tables
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection

@@ -3,6 +3,7 @@ import { AtlasError, required } from './errors.js';
 const paymentRails = new Set(['ach', 'card', 'zelle', 'crypto']);
 const invoiceStatuses = new Set(['draft', 'issued']);
 const accountTreatments = new Set(['operating', 'trust']);
+const paymentPlanFrequencies = new Set(['weekly', 'biweekly', 'monthly']);
 
 function positiveMinor(value, field = 'amountMinor') {
   if (!Number.isSafeInteger(value) || value < 1) throw new AtlasError('VALIDATION_ERROR', `${field} must be a positive integer in the currency's smallest unit`, 400);
@@ -159,7 +160,7 @@ export class AccountingService {
     return this.atlas.createObject(workspaceId, {
       parentObjectId: invoice.id, dimension: 'operation', type: 'refund', actorId,
       title: `Refund · ${invoice.title}`,
-      state: { scope: 'matter', matterId: invoice.state.matterId, invoiceId: invoice.id, amountMinor, currency: invoice.state.currency, status: 'confirmed', externalReference: required(input.externalReference, 'externalReference'), sourceAccount: input.sourceAccount ?? invoice.state.trustTreatment, reason: input.reason ?? null }
+      state: { scope: 'matter', matterId: invoice.state.matterId, clientId:invoice.state.clientId??null, invoiceId: invoice.id, amountMinor, currency: invoice.state.currency, status: 'confirmed', externalReference: required(input.externalReference, 'externalReference'), sourceAccount: input.sourceAccount ?? invoice.state.trustTreatment, reason: input.reason ?? null }
     });
   }
 
@@ -185,18 +186,35 @@ export class AccountingService {
     });
   }
 
+  async createFundRequest(workspaceId,input,actorId){
+    const matter=await this.requireMatter(workspaceId,input.matterId);await this.requireClient(workspaceId,input.clientId);const treatment=input.trustTreatment??'trust';if(!accountTreatments.has(treatment))throw new AtlasError('VALIDATION_ERROR','trustTreatment must be operating or trust',400);
+    return this.atlas.createObject(workspaceId,{parentObjectId:matter.id,dimension:'operation',type:'fund_request',actorId,title:required(input.title,'title'),state:{scope:'matter',matterId:matter.id,clientId:input.clientId??null,amountMinor:positiveMinor(input.amountMinor),currency:input.currency??'USD',trustTreatment:treatment,dueAt:optionalDate(input.dueAt,'dueAt'),status:'requested',notes:input.notes??null,fulfilledPaymentId:null}});
+  }
+
+  async createPaymentPlan(workspaceId,input,actorId){
+    const invoice=await this.requireInvoice(workspaceId,input.invoiceId);const balance=await this.invoiceBalance(workspaceId,invoice);if(balance.outstandingMinor<1)throw new AtlasError('INVOICE_ALREADY_PAID','A paid invoice cannot receive a payment plan',409);const frequency=required(input.frequency,'frequency');if(!paymentPlanFrequencies.has(frequency))throw new AtlasError('VALIDATION_ERROR','frequency must be weekly, biweekly, or monthly',400);const installmentCount=Number(input.installmentCount);if(!Number.isInteger(installmentCount)||installmentCount<2||installmentCount>120)throw new AtlasError('VALIDATION_ERROR','installmentCount must be an integer from 2 to 120',400);const totalMinor=positiveMinor(input.totalMinor??balance.outstandingMinor,'totalMinor');if(totalMinor>balance.outstandingMinor)throw new AtlasError('PAYMENT_PLAN_EXCEEDS_BALANCE','Payment plan exceeds the outstanding invoice balance',400);const startAt=optionalDate(input.startAt,'startAt')??new Date().toISOString();
+    return this.atlas.createObject(workspaceId,{parentObjectId:invoice.id,dimension:'operation',type:'payment_plan',actorId,title:input.title??`Payment plan · ${invoice.title}`,state:{scope:'matter',matterId:invoice.state.matterId,clientId:invoice.state.clientId,invoiceId:invoice.id,currency:invoice.state.currency,totalMinor,installmentCount,installmentAmountMinor:Math.ceil(totalMinor/installmentCount),frequency,startAt,status:'active',automaticCharges:false,paidInstallments:0}});
+  }
+
+  async recordLegacyReconciliation(workspaceId,input,actorId){
+    const invoice=await this.requireInvoice(workspaceId,input.invoiceId);const balance=await this.invoiceBalance(workspaceId,invoice);const amountMinor=positiveMinor(input.amountMinor);if(amountMinor>balance.outstandingMinor&&!input.allowCreditBalance)throw new AtlasError('PAYMENT_EXCEEDS_BALANCE','Legacy payment exceeds the outstanding invoice balance',400);const rail=required(input.rail,'rail');if(!paymentRails.has(rail)||rail==='crypto')throw new AtlasError('VALIDATION_ERROR','legacy rail must be ach, card, or zelle',400);const destinationAccount=input.destinationAccount??invoice.state.trustTreatment;if(!accountTreatments.has(destinationAccount))throw new AtlasError('VALIDATION_ERROR','destinationAccount must be operating or trust',400);
+    return this.atlas.createObject(workspaceId,{parentObjectId:invoice.id,dimension:'operation',type:'payment',actorId,title:`Legacy payment reconciled · ${invoice.title}`,state:{scope:'matter',matterId:invoice.state.matterId,clientId:invoice.state.clientId,invoiceId:invoice.id,rail,provider:'legacy',amountMinor,currency:invoice.state.currency,status:'confirmed',externalReference:required(input.externalReference,'externalReference'),receivedAt:optionalDate(input.receivedAt,'receivedAt')??new Date().toISOString(),destinationAccount,manuallyVerified:true,legacyReconciliation:true,legacySystem:input.legacySystem??null,reconciliationNotes:input.notes??null,reconciledAt:new Date().toISOString()}});
+  }
+
+  async trustBalanceForClient(workspaceId,clientId){const id=required(clientId,'clientId');await this.requireClient(workspaceId,id);const objects=await this.objects(workspaceId);const invoices=new Map(objects.filter(item=>item.type==='invoice').map(item=>[item.id,item]));const owns=(item)=>item.state?.clientId===id||invoices.get(item.state?.invoiceId)?.state?.clientId===id;const payments=objects.filter(item=>item.type==='payment'&&item.state?.status==='confirmed'&&item.state?.destinationAccount==='trust'&&owns(item)).reduce((sum,item)=>sum+Number(item.state.amountMinor??0),0);const refunds=objects.filter(item=>item.type==='refund'&&item.state?.sourceAccount==='trust'&&owns(item)).reduce((sum,item)=>sum+Number(item.state.amountMinor??0),0);const activity=objects.filter(item=>item.type==='trust_transaction'&&item.state?.clientId===id).reduce((sum,item)=>sum+(item.state.direction==='deposit'?1:-1)*Number(item.state.amountMinor??0),0);return payments-refunds+activity;}
+
   async createTrustTransaction(workspaceId, input, actorId) {
     const matter = await this.requireMatter(workspaceId, input.matterId);
-    await this.requireClient(workspaceId, required(input.clientId, 'clientId'));
+    const clientId=required(input.clientId, 'clientId');await this.requireClient(workspaceId,clientId);
     const direction = required(input.direction, 'direction');
     if (!['deposit', 'disbursement'].includes(direction)) throw new AtlasError('VALIDATION_ERROR', 'direction must be deposit or disbursement', 400);
     const amountMinor = positiveMinor(input.amountMinor);
-    const summary = await this.summary(workspaceId);
-    if (direction === 'disbursement' && amountMinor > summary.trustBalanceMinor) throw new AtlasError('INSUFFICIENT_TRUST_FUNDS', 'Trust disbursement exceeds the recorded trust balance', 409);
+    const clientBalance=await this.trustBalanceForClient(workspaceId,clientId);
+    if (direction === 'disbursement' && amountMinor > clientBalance) throw new AtlasError('INSUFFICIENT_TRUST_FUNDS', 'Trust disbursement exceeds this client’s recorded trust balance', 409);
     return this.atlas.createObject(workspaceId, {
       parentObjectId: matter.id, dimension: 'operation', type: 'trust_transaction', actorId,
       title: required(input.description, 'description'),
-      state: { scope: 'matter', matterId: matter.id, clientId: input.clientId, direction, amountMinor, currency: input.currency ?? 'USD', externalReference: required(input.externalReference, 'externalReference'), occurredAt: optionalDate(input.occurredAt, 'occurredAt') ?? new Date().toISOString(), reconciled: input.reconciled === true }
+      state: { scope: 'matter', matterId: matter.id, clientId, direction, amountMinor, currency: input.currency ?? 'USD', externalReference: required(input.externalReference, 'externalReference'), occurredAt: optionalDate(input.occurredAt, 'occurredAt') ?? new Date().toISOString(), reconciled: input.reconciled === true }
     });
   }
 
@@ -220,6 +238,8 @@ export class AccountingService {
     const timeEntries = objects.filter((item) => item.type === 'time_entry');
     const expenses = objects.filter((item) => item.type === 'expense');
     const trustTransactions = objects.filter((item) => item.type === 'trust_transaction');
+    const fundRequests=objects.filter((item)=>item.type==='fund_request');
+    const paymentPlans=objects.filter((item)=>item.type==='payment_plan');
     const externalAccountingEntries=objects.filter((item)=>item.type==='accounting_entry');
     const quickBooksEntries=externalAccountingEntries.filter((item)=>item.state?.externalSource?.provider==='quickbooks'&&item.state.externalSource.status==='active');
     const quickBooksByType=(type)=>quickBooksEntries.filter((item)=>item.state?.entryType===type);
@@ -235,7 +255,7 @@ export class AccountingService {
       unbilledTimeMinor: timeEntries.filter((item) => item.state.billable && !item.state.billedInvoiceId).reduce((sum, item) => sum + Number(item.state.valueMinor ?? 0), 0),
       unbilledExpensesMinor: expenses.filter((item) => item.state.reimbursable && !item.state.billedInvoiceId).reduce((sum, item) => sum + Number(item.state.amountMinor ?? 0), 0),
       invoices: rows, payments, refunds,
-      timeEntries, expenses, trustTransactions, journalEntries: objects.filter((item) => item.type === 'journal_entry'),
+      timeEntries, expenses, trustTransactions, fundRequests, paymentPlans, journalEntries: objects.filter((item) => item.type === 'journal_entry'),
       bankConnections: objects.filter((item) => item.type === 'bank_connection'),
       financingApplications: objects.filter((item) => item.type === 'financing_application'),
       externalAccountingEntries,

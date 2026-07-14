@@ -93,6 +93,9 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Replaceable bank-connection and legal-fee financing provider registries
 - Explicit client consent and external lender handoff for legal-fee financing applications
 - First-class Accounting web workspace and case Billing view
+- Routed Billing pages for Dashboard, Time entries, Expenses, Requested funds, Invoices, Legacy Reconciliation, Payment plans, Account activity, Trust accounting, and an Atlas billing guide
+- Canonical funds requests, reviewed installment schedules with no automatic charging, and historical-payment reconciliation with source-system provenance
+- Client-specific trust safeguards that reject a disbursement unless that exact client has sufficient recorded trust funds
 
 - Canonical workspaces and nested workspace objects
 - Matter, client, evidence, document, person, organization, and operation dimensions

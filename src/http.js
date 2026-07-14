@@ -161,6 +161,9 @@ function route(method, pathname) {
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/accounting\/refunds$/, 'recordRefund']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/accounting\/time-entries$/, 'createTimeEntry']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/accounting\/expenses$/, 'createExpense']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/accounting\/fund-requests$/, 'createFundRequest']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/accounting\/payment-plans$/, 'createPaymentPlan']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/accounting\/legacy-reconciliations$/, 'recordLegacyReconciliation']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/accounting\/trust-transactions$/, 'createTrustTransaction']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/accounting\/journal-entries$/, 'createJournalEntry']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/accounting\/banks\/([^/]+)\/authorize$/, 'beginBankAuthorization']
@@ -316,6 +319,9 @@ export function createAtlasHandler(service, options = {}) {
         case 'recordRefund': result=await accounting.recordRefund(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'createTimeEntry': result=await accounting.createTimeEntry(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'createExpense': result=await accounting.createExpense(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
+        case 'createFundRequest': result=await accounting.createFundRequest(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
+        case 'createPaymentPlan': result=await accounting.createPaymentPlan(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
+        case 'recordLegacyReconciliation': result=await accounting.recordLegacyReconciliation(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'createTrustTransaction': result=await accounting.createTrustTransaction(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'createJournalEntry': result=await accounting.createJournalEntry(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'beginBankAuthorization': result=await accounting.beginBankAuthorization(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;

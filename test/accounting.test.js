@@ -94,3 +94,42 @@ test('standard firm accounting captures time, expenses, balanced journals, and g
   await assert.rejects(() => atlas.updateObject(workspace.id,trustDeposit.id,{version:trustDeposit.version,title:'Changed'},'usr_billing'),/cannot be edited/);
   await assert.rejects(() => atlas.deleteObject(workspace.id,trustDeposit.id,{version:trustDeposit.version},'usr_billing'),/cannot be deleted/);
 });
+
+test('requested funds and payment plans remain canonical reviewable objects without automatic charges', async () => {
+  const { accounting, workspace, matter, client } = await fixture();
+  const request = await accounting.createFundRequest(workspace.id, { matterId: matter.id, clientId: client.id, title: 'Replenish trust', amountMinor: 150_000, trustTreatment: 'trust', dueAt: '2026-08-01' }, 'usr_billing');
+  const invoice = await accounting.createInvoice(workspace.id, { matterId: matter.id, clientId: client.id, title: 'Legal services', amountMinor: 240_000 }, 'usr_billing');
+  const plan = await accounting.createPaymentPlan(workspace.id, { invoiceId: invoice.id, installmentCount: 4, frequency: 'monthly', startAt: '2026-08-15' }, 'usr_billing');
+  const summary = await accounting.summary(workspace.id);
+  assert.equal(request.type, 'fund_request');
+  assert.equal(request.parentObjectId, matter.id);
+  assert.equal(plan.type, 'payment_plan');
+  assert.equal(plan.parentObjectId, invoice.id);
+  assert.equal(plan.state.installmentAmountMinor, 60_000);
+  assert.equal(plan.state.automaticCharges, false);
+  assert.equal(summary.fundRequests.length, 1);
+  assert.equal(summary.paymentPlans.length, 1);
+  await assert.rejects(() => accounting.createPaymentPlan(workspace.id, { invoiceId: invoice.id, installmentCount: 1, frequency: 'monthly' }, 'usr_billing'), /2 to 120/);
+});
+
+test('legacy reconciliation records historical payment provenance and updates invoice balance', async () => {
+  const { accounting, workspace, matter, client } = await fixture();
+  const invoice = await accounting.createInvoice(workspace.id, { matterId: matter.id, clientId: client.id, title: 'Migrated invoice', amountMinor: 90_000 }, 'usr_billing');
+  const payment = await accounting.recordLegacyReconciliation(workspace.id, { invoiceId: invoice.id, amountMinor: 35_000, rail: 'ach', externalReference: 'prior-system-882', legacySystem: 'Prior CMS', receivedAt: '2026-06-20', notes: 'Matched to bank statement' }, 'usr_billing');
+  const summary = await accounting.summary(workspace.id);
+  assert.equal(payment.state.legacyReconciliation, true);
+  assert.equal(payment.state.provider, 'legacy');
+  assert.equal(payment.state.legacySystem, 'Prior CMS');
+  assert.equal(summary.paidMinor, 35_000);
+  assert.equal(summary.receivableMinor, 55_000);
+});
+
+test('trust overdraft protection is isolated to the specific client rather than the firm total', async () => {
+  const { accounting, atlas, workspace, matter, client } = await fixture();
+  const otherMatter = await atlas.createObject(workspace.id, { dimension: 'matter', type: 'civil', title: 'Jordan v. Hill' });
+  const otherClient = await atlas.createObject(workspace.id, { parentObjectId: otherMatter.id, dimension: 'client', type: 'client', title: 'Alex Jordan', state: { matterId: otherMatter.id } });
+  await accounting.createTrustTransaction(workspace.id, { matterId: matter.id, clientId: client.id, direction: 'deposit', amountMinor: 100_000, externalReference: 'bank-a', description: 'Morgan deposit' }, 'usr_billing');
+  await assert.rejects(() => accounting.createTrustTransaction(workspace.id, { matterId: otherMatter.id, clientId: otherClient.id, direction: 'disbursement', amountMinor: 1, externalReference: 'bank-b', description: 'Jordan disbursement' }, 'usr_billing'), /this client/);
+  assert.equal(await accounting.trustBalanceForClient(workspace.id, client.id), 100_000);
+  assert.equal(await accounting.trustBalanceForClient(workspace.id, otherClient.id), 0);
+});
