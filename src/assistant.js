@@ -19,8 +19,51 @@ function relevantDate(object){return object.state?.date??object.state?.dueDate??
 function isCommunication(object){return object.dimension==='operation'&&['communication','phone_call','incoming_email','email','outgoing_email'].includes(object.type);}
 function assertPublicWebQuery(query,workspace,objects){if(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i.test(query)||/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/.test(query))throw new AtlasError('AI_WEB_QUERY_CONFIDENTIAL','Public web searches cannot contain firm email addresses or phone numbers',400);const values=[workspace?.name,...objects.filter(object=>['matter','client','person','organization'].includes(object.dimension)).map(object=>object.title),...objects.flatMap(object=>['caseNumber','clientName','email','phone'].map(key=>object.state?.[key]))].map(normalizedIdentifier).filter(value=>value.length>=6);const normalized=normalizedIdentifier(query);const match=values.find(value=>normalized.includes(value));if(match)throw new AtlasError('AI_WEB_QUERY_CONFIDENTIAL','Public web searches cannot contain identifiers found in the private firm twin',400);}
 
-const ATLAS_ASSISTANT_INSTRUCTIONS = `You are Atlas, the native intelligence layer for an authorized law-firm workspace.
-Ground factual answers in Atlas tools and never invent firm facts. For a question about document contents, controlling documents, facts found in files, or firm-wide document patterns, call search_document_knowledge and cite its document title and page or section when supplied. Treat candidate document extraction as unreviewed AI analysis and say so; never present it as attorney-verified fact. Treat source_extraction passages as source-derived text that may contain OCR or extraction errors and verify consequential conclusions against the original document. For a matter-specific question, retrieve the matter and call get_matter_context before concluding. For firm counts, workload, client-contact frequency, or operational trends, call compute_firm_metrics instead of estimating. For priority questions, call list_daily_priorities and inspect the relevant matter context. Treat tasks, deadlines, documents, communications, clients, accepted intelligence, and matter health as parts of one canonical firm twin. Never say a task or deadline is missing unless the retrieved matter context confirms it. Cite the Atlas records used. When current public information is necessary and search_public_web is available, use it only with a generic public-law query that contains no client name, matter title, case number, email, phone number, firm strategy, or other private firm data; clearly distinguish public web sources from Atlas firm records. Prepare consequential work only through proposal tools; never send, file, publish, or create consequential work directly.`;
+const ATLAS_ASSISTANT_INSTRUCTIONS = `You are Atlas, the native intelligence layer for an authorized law-firm workspace and a capable general conversational assistant.
+Respond helpfully to reasonable questions even when they do not match a known Atlas command. If a question needs neither private firm facts nor current public information, answer it directly from general knowledge. Ground every firm-specific factual answer in Atlas tools and never invent firm facts. For a question about document contents, controlling documents, facts found in files, or firm-wide document patterns, call search_document_knowledge and cite its document title and page or section when supplied. Treat candidate document extraction as unreviewed AI analysis and say so; never present it as attorney-verified fact. Treat source_extraction passages as source-derived text that may contain OCR or extraction errors and verify consequential conclusions against the original document. For a matter-specific question, retrieve the matter and call get_matter_context before concluding. For firm counts, workload, client-contact frequency, or operational trends, call compute_firm_metrics instead of estimating. For priority questions, call list_daily_priorities and inspect the relevant matter context. Treat tasks, deadlines, documents, communications, clients, accepted intelligence, and matter health as parts of one canonical firm twin. Never say a task or deadline is missing unless the retrieved matter context confirms it. Cite the Atlas records used. When public information may have changed or the user asks for internet research, use search_public_web when it is available. Public research may cover law or any other public topic, but the search query must be generic and contain no client name, matter title, case number, email, phone number, firm strategy, document text, or other private firm data. Use Atlas tools separately for private context, and clearly distinguish public web sources from Atlas firm records. Never claim that you browsed the web unless search_public_web returned sources. If a tool reports a recoverable error, follow its recovery instruction and continue the conversation rather than abandoning the user's request. If live research is temporarily unavailable, say so clearly, do not invent current facts or citations, and answer only the timeless portion you can support. Prepare consequential work only through proposal tools; never send, file, publish, or create consequential work directly.`;
+
+const RECOVERABLE_WEB_TOOL_ERRORS = new Set([
+  'AI_WEB_QUERY_CONFIDENTIAL',
+  'AI_WEB_QUERY_INVALID',
+  'WEB_RESEARCH_NOT_CONFIGURED',
+  'WEB_RESEARCH_UNAVAILABLE',
+  'WEB_RESEARCH_AUTHENTICATION_FAILED',
+  'WEB_RESEARCH_RATE_LIMITED',
+  'WEB_RESEARCH_ERROR',
+  'WEB_RESEARCH_INVALID_RESPONSE'
+]);
+
+function recoverableWebToolFailure(error) {
+  if (!(error instanceof AtlasError) || !RECOVERABLE_WEB_TOOL_ERRORS.has(error.code)) return null;
+  if (error.code === 'AI_WEB_QUERY_CONFIDENTIAL') {
+    return {
+      ok: false,
+      error: {
+        code: error.code,
+        message: 'The public search query contained private firm context and was not sent.',
+        recovery: 'Use Atlas tools for private facts. Reformulate only the public issue as a generic query with every client, matter, case, contact, strategy, and document identifier removed, then retry search_public_web.'
+      }
+    };
+  }
+  if (error.code === 'AI_WEB_QUERY_INVALID') {
+    return {
+      ok: false,
+      error: {
+        code: error.code,
+        message: 'The public search query was not valid and was not sent.',
+        recovery: 'Retry search_public_web once with a concise generic public query between 3 and 1000 characters.'
+      }
+    };
+  }
+  return {
+    ok: false,
+    error: {
+      code: error.code,
+      message: 'Live public web research is temporarily unavailable.',
+      recovery: 'Continue the conversation. State that live browsing is temporarily unavailable, do not claim current facts or citations, and answer only timeless general information that does not require browsing.'
+    }
+  };
+}
 
 export class AtlasToolRegistry {
   constructor(service,options={}) { this.service = service; this.webResearch=options.webResearch??null;this.embeddingProvider=options.embeddingProvider??null;this.contentCipher=options.contentCipher??{decrypt:value=>value}; }
@@ -181,7 +224,16 @@ export class AtlasAssistant {
       messages.push({ role: 'assistant', toolCalls: response.toolCalls });
       for (const call of response.toolCalls) {
         if (executed >= this.maxToolCalls) throw new AtlasError('AI_TOOL_LIMIT_EXCEEDED', 'Atlas AI exceeded the tool-call limit', 502);
-        const result = await this.tools.execute(call.name, workspaceId, call.arguments ?? {});
+        let result;
+        try {
+          result = await this.tools.execute(call.name, workspaceId, call.arguments ?? {});
+        } catch (error) {
+          const recoverable = call.name === 'search_public_web' ? recoverableWebToolFailure(error) : null;
+          if (!recoverable) throw error;
+          executed += 1;
+          messages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: recoverable });
+          continue;
+        }
         if (result.actionProposal) actionProposals.push(result.actionProposal);
         executed += 1;
         for (const item of result.sources) sources.set(item.sourceId??item.observationId??item.objectId, item);
