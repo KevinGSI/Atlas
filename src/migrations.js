@@ -11,6 +11,14 @@ export async function loadMigrations(directory) {
   }));
 }
 
+export function migrationTableNames(migrations) {
+  const names = new Set();
+  for (const migration of migrations) {
+    for (const match of migration.sql.matchAll(/\bCREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+"?([a-z_][a-z0-9_]*)"?/gi)) names.add(match[1].toLowerCase());
+  }
+  return [...names].sort();
+}
+
 export async function runMigrations(pool, directory) {
   await pool.query(`CREATE TABLE IF NOT EXISTS atlas_schema_migration (
     name text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now()

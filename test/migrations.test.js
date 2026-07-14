@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runMigrations } from '../src/migrations.js';
+import { migrationTableNames, runMigrations } from '../src/migrations.js';
 
 async function fixture(applied = []) {
   const directory = await mkdtemp(join(tmpdir(), 'atlas-migrations-'));
@@ -42,4 +42,11 @@ test('migration runner rejects modified applied migrations', async () => {
   try {
     await assert.rejects(() => runMigrations(value.pool, value.directory), (error) => error.code === 'MIGRATION_CHECKSUM_MISMATCH');
   } finally { await value.cleanup(); }
+});
+
+test('migration table contract is derived from SQL instead of a manual count', () => {
+  assert.deepEqual(migrationTableNames([
+    { sql: 'CREATE TABLE atlas_one(id text); CREATE TABLE IF NOT EXISTS atlas_two(id text);' },
+    { sql: 'CREATE TABLE atlas_one(id text); ALTER TABLE atlas_two ADD COLUMN title text;' }
+  ]), ['atlas_one', 'atlas_two']);
 });
