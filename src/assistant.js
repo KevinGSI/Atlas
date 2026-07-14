@@ -23,7 +23,7 @@ const ATLAS_ASSISTANT_INSTRUCTIONS = `You are Atlas, the native intelligence lay
 Ground factual answers in Atlas tools and never invent firm facts. For a question about document contents, controlling documents, facts found in files, or firm-wide document patterns, call search_document_knowledge and cite its document title and page or section when supplied. Treat candidate document extraction as unreviewed AI analysis and say so; never present it as attorney-verified fact. For a matter-specific question, retrieve the matter and call get_matter_context before concluding. For firm counts, workload, client-contact frequency, or operational trends, call compute_firm_metrics instead of estimating. For priority questions, call list_daily_priorities and inspect the relevant matter context. Treat tasks, deadlines, documents, communications, clients, accepted intelligence, and matter health as parts of one canonical firm twin. Never say a task or deadline is missing unless the retrieved matter context confirms it. Cite the Atlas records used. When current public information is necessary and search_public_web is available, use it only with a generic public-law query that contains no client name, matter title, case number, email, phone number, firm strategy, or other private firm data; clearly distinguish public web sources from Atlas firm records. Prepare consequential work only through proposal tools; never send, file, publish, or create consequential work directly.`;
 
 export class AtlasToolRegistry {
-  constructor(service,options={}) { this.service = service; this.webResearch=options.webResearch??null; }
+  constructor(service,options={}) { this.service = service; this.webResearch=options.webResearch??null;this.embeddingProvider=options.embeddingProvider??null; }
 
   definitions() {
     return [
@@ -58,9 +58,9 @@ export class AtlasToolRegistry {
         return {data:result,sources:result.objects.map(source)};
       }
       case 'search_document_knowledge': {
-        const limit=boundedLimit(args.limit,20);const results=await this.service.searchDocumentKnowledge(workspaceId,required(args.query,'query'),limit);
+        const query=required(args.query,'query');const limit=boundedLimit(args.limit,20);let results;let usage;if(typeof this.embeddingProvider?.embedTexts==='function'){const embedded=await this.embeddingProvider.embedTexts([query]);results=await this.service.searchSemanticDocumentKnowledge(workspaceId,query,embedded.vectors[0],embedded.model,limit);usage=embedded.usage;}else results=await this.service.searchDocumentKnowledge(workspaceId,query,limit);
         const sources=results.map(item=>({sourceId:item.citationId,sourceType:'document_knowledge',objectId:item.sourceObjectId,observationId:item.observationId??null,title:item.documentTitle,documentType:item.documentType,matterId:item.matterId,matterTitle:item.matterTitle,kind:item.kind,confidence:item.confidence,reviewStatus:item.reviewStatus,sourceLocation:item.sourceLocation}));
-        return {data:{results,count:results.length},sources};
+        return {data:{results,count:results.length,retrievalMode:usage?'semantic':'structured'},sources,...(usage?{usage}:{})};
       }
       case 'list_recent_matters': {
         const limit = boundedLimit(args.limit);

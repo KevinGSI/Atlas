@@ -37,6 +37,10 @@ services:
         value: openai
       - key: AI_MODEL
         value: gpt-4.1-mini
+      - key: AI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: AI_EMBEDDING_DIMENSIONS
+        value: 512
       - key: AI_WEB_SEARCH_ENABLED
         value: true
       - key: AI_WEB_SEARCH_CONTEXT_SIZE
@@ -94,6 +98,10 @@ services:
         value: openai
       - key: AI_MODEL
         value: gpt-4.1-mini
+      - key: AI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: AI_EMBEDDING_DIMENSIONS
+        value: 512
       - key: OPENAI_API_KEY
         sync: false
       - key: AI_CONTENT_ENCRYPTION_KEY

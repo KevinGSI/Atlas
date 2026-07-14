@@ -79,6 +79,8 @@ test('production refuses to start without PostgreSQL', () => {
 
 test('document storage providers fail closed when their durable dependency is absent',()=>{assert.throws(()=>loadConfig({DOCUMENT_STORAGE_PROVIDER:'postgres'}),/DATABASE_URL is required/);assert.throws(()=>loadConfig({DOCUMENT_STORAGE_PROVIDER:'filesystem'}),/DOCUMENT_STORAGE_PATH is required/);assert.equal(loadConfig({DOCUMENT_STORAGE_PROVIDER:'memory'}).documentStorageProvider,'memory');});
 
+test('embedding configuration is bounded and provider-neutral',()=>{const config=loadConfig({AI_EMBEDDING_MODEL:'local-semantic',AI_EMBEDDING_DIMENSIONS:'768'});assert.equal(config.aiEmbeddingModel,'local-semantic');assert.equal(config.aiEmbeddingDimensions,768);assert.throws(()=>loadConfig({AI_EMBEDDING_DIMENSIONS:'3073'}),/must not exceed 3072/);});
+
 test('production rejects wildcard CORS', () => {
   assert.throws(() => loadConfig({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://example/atlas', AUTH_TOKEN_SECRET: 'a'.repeat(32),MFA_ENCRYPTION_KEY:Buffer.alloc(32,9).toString('base64'), CORS_ORIGINS: '*' }), /Wildcard CORS/);
 });

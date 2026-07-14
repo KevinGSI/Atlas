@@ -61,7 +61,8 @@ test('normalized intelligence projects candidate twin observations and non-chat 
   await service.createObject(workspace.id, { dimension: 'document', type: 'incoming_pdf', title: 'Court notice' });
   const registry = new IntelligenceProviderRegistry().register('extractor', { capabilities() { return { structuredExtraction: true }; }, async analyze() { return {
     observations: [{ kind: 'deadline', data: { date: '2026-07-20', description: 'Response due' }, confidence: 0.94, sourceLocation: { page: 2 } }],
-    actionProposals: [{ actionType: 'create_task', input: { title: 'Prepare response', matterId: null, dueDate: '2026-07-20' } }]
+    actionProposals: [{ actionType: 'create_task', input: { title: 'Prepare response', matterId: null, dueDate: '2026-07-20' } }],
+    knowledgeEmbeddings:{vectors:[[1,0,0]],provider:'local',model:'semantic-test',dimensions:3}
   }; } });
   const runtime = new AtlasIntelligenceRuntime(repository, registry, { providerName: 'extractor', projector: new IntelligenceProjectionService(() => '2026-07-10T12:01:00.000Z'), clock: () => '2026-07-10T12:01:00.000Z' });
   await runtime.processNext();
@@ -69,6 +70,8 @@ test('normalized intelligence projects candidate twin observations and non-chat 
   const proposals = await repository.listAiActionProposals(workspace.id, 'pending');
   assert.equal(observations[0].kind, 'deadline');
   assert.equal(observations[0].sourceLocation.page, 2);
+  assert.equal((await repository.listDocumentKnowledgeEmbeddings(workspace.id,'semantic-test'))[0].observationId,observations[0].id);
+  assert.equal((await repository.listIntelligenceJobs(workspace.id))[0].result.knowledgeEmbeddings,undefined);
   assert.equal(proposals[0].originType, 'intelligence');
   assert.equal(proposals[0].runId, null);
   assert.match(proposals[0].intelligenceJobId, /^inj_/);

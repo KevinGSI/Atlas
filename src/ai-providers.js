@@ -52,13 +52,22 @@ export class OpenAiResponsesProvider {
   constructor(options) {
     this.apiKey = options.apiKey;
     this.model = options.model;
+    this.embeddingModel=options.embeddingModel??'text-embedding-3-small';
+    this.embeddingDimensions=options.embeddingDimensions??512;
     this.baseUrl = (options.baseUrl ?? 'https://api.openai.com/v1').replace(/\/$/, '');
     this.transport = options.transport ?? fetch;
     if (!this.apiKey) throw new AtlasError('AI_PROVIDER_CONFIGURATION_ERROR', 'OpenAI API key is required', 500);
     if (!this.model) throw new AtlasError('AI_PROVIDER_CONFIGURATION_ERROR', 'OpenAI model is required', 500);
   }
   capabilities() {
-    return { toolCalling: true, streaming: false, structuredOutput: false, providerState: true, documentUnderstanding: true, pdfVision: true };
+    return { toolCalling: true, streaming: false, structuredOutput: false, providerState: true, documentUnderstanding: true, pdfVision: true, embeddings:true, embeddingModel:this.embeddingModel, embeddingDimensions:this.embeddingDimensions };
+  }
+  async embedTexts(input){
+    if(!Array.isArray(input)||!input.length||input.length>100||input.some(value=>typeof value!=='string'||!value.trim()||value.length>32000))throw new AtlasError('AI_EMBEDDING_INPUT_INVALID','Embedding input must contain 1 to 100 bounded text strings',400);
+    let response;try{response=await this.transport(`${this.baseUrl}/embeddings`,{method:'POST',headers:{authorization:`Bearer ${this.apiKey}`,'content-type':'application/json'},body:JSON.stringify({model:this.embeddingModel,input,encoding_format:'float',dimensions:this.embeddingDimensions})});}catch{throw new AtlasError('AI_PROVIDER_UNAVAILABLE','AI embedding provider is unavailable',503,{provider:'openai'});}
+    if(!response.ok)throw new AtlasError(response.status===429?'AI_PROVIDER_RATE_LIMITED':'AI_PROVIDER_ERROR','AI embedding request failed',response.status===429?503:502,{provider:'openai',status:response.status});
+    let body;try{body=await response.json();}catch{throw new AtlasError('AI_PROVIDER_INVALID_RESPONSE','AI embedding provider returned invalid JSON',502,{provider:'openai'});}const ordered=[...(body.data??[])].sort((a,b)=>a.index-b.index);if(ordered.length!==input.length||ordered.some(item=>!Array.isArray(item.embedding)||item.embedding.length!==this.embeddingDimensions||item.embedding.some(value=>!Number.isFinite(value))))throw new AtlasError('AI_PROVIDER_INVALID_RESPONSE','AI embedding provider returned invalid vectors',502,{provider:'openai'});
+    return {vectors:ordered.map(item=>item.embedding),provider:'openai',model:body.model??this.embeddingModel,dimensions:this.embeddingDimensions,usage:{inputTokens:body.usage?.prompt_tokens??0,outputTokens:0,totalTokens:body.usage?.total_tokens??0}};
   }
   async analyzeFile({content,filename,mediaType,instruction,context}) {
     const image=mediaType==='image/jpeg'||mediaType==='image/png';
@@ -209,7 +218,7 @@ export function createAiProviderRegistry(config, dependencies = {}) {
   for (const [name, provider] of Object.entries(dependencies.aiProviders ?? {})) registry.register(name, provider);
   if (config.openAiApiKey && !dependencies.aiProviders?.openai) {
     registry.register('openai', new OpenAiResponsesProvider({
-      apiKey: config.openAiApiKey, model: config.aiModel, baseUrl: config.openAiBaseUrl, transport: dependencies.aiTransport
+      apiKey: config.openAiApiKey, model: config.aiModel, embeddingModel:config.aiEmbeddingModel, embeddingDimensions:config.aiEmbeddingDimensions, baseUrl: config.openAiBaseUrl, transport: dependencies.aiTransport
     }));
   }
   return registry;

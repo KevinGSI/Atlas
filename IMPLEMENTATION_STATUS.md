@@ -1,6 +1,17 @@
-# Atlas Core 0.48.0 — Firm-Wide Document Retrieval
+# Atlas Core 0.49.0 — Semantic Document Retrieval
 
 ## Verified as implemented
+
+- “What do you need?” retrieves relevant document findings even when a lawyer uses different wording
+- Provider-neutral batched embedding contract with OpenAI as the first adapter
+- Configurable embedding model and dimensions without changing Atlas retrieval or citation code
+- Persistent firm-scoped semantic vectors linked to canonical intelligence observations
+- Hybrid semantic and structured matching ranked with cosine similarity
+- Semantic results retain document, case, page or section, confidence, and attorney-review provenance
+- Rejected findings disappear from semantic retrieval without deleting their immutable review history
+- Embeddings never enter provider-hosted search state; Atlas owns storage, ranking, tenant enforcement, and citations
+- Stored vectors do not duplicate raw document text and public database access is revoked
+- Migration `0027_document_knowledge_embeddings.sql` enforces workspace, observation, model, and dimension integrity
 
 - “What do you need?” can search firm-authorized documents and structured document intelligence across cases
 - Retrieval returns separate citations for each extracted finding, even when several findings came from the same document

@@ -1,8 +1,13 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.48.0` connects native document understanding to “What do you need?”: Atlas can retrieve structured knowledge across a firm’s authorized files, cite the originating document and page or section, preserve attorney-review status, and exclude other firms. OpenAI is the initial file-analysis adapter, while retrieval, provenance, tenancy, safety, canonical observations, and human review remain provider-neutral Atlas services.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.49.0` adds persistent semantic document retrieval: “What do you need?” can locate authorized document findings despite different wording, while retaining the originating document, case, page or section, confidence, and attorney-review status. OpenAI is the initial embedding adapter, while vector storage, cosine ranking, tenancy, citations, safety, and human review remain provider-neutral Atlas services.
 
 ## Implemented
+
+- Hybrid semantic and structured document retrieval across the authorized firm twin
+- Persistent workspace-scoped vectors linked to canonical document observations
+- Interchangeable batched embedding provider with configurable model and dimensions
+- Atlas-owned cosine ranking without a provider-hosted confidential search index
 
 - Firm-wide document-knowledge retrieval through the native Atlas assistant
 - Case-aware citations preserving document, page or section, confidence, and attorney-review provenance

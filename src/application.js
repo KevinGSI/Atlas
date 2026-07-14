@@ -88,7 +88,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const voice=new VoiceAssistantService(service,{intentProvider:voiceIntentProvider});
   const telephony=dependencies.telephonyAdapter??(config.twilioAuthToken?new TwilioVoiceAdapter({authToken:config.twilioAuthToken,publicBaseUrl:config.voicePublicBaseUrl,accountSid:config.twilioAccountSid,messagingFrom:config.twilioMessagingFrom,transport:dependencies.telephonyTransport}):null);
   const sms=new SmsAssistantService(service,{intentProvider:voiceIntentProvider,messagingProvider:dependencies.messagingProvider??telephony});
-  const assistant = new AtlasAssistant(selectedModel, new AtlasToolRegistry(service,{webResearch}), {
+  const assistant = new AtlasAssistant(selectedModel, new AtlasToolRegistry(service,{webResearch,embeddingProvider:selectedModel}), {
     repository: runtime.repository,
     contentCipher: createContentCipher(config, dependencies)
   });

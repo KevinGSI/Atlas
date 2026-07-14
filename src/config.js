@@ -24,6 +24,9 @@ export function loadConfig(env = process.env) {
   const aiProvider = env.AI_PROVIDER || null;
   const intelligenceProvider = env.INTELLIGENCE_PROVIDER || null;
   const aiModel = env.AI_MODEL || null;
+  const aiEmbeddingModel=env.AI_EMBEDDING_MODEL||'text-embedding-3-small';
+  const aiEmbeddingDimensions=positiveInteger(env.AI_EMBEDDING_DIMENSIONS,512,'AI_EMBEDDING_DIMENSIONS');
+  if(aiEmbeddingDimensions>3072)throw new Error('AI_EMBEDDING_DIMENSIONS must not exceed 3072');
   const openAiApiKey = env.OPENAI_API_KEY || null;
   const aiWebSearchEnabled = env.AI_WEB_SEARCH_ENABLED === 'true';
   const aiWebSearchContextSize = env.AI_WEB_SEARCH_CONTEXT_SIZE || 'medium';
@@ -81,6 +84,8 @@ export function loadConfig(env = process.env) {
     aiProvider,
     intelligenceProvider,
     aiModel,
+    aiEmbeddingModel,
+    aiEmbeddingDimensions,
     openAiApiKey,
     aiWebSearchEnabled,
     aiWebSearchContextSize,
