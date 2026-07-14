@@ -8,6 +8,8 @@ An administrator authorizes a supported provider through OAuth. Atlas requests r
 
 Production connection requires an approved developer application and credentials from the provider. The current adapters cover Clio Manage and a configurable MyCase Open API connection. Additional providers implement the same connector contract without changing the canonical object model.
 
+Connected Gmail and Microsoft 365 mailboxes also import supported non-inline attachments through read-only OAuth. Atlas validates and stores those files inside the authorized firm, links them to the canonical email, and queues the ordinary native document-intelligence pipeline. Raw attachment bytes never enter the email object or credential vault.
+
 ## Downloaded export migration
 
 The authenticated Migration workspace accepts CSV and JSON exports. Preview parses and classifies the selected files without changing firm data. Supported canonical datasets are:
@@ -25,7 +27,7 @@ After a successful preview, import creates a canonical migration batch and norma
 ## Current limitations
 
 - Uploaded files must be CSV or JSON and are limited to 10 MB per file and 18 MB per browser preview batch.
-- ZIP extraction, document binaries, attachments, and provider-specific custom fields need additional adapters.
+- ZIP extraction, document binaries embedded in downloaded CMS exports, and provider-specific custom fields need additional adapters. Connected Gmail and Microsoft 365 attachment retrieval is implemented separately.
 - Unknown filenames may require a future per-file mapping screen. Current detection recognizes common case, matter, contact, client, event, accounting, email, calendar, task, and communication names.
 - A completed import can contain record-level errors; the migration batch retains up to 250 error summaries for review.
 - Import does not alter the source CMS and does not automatically disconnect a connected provider.

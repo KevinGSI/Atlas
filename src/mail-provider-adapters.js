@@ -6,6 +6,7 @@ const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly'
 ];
 const MICROSOFT_SCOPES = ['offline_access', 'Mail.Read', 'Calendars.Read'];
+const DOWNLOADABLE_MEDIA_TYPES=new Set(['application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain','text/csv','image/jpeg','image/png']);
 
 function expiresAt(value, now = Date.now()) {
   const seconds = Number(value?.expires_in);
@@ -43,7 +44,7 @@ function googleBody(part) {
 
 function googleAttachments(part, results = []) {
   if (!part) return results;
-  if (part.filename) results.push({ filename: part.filename, mediaType: part.mimeType ?? 'application/octet-stream', providerAttachmentId: part.body?.attachmentId ?? null, size: Number(part.body?.size ?? 0) });
+  if (part.filename) results.push({ filename: part.filename, mediaType: part.mimeType ?? 'application/octet-stream', providerAttachmentId: part.body?.attachmentId ?? null, size: Number(part.body?.size ?? 0), ...(part.body?.data?{contentBase64:Buffer.from(part.body.data,'base64url').toString('base64')}:{}) });
   for (const child of part.parts ?? []) googleAttachments(child, results);
   return results;
 }
@@ -94,7 +95,7 @@ function microsoftCalendar(event) {
 }
 
 class MailOAuthConnector extends OAuthCmsConnector {
-  constructor(options) { super(options); this.clock = options.clock ?? (() => Date.now()); }
+  constructor(options) { super(options); this.clock = options.clock ?? (() => Date.now());this.maxAttachmentBytes=options.maxAttachmentBytes??25_000_000; }
   capabilities() { return { oauth2: true, pkce: true, incrementalSync: true, readOnly: true, resources: ['email', 'calendar'], nativeIntelligence: true }; }
   async exchangeCode(input) {
     const credentials = await super.exchangeCode(input);
@@ -148,7 +149,9 @@ export class GoogleWorkspaceConnector extends MailOAuthConnector {
       for (const item of listed.body.messages ?? []) {
         const detail = await this.providerJson(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(item.id)}?format=full`, current);
         current = detail.credentials;
-        records.push(googleEmail(detail.body));
+        const record=googleEmail(detail.body);
+        for(const attachment of record.data.attachments){if(attachment.contentBase64||!attachment.providerAttachmentId)continue;if(attachment.size>this.maxAttachmentBytes||!DOWNLOADABLE_MEDIA_TYPES.has(attachment.mediaType)){attachment.skippedReason=attachment.size>this.maxAttachmentBytes?'too_large':'unsafe_type';continue;}const downloaded=await this.providerJson(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(item.id)}/attachments/${encodeURIComponent(attachment.providerAttachmentId)}`,current);current=downloaded.credentials;attachment.contentBase64=Buffer.from(String(downloaded.body.data??''),'base64url').toString('base64');attachment.size=Number(downloaded.body.size??attachment.size);}
+        records.push(record);
       }
       const nextCursor = listed.body.nextPageToken
         ? { ...position, pageToken: listed.body.nextPageToken }
@@ -185,7 +188,8 @@ export class Microsoft365Connector extends MailOAuthConnector {
       }
       const listed = await this.providerJson(url, credentials);
       const next = listed.body['@odata.nextLink'] ?? null;
-      return { records: (listed.body.value ?? []).map(microsoftEmail), nextCursor: next ? { ...position, nextUrl: next } : { ...position, resource: 'calendar', nextUrl: null }, hasMore: true, credentials: listed.credentials };
+      const records=[];let current=listed.credentials;for(const message of listed.body.value??[]){const record=microsoftEmail(message);if(message.hasAttachments){const metadata=await this.providerJson(`https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(message.id)}/attachments?$select=id,name,contentType,size,isInline`,current);current=metadata.credentials;const attachments=[];for(const item of metadata.body.value??[]){if(item['@odata.type']!=='#microsoft.graph.fileAttachment'||item.isInline)continue;const attachment={filename:item.name,mediaType:item.contentType??'application/octet-stream',providerAttachmentId:item.id,size:Number(item.size??0)};if(attachment.size>this.maxAttachmentBytes||!DOWNLOADABLE_MEDIA_TYPES.has(attachment.mediaType)){attachment.skippedReason=attachment.size>this.maxAttachmentBytes?'too_large':'unsafe_type';attachments.push(attachment);continue;}const downloaded=await this.providerJson(`https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(message.id)}/attachments/${encodeURIComponent(item.id)}?$select=id,name,contentType,size,contentBytes`,current);current=downloaded.credentials;attachment.contentBase64=downloaded.body.contentBytes;attachment.size=Number(downloaded.body.size??attachment.size);attachments.push(attachment);}record.data.attachments=attachments;record.data.hasAttachments=attachments.length>0;}records.push(record);}
+      return { records, nextCursor: next ? { ...position, nextUrl: next } : { ...position, resource: 'calendar', nextUrl: null }, hasMore: true, credentials: current };
     }
     const url = position.nextUrl ? new URL(position.nextUrl) : new URL('https://graph.microsoft.com/v1.0/me/calendarView');
     if (!position.nextUrl) {

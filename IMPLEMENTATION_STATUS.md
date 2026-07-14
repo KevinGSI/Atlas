@@ -1,6 +1,16 @@
-# Atlas Core 0.51.0 — Encrypted Source-Passage Retrieval
+# Atlas Core 0.52.0 — Connected Mail Attachment Intelligence
 
 ## Verified as implemented
+
+- Gmail downloads supported message attachments through its read-only OAuth API
+- Microsoft 365 lists attachment metadata first and downloads supported non-inline files individually
+- Provider attachment downloads are bounded by the same configured size limit as direct uploads
+- Safe PDF, DOCX, text, CSV, JPEG, and PNG attachments enter firm-isolated durable blob storage
+- Each imported attachment becomes a canonical document connected to its canonical incoming email
+- Provider and attachment identity make imports repeat-safe across subsequent mailbox synchronization
+- Every new connected-mail document queues native file understanding and encrypted source-passage indexing
+- Raw attachment bytes and base64 content are removed before canonical email persistence
+- Unsupported or oversized files are skipped without blocking the email; imported and skipped counts remain visible in canonical state
 
 - Raw Atlas-owned document files are extracted into bounded, source-faithful retrieval passages
 - Passage text is encrypted with context-bound AES-256-GCM before persistent storage
@@ -379,7 +389,7 @@ Atlas must not ask customers to submit their Clio or MyCase password. Users auth
 ## Product limitations remaining
 
 - Provider field mappings require certification against each vendor account and enabled API surface
-- Provider-originated attachment fetching, trust-account migration controls, and conflict-resolution UI need additional releases
+- CMS document-binary fetching beyond Gmail and Microsoft 365, trust-account migration controls, and conflict-resolution UI need additional releases
 - Final cutover tooling and write-back require separate explicit authorization and reconciliation policies
 - Email and phone response drafting quality still depends on the configured interchangeable AI provider and connector-supplied content
 - The motion-to-compel output is a reviewable draft shell, not a jurisdiction-certified filing

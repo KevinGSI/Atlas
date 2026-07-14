@@ -1,8 +1,15 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.51.0` adds encrypted source-passage retrieval over firm-owned uploaded documents. Atlas extracts page- or section-located passages through an interchangeable file-capable AI adapter, stores passage text encrypted at rest, embeds it for firm-scoped semantic search, and decrypts only authorized matches immediately before AI use. OpenAI remains the initial adapter; Atlas retains storage, tenancy, ranking, citations, safety, and review control.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.52.0` closes the connected-mail attachment gap. Read-only Gmail and Microsoft 365 connectors download supported non-inline files, validate and store them inside the isolated firm workspace, create canonical email-to-document relationships, and route every safe attachment into the same native intelligence and encrypted source-passage pipeline as a direct Atlas upload.
 
 ## Implemented
+
+- Gmail and Microsoft 365 attachment retrieval through read-only OAuth connections
+- Bounded provider downloads with filename, media-type, base64, byte-size, and digest validation
+- Canonical email-to-document relationships with source identity and repeat-safe imports
+- Automatic native document intelligence and semantic passage indexing for connected-mail files
+- Unsupported, inline, and oversized files are never stored; the email records an explicit skipped count
+- Attachment bytes never enter canonical email state or connector credential storage
 
 - Automatic background semantic indexing for existing document findings
 - Repeat-safe raw-document passage indexing for Atlas-owned uploaded files
