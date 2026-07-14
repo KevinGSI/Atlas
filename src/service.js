@@ -1,5 +1,6 @@
 import { AtlasError, required } from './errors.js';
 import { createId } from './ids.js';
+import { ConflictScreeningService } from './conflict-screening.js';
 
 const dimensions = new Set(['matter', 'client', 'evidence', 'document', 'person', 'organization', 'operation']);
 const immutableLedgerTypes = new Set(['payment', 'refund', 'trust_transaction', 'journal_entry']);
@@ -153,6 +154,8 @@ export class AtlasService {
       observations:observations.filter((item)=>`${item.kind} ${JSON.stringify(item.data)}`.toLowerCase().includes(text))
     };
   }
+
+  async conflictAlerts(workspaceId){return new ConflictScreeningService(this.repository,this.clock).screen(workspaceId);}
 
   async searchDocumentKnowledge(workspaceId,query,limit=20){
     const text=required(query,'query').trim();

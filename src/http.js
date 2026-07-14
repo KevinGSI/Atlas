@@ -123,6 +123,7 @@ function route(method, pathname) {
     ['GET', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)\/graph$/, 'graph'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/events$/, 'createEvent'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/events$/, 'listEvents'],
+    ['GET', /^\/v1\/workspaces\/([^/]+)\/conflicts$/, 'conflictAlerts'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/health$/, 'matterHealth'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/assistant\/query$/, 'assistantQuery'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/assistant\/runs$/, 'listAssistantRuns'],
@@ -217,7 +218,7 @@ export function createAtlasHandler(service, options = {}) {
       const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/') && match.name!=='ingestWebhook') {
-        const permission = ['getWorkspace', 'getSubscription', 'listObjects', 'getObject', 'downloadFile', 'graph', 'listEvents', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus'].includes(match.name)
+        const permission = ['getWorkspace', 'getSubscription', 'listObjects', 'getObject', 'downloadFile', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus'].includes(match.name)
           ? 'workspace:read' : ['createMembership','inviteMember','listWorkspaceInvitations','listWorkspaceSecurityEvents','listWorkspaceSessions','revokeWorkspaceSessions','deactivateMembership','reactivateMembership','getWorkspaceSecurityPolicy','updateWorkspaceSecurityPolicy','createFirmExport'].includes(match.name) ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
@@ -273,6 +274,7 @@ export function createAtlasHandler(service, options = {}) {
         case 'graph': result = await service.expandGraph(workspaceId, objectId); break;
         case 'createEvent': result = await service.createEvent(workspaceId, await readJson(request, config.maxBodyBytes)); break;
         case 'listEvents': result = await service.listEvents(workspaceId, url.searchParams.get('parentObjectId')); break;
+        case 'conflictAlerts': result = await service.conflictAlerts(workspaceId); break;
         case 'matterHealth': result = await service.matterHealth(workspaceId, objectId); break;
         case 'assistantQuery': { const input = await readJson(request, config.maxBodyBytes); result = await assistant.query({ workspaceId, userId: user.id, prompt: input.prompt, conversationId: input.conversationId }); break; }
         case 'listAssistantRuns': result = await assistant.listRuns(workspaceId, Number(url.searchParams.get('limit') ?? 50)); break;
