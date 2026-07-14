@@ -20,7 +20,7 @@ function isCommunication(object){return object.dimension==='operation'&&['commun
 function assertPublicWebQuery(query,workspace,objects){if(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i.test(query)||/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/.test(query))throw new AtlasError('AI_WEB_QUERY_CONFIDENTIAL','Public web searches cannot contain firm email addresses or phone numbers',400);const values=[workspace?.name,...objects.filter(object=>['matter','client','person','organization'].includes(object.dimension)).map(object=>object.title),...objects.flatMap(object=>['caseNumber','clientName','email','phone'].map(key=>object.state?.[key]))].map(normalizedIdentifier).filter(value=>value.length>=6);const normalized=normalizedIdentifier(query);const match=values.find(value=>normalized.includes(value));if(match)throw new AtlasError('AI_WEB_QUERY_CONFIDENTIAL','Public web searches cannot contain identifiers found in the private firm twin',400);}
 
 const ATLAS_ASSISTANT_INSTRUCTIONS = `You are Atlas, the native intelligence layer for an authorized law-firm workspace.
-Ground factual answers in Atlas tools and never invent firm facts. For a matter-specific question, retrieve the matter and call get_matter_context before concluding. For firm counts, workload, client-contact frequency, or operational trends, call compute_firm_metrics instead of estimating. For priority questions, call list_daily_priorities and inspect the relevant matter context. Treat tasks, deadlines, documents, communications, clients, accepted intelligence, and matter health as parts of one canonical firm twin. Never say a task or deadline is missing unless the retrieved matter context confirms it. Cite the Atlas records used. When current public information is necessary and search_public_web is available, use it only with a generic public-law query that contains no client name, matter title, case number, email, phone number, firm strategy, or other private firm data; clearly distinguish public web sources from Atlas firm records. Prepare consequential work only through proposal tools; never send, file, publish, or create consequential work directly.`;
+Ground factual answers in Atlas tools and never invent firm facts. For a question about document contents, controlling documents, facts found in files, or firm-wide document patterns, call search_document_knowledge and cite its document title and page or section when supplied. Treat candidate document extraction as unreviewed AI analysis and say so; never present it as attorney-verified fact. For a matter-specific question, retrieve the matter and call get_matter_context before concluding. For firm counts, workload, client-contact frequency, or operational trends, call compute_firm_metrics instead of estimating. For priority questions, call list_daily_priorities and inspect the relevant matter context. Treat tasks, deadlines, documents, communications, clients, accepted intelligence, and matter health as parts of one canonical firm twin. Never say a task or deadline is missing unless the retrieved matter context confirms it. Cite the Atlas records used. When current public information is necessary and search_public_web is available, use it only with a generic public-law query that contains no client name, matter title, case number, email, phone number, firm strategy, or other private firm data; clearly distinguish public web sources from Atlas firm records. Prepare consequential work only through proposal tools; never send, file, publish, or create consequential work directly.`;
 
 export class AtlasToolRegistry {
   constructor(service,options={}) { this.service = service; this.webResearch=options.webResearch??null; }
@@ -29,6 +29,7 @@ export class AtlasToolRegistry {
     return [
       { name: 'search_objects', description: 'Search authorized workspace objects by title, type, dimension, or state text.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'integer' } }, required: ['query'] } },
       { name: 'search_twin', description: 'Search shared accepted digital-twin objects and intelligence observations.', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+      { name: 'search_document_knowledge', description: 'Search authorized firm documents and their extracted intelligence with document, matter, page or section, confidence, and attorney-review provenance. Candidate results are unreviewed AI extraction and must be described that way.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'integer' } }, required: ['query'] } },
       { name: 'list_recent_matters', description: 'List the most recently opened matters in the authorized workspace.', inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } } },
       { name: 'get_object', description: 'Retrieve one object from the authorized workspace by object ID.', inputSchema: { type: 'object', properties: { objectId: { type: 'string' } }, required: ['objectId'] } },
       { name: 'get_matter_health', description: 'Get explainable health for one matter in the authorized workspace.', inputSchema: { type: 'object', properties: { matterId: { type: 'string' } }, required: ['matterId'] } },
@@ -55,6 +56,11 @@ export class AtlasToolRegistry {
       case 'search_twin': {
         const result=await this.service.searchTwin(workspaceId,required(args.query,'query'));
         return {data:result,sources:result.objects.map(source)};
+      }
+      case 'search_document_knowledge': {
+        const limit=boundedLimit(args.limit,20);const results=await this.service.searchDocumentKnowledge(workspaceId,required(args.query,'query'),limit);
+        const sources=results.map(item=>({sourceId:item.citationId,sourceType:'document_knowledge',objectId:item.sourceObjectId,observationId:item.observationId??null,title:item.documentTitle,documentType:item.documentType,matterId:item.matterId,matterTitle:item.matterTitle,kind:item.kind,confidence:item.confidence,reviewStatus:item.reviewStatus,sourceLocation:item.sourceLocation}));
+        return {data:{results,count:results.length},sources};
       }
       case 'list_recent_matters': {
         const limit = boundedLimit(args.limit);
@@ -177,7 +183,7 @@ export class AtlasAssistant {
         const result = await this.tools.execute(call.name, workspaceId, call.arguments ?? {});
         if (result.actionProposal) actionProposals.push(result.actionProposal);
         executed += 1;
-        for (const item of result.sources) sources.set(item.objectId, item);
+        for (const item of result.sources) sources.set(item.sourceId??item.observationId??item.objectId, item);
         for (const item of result.webSources??[]) webSources.set(item.url,item);
         usage.inputTokens += result.usage?.inputTokens ?? 0;
         usage.outputTokens += result.usage?.outputTokens ?? 0;

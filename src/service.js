@@ -154,6 +154,26 @@ export class AtlasService {
     };
   }
 
+  async searchDocumentKnowledge(workspaceId,query,limit=20){
+    const text=required(query,'query').trim();
+    if(text.length<2||text.length>1000)throw new AtlasError('VALIDATION_ERROR','document knowledge query must contain 2 to 1000 characters',400);
+    if(!Number.isInteger(limit)||limit<1||limit>50)throw new AtlasError('VALIDATION_ERROR','limit must be between 1 and 50',400);
+    const normalized=text.toLowerCase();const terms=[...new Set(normalized.split(/[^a-z0-9]+/).filter(term=>term.length>1))];
+    const [objects,observations]=await Promise.all([this.repository.listObjects(workspaceId,{}),this.repository.listIntelligenceObservations(workspaceId)]);
+    const objectMap=new Map(objects.map(object=>[object.id,object]));const matterMap=new Map(objects.filter(object=>object.dimension==='matter').map(object=>[object.id,object]));
+    const score=value=>{const haystack=String(value??'').toLowerCase();const phrase=haystack.includes(normalized)?100:0;return phrase+terms.reduce((total,term)=>total+(haystack.includes(term)?1:0),0);};
+    const results=[];
+    for(const document of objects.filter(object=>object.dimension==='document')){
+      const relevance=score(`${document.title} ${document.type} ${JSON.stringify(document.state)}`);if(!relevance)continue;
+      const matterId=document.parentObjectId??document.state?.matterId??null;results.push({citationId:`document:${document.id}`,sourceObjectId:document.id,documentTitle:document.title,documentType:document.type,matterId,matterTitle:matterMap.get(matterId)?.title??null,kind:'document',data:{title:document.title,documentType:document.type},confidence:1,reviewStatus:'canonical',sourceLocation:null,relevance});
+    }
+    for(const observation of observations.filter(item=>item.status!=='rejected')){
+      const document=objectMap.get(observation.sourceObjectId);if(document?.dimension!=='document')continue;const relevance=score(`${observation.kind} ${JSON.stringify(observation.data)} ${document.title} ${document.type}`);if(!relevance)continue;
+      const matterId=observation.data?.matterId??document.parentObjectId??document.state?.matterId??null;results.push({citationId:`observation:${observation.id}`,observationId:observation.id,sourceObjectId:document.id,documentTitle:document.title,documentType:document.type,matterId,matterTitle:matterMap.get(matterId)?.title??null,kind:observation.kind,data:observation.data,confidence:observation.confidence,reviewStatus:observation.status,sourceLocation:observation.sourceLocation??null,relevance});
+    }
+    return results.sort((a,b)=>b.relevance-a.relevance||Number(b.reviewStatus==='accepted')-Number(a.reviewStatus==='accepted')||a.documentTitle.localeCompare(b.documentTitle)).slice(0,limit);
+  }
+
   async decideIntelligenceObservation(workspaceId,observationId,input,actorId) {
     const decision=required(input.decision,'decision');if(!['accept','reject'].includes(decision))throw new AtlasError('VALIDATION_ERROR','decision must be accept or reject',400);
     return this.repository.transaction(async(repository)=>{

@@ -1,6 +1,15 @@
-# Atlas Core 0.47.0 — Native Document Understanding
+# Atlas Core 0.48.0 — Firm-Wide Document Retrieval
 
 ## Verified as implemented
+
+- “What do you need?” can search firm-authorized documents and structured document intelligence across cases
+- Retrieval returns separate citations for each extracted finding, even when several findings came from the same document
+- Every document-intelligence citation preserves document title, case, page or section, confidence, and review status
+- Candidate AI extraction is explicitly labeled as unreviewed; rejected observations are excluded from retrieval
+- Accepted findings remain distinguishable from canonical document metadata and unreviewed candidates
+- Search and citation assembly are provider-neutral Atlas services rather than OpenAI-hosted vector state
+- Every query is pinned to the already-authorized firm workspace and cross-firm results are excluded
+- The live web application displays page or section details and unreviewed status beside Atlas sources
 
 - Stored PDF, DOCX, text, CSV, JPEG, and PNG content routes into native intelligence without waiting for chat
 - Exact-trigger routing ensures document bytes reach a file-capable provider before the generic event model
@@ -18,7 +27,7 @@
 - Access-controlled retrieval rejecting cross-firm objects and externally managed connector references
 - PDF, DOCX, text, CSV, JPEG, and PNG allowlist with filename sanitization, base64 validation, and configurable limits
 - Production startup and launch readiness fail closed unless durable document storage is configured
-- Render blueprint includes a persistent document disk mounted outside the application container filesystem
+- Render blueprint uses shared PostgreSQL document storage so the web service and intelligence worker see the same bytes
 
 - Client payment links now open an Atlas-owned, responsive checkout instead of redirecting to a processor-branded website
 - Atlas controls the checkout branding, invoice summary, security explanation, error states, and completion experience

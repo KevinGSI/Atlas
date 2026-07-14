@@ -224,8 +224,8 @@ export function createAtlasHandler(service, options = {}) {
         case 'paymentPage': case 'paymentApp': return sendPaymentAsset(response,await phaseOneAsset(match.name),headers);
         case 'stripePaymentWebhook': {if(!accounting)throw new AtlasError('PAYMENT_PROVIDER_NOT_CONFIGURED','Payment processing is not configured',503);result=await accounting.processPaymentWebhook('stripe',await readRawBody(request,config.maxBodyBytes),request.headers?.['stripe-signature']);break;}
         case 'stripePaymentCheckout': {if(!accounting)throw new AtlasError('PAYMENT_PROVIDER_NOT_CONFIGURED','Payment processing is not configured',503);result=await accounting.paymentCheckoutConfiguration('stripe',workspaceId);break;}
-        case 'health': case 'live': result = { status: 'ok', version: '0.47.0' }; break;
-        case 'ready': await ready(); result = { status: 'ready', version: '0.47.0' }; break;
+        case 'health': case 'live': result = { status: 'ok', version: '0.48.0' }; break;
+        case 'ready': await ready(); result = { status: 'ready', version: '0.48.0' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
         case 'registerFirm': result = await identity.registerFirm(await readJson(request,config.maxBodyBytes)); break;
         case 'login': result = await identity.login(await readJson(request, config.maxBodyBytes),requestContext(request)); break;

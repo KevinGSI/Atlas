@@ -1,8 +1,13 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.47.0` completes the first native document-understanding path: firm-isolated file bytes are durably shared between the API and intelligence worker, verified before use, and analyzed through an interchangeable file-capable AI contract. OpenAI is the initial adapter, but storage, routing, safety, canonical observations, and human review remain Atlas-owned.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.48.0` connects native document understanding to “What do you need?”: Atlas can retrieve structured knowledge across a firm’s authorized files, cite the originating document and page or section, preserve attorney-review status, and exclude other firms. OpenAI is the initial file-analysis adapter, while retrieval, provenance, tenancy, safety, canonical observations, and human review remain provider-neutral Atlas services.
 
 ## Implemented
+
+- Firm-wide document-knowledge retrieval through the native Atlas assistant
+- Case-aware citations preserving document, page or section, confidence, and attorney-review provenance
+- Separate citations for multiple findings from one file, with rejected observations excluded
+- Visible warnings when an answer relies on candidate AI extraction awaiting attorney review
 
 - Accounting workflow for invoice-linked ACH and debit/credit-card payment links
 - Responsive Atlas-owned checkout page with invoice summary, security explanation, completion state, and embedded sensitive-field boundary
