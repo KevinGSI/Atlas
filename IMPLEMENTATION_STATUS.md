@@ -298,7 +298,7 @@
 - Fail-closed live provider command with JSON report
 - Disposable-schema live PostgreSQL integration harness
 - All 29 migrations discovered and checksum-verified in order, with idempotent rerun behavior covered by the migration harness
-- Live integration checks cover 36 application tables, canonical persistence, rate-limit persistence, awareness receipts, transactional rollback, and immutable timeline triggers
+- Live integration checks cover 37 application tables, canonical persistence, rate-limit persistence, awareness receipts, transactional rollback, and immutable timeline triggers
 - Fail-closed live-test command requiring an explicit database URL
 - PostgreSQL 16 CI service with health checks and locked dependency installation
 - Candidate observation previews inside attorney awareness cards
@@ -351,7 +351,7 @@
 ## Verification completed here
 
 - 340 Phase 1 tests passed locally with 0 failures; 1 dedicated live-PostgreSQL test correctly skipped because this workspace supplied no database URL
-- Repository verification passed across 152 required launch files, 45 source modules, and 36 database tables
+- Repository verification passed across 152 required launch files, 45 source modules, and 37 database tables
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection
 - Live AI command environment and failure behavior verified locally

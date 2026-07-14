@@ -126,4 +126,4 @@ if (failures.length) {
   console.error(`Verification failed:\n- ${failures.join('\n- ')}`);
   process.exit(1);
 }
-console.log(`Verification passed: version ${pkg.version}, ${requiredFiles.length} required files, ${sourceFiles} source modules, 36 database tables.`);
+console.log(`Verification passed: version ${pkg.version}, ${requiredFiles.length} required files, ${sourceFiles} source modules, 37 database tables.`);
