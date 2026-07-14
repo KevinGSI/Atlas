@@ -1,7 +1,7 @@
 import { createId } from './ids.js';
 import { createDefaultNativeCapabilities } from './native-capabilities.js';
 
-const category=(trigger)=>trigger==='email.received'?'incoming_email':trigger==='phone_call.received'?'phone_call':trigger==='attachment.received'?'document_upload':trigger==='deadline.missed'?'missed_deadline':trigger==='deadline.approaching'?'approaching_deadline':trigger.startsWith('cms.')?'cms_activity':'firm_activity';
+const category=(trigger)=>trigger==='email.received'?'incoming_email':trigger==='calendar.received'?'calendar_event':trigger==='phone_call.received'?'phone_call':trigger==='attachment.received'?'document_upload':trigger==='deadline.missed'?'missed_deadline':trigger==='deadline.approaching'?'approaching_deadline':trigger.startsWith('cms.')?'cms_activity':'firm_activity';
 
 export class SituationalPlaybookEngine {
   constructor(capabilities=createDefaultNativeCapabilities()){this.capabilities=capabilities;}

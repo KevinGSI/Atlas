@@ -23,6 +23,23 @@ function stripHtml(value) {
   return String(value ?? '').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim();
 }
 
+function microsoftGraphUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'graph.microsoft.com' || !url.pathname.startsWith('/v1.0/')) throw new Error('untrusted');
+    return url;
+  } catch {
+    throw new AtlasError('MAIL_SYNC_PROVIDER_ERROR', 'Microsoft Graph returned an invalid continuation URL', 502, { provider: 'microsoft' });
+  }
+}
+
+function microsoftDate(value, timeZone) {
+  if (!value) return null;
+  const candidate = timeZone === 'UTC' && !/[zZ]|[+-]\d\d:\d\d$/.test(value) ? `${value}Z` : value;
+  const parsed = new Date(candidate);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
+}
+
 function decodeBase64Url(value) {
   if (!value) return '';
   try { return Buffer.from(value, 'base64url').toString('utf8'); }
@@ -75,7 +92,8 @@ function googleCalendar(event) {
   };
 }
 
-function microsoftEmail(message) {
+function microsoftEmail(message, now = new Date().toISOString()) {
+  if (message['@removed']) return { type: 'email', id: String(message.id), updatedAt: now, checksum: `removed:${message['@removed'].reason ?? 'deleted'}`, deleted: true, deletedAt: now, data: {} };
   const from = message.from?.emailAddress?.address?.toLowerCase() ?? 'unknown@invalid.local';
   const recipients = (items) => (items ?? []).map((item) => item.emailAddress?.address?.toLowerCase()).filter(Boolean);
   const receivedAt = message.receivedDateTime ?? new Date().toISOString();
@@ -86,11 +104,15 @@ function microsoftEmail(message) {
   };
 }
 
-function microsoftCalendar(event) {
+function microsoftCalendar(event, now = new Date().toISOString()) {
+  const removed = Boolean(event['@removed']);
+  const cancelled = removed || Boolean(event.isCancelled);
+  const start = microsoftDate(event.start?.dateTime, event.start?.timeZone);
+  const end = microsoftDate(event.end?.dateTime, event.end?.timeZone);
   return {
-    type: 'calendar', id: String(event.id), updatedAt: event.lastModifiedDateTime ?? event.start?.dateTime, checksum: event.changeKey ?? event.id,
-    deleted: Boolean(event.isCancelled), deletedAt: event.isCancelled ? event.lastModifiedDateTime ?? new Date().toISOString() : null,
-    data: { title: event.subject || '(untitled calendar event)', start: event.start?.dateTime ?? null, end: event.end?.dateTime ?? null, timeZone: event.start?.timeZone ?? null, location: event.location?.displayName ?? null, description: stripHtml(event.body?.content ?? event.bodyPreview), attendees: (event.attendees ?? []).map((item) => item.emailAddress?.address).filter(Boolean), status: event.showAs ?? null, webLink: event.webLink ?? null }
+    type: 'calendar', id: String(event.id), updatedAt: event.lastModifiedDateTime ?? start ?? now, checksum: event.changeKey ?? (removed ? `removed:${event['@removed'].reason ?? 'deleted'}` : event.id),
+    deleted: cancelled, deletedAt: cancelled ? event.lastModifiedDateTime ?? now : null,
+    data: removed ? {} : { title: event.subject || '(untitled calendar event)', start, startsAt: start, end, endsAt: end, timeZone: event.start?.timeZone ?? null, location: event.location?.displayName ?? null, description: stripHtml(event.body?.content ?? event.bodyPreview), attendees: (event.attendees ?? []).map((item) => item.emailAddress?.address?.toLowerCase()).filter(Boolean), organizer: event.organizer?.emailAddress?.address?.toLowerCase() ?? null, status: event.showAs ?? null, responseStatus: event.responseStatus?.response ?? null, isAllDay: Boolean(event.isAllDay), isOnlineMeeting: Boolean(event.isOnlineMeeting), onlineMeetingUrl: event.onlineMeeting?.joinUrl ?? event.onlineMeetingUrl ?? null, webLink: event.webLink ?? null }
   };
 }
 
@@ -112,12 +134,12 @@ class MailOAuthConnector extends OAuthCmsConnector {
     const refreshed = await response.json();
     return { ...credentials, ...refreshed, refresh_token: refreshed.refresh_token ?? credentials.refresh_token, expires_at: expiresAt(refreshed, this.clock()) };
   }
-  async providerJson(url, credentials) {
+  async providerJson(url, credentials, additionalHeaders = {}) {
     let current = await this.currentCredentials(credentials);
-    let response = await this.transport(url, { headers: { authorization: `Bearer ${current.access_token}` } });
+    let response = await this.transport(url, { headers: { authorization: `Bearer ${current.access_token}`, ...additionalHeaders } });
     if (response.status === 401 && current.refresh_token) {
       current = await this.currentCredentials(current, true);
-      response = await this.transport(url, { headers: { authorization: `Bearer ${current.access_token}` } });
+      response = await this.transport(url, { headers: { authorization: `Bearer ${current.access_token}`, ...additionalHeaders } });
     }
     if (!response.ok) throw new AtlasError('MAIL_SYNC_PROVIDER_ERROR', 'Mailbox provider synchronization failed', 502, { provider: this.name, status: response.status });
     return { body: await response.json(), credentials: current };
@@ -179,25 +201,41 @@ export class Microsoft365Connector extends MailOAuthConnector {
   async pull({ credentials, cursor }) {
     const position = cursor ?? { resource: 'email', nextUrl: null, since: this.initialSince(), syncStartedAt: new Date(this.clock()).toISOString() };
     if (position.resource === 'email') {
-      const url = position.nextUrl ? new URL(position.nextUrl) : new URL('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages');
-      if (!position.nextUrl) {
-        url.searchParams.set('$top', '50');
-        url.searchParams.set('$select', 'id,subject,receivedDateTime,lastModifiedDateTime,from,toRecipients,ccRecipients,bodyPreview,body,hasAttachments,internetMessageId,conversationId,changeKey');
-        url.searchParams.set('$filter', `receivedDateTime ge ${position.since}`);
-        url.searchParams.set('$orderby', 'receivedDateTime asc');
+      const initial = new URL('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta');
+      initial.searchParams.set('$top', '50');
+      initial.searchParams.set('$select', 'id,subject,receivedDateTime,lastModifiedDateTime,from,toRecipients,ccRecipients,bodyPreview,body,hasAttachments,internetMessageId,conversationId,changeKey');
+      initial.searchParams.set('$filter', `receivedDateTime ge ${position.since}`);
+      initial.searchParams.set('$orderby', 'receivedDateTime desc');
+      const continuation = position.nextUrl ?? position.emailDeltaUrl;
+      const url = continuation ? microsoftGraphUrl(continuation) : initial;
+      let listed;
+      try { listed = await this.providerJson(url, credentials, { Prefer: 'odata.maxpagesize=50' }); }
+      catch (error) {
+        if (!continuation || error?.details?.status !== 410) throw error;
+        listed = await this.providerJson(initial, credentials, { Prefer: 'odata.maxpagesize=50' });
       }
-      const listed = await this.providerJson(url, credentials);
       const next = listed.body['@odata.nextLink'] ?? null;
-      const records=[];let current=listed.credentials;for(const message of listed.body.value??[]){const record=microsoftEmail(message);if(message.hasAttachments){const metadata=await this.providerJson(`https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(message.id)}/attachments?$select=id,name,contentType,size,isInline`,current);current=metadata.credentials;const attachments=[];for(const item of metadata.body.value??[]){if(item['@odata.type']!=='#microsoft.graph.fileAttachment'||item.isInline)continue;const attachment={filename:item.name,mediaType:item.contentType??'application/octet-stream',providerAttachmentId:item.id,size:Number(item.size??0)};if(attachment.size>this.maxAttachmentBytes||!DOWNLOADABLE_MEDIA_TYPES.has(attachment.mediaType)){attachment.skippedReason=attachment.size>this.maxAttachmentBytes?'too_large':'unsafe_type';attachments.push(attachment);continue;}const downloaded=await this.providerJson(`https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(message.id)}/attachments/${encodeURIComponent(item.id)}?$select=id,name,contentType,size,contentBytes`,current);current=downloaded.credentials;attachment.contentBase64=downloaded.body.contentBytes;attachment.size=Number(downloaded.body.size??attachment.size);attachments.push(attachment);}record.data.attachments=attachments;record.data.hasAttachments=attachments.length>0;}records.push(record);}
-      return { records, nextCursor: next ? { ...position, nextUrl: next } : { ...position, resource: 'calendar', nextUrl: null }, hasMore: true, credentials: current };
+      const delta = listed.body['@odata.deltaLink'] ?? position.emailDeltaUrl ?? null;
+      const now = new Date(this.clock()).toISOString();
+      const records=[];let current=listed.credentials;for(const message of listed.body.value??[]){const record=microsoftEmail(message,now);if(!record.deleted&&message.hasAttachments){const metadata=await this.providerJson(`https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(message.id)}/attachments?$select=id,name,contentType,size,isInline`,current);current=metadata.credentials;const attachments=[];for(const item of metadata.body.value??[]){if(item['@odata.type']!=='#microsoft.graph.fileAttachment'||item.isInline)continue;const attachment={filename:item.name,mediaType:item.contentType??'application/octet-stream',providerAttachmentId:item.id,size:Number(item.size??0)};if(attachment.size>this.maxAttachmentBytes||!DOWNLOADABLE_MEDIA_TYPES.has(attachment.mediaType)){attachment.skippedReason=attachment.size>this.maxAttachmentBytes?'too_large':'unsafe_type';attachments.push(attachment);continue;}const downloaded=await this.providerJson(`https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(message.id)}/attachments/${encodeURIComponent(item.id)}?$select=id,name,contentType,size,contentBytes`,current);current=downloaded.credentials;attachment.contentBase64=downloaded.body.contentBytes;attachment.size=Number(downloaded.body.size??attachment.size);attachments.push(attachment);}record.data.attachments=attachments;record.data.hasAttachments=attachments.length>0;}records.push(record);}
+      return { records, nextCursor: next ? { ...position, resource: 'email', nextUrl: next } : { ...position, resource: 'calendar', nextUrl: null, emailDeltaUrl: delta }, hasMore: true, credentials: current };
     }
-    const url = position.nextUrl ? new URL(position.nextUrl) : new URL('https://graph.microsoft.com/v1.0/me/calendarView');
-    if (!position.nextUrl) {
-      url.searchParams.set('startDateTime', position.since); url.searchParams.set('endDateTime', new Date(this.clock() + 365 * 86_400_000).toISOString()); url.searchParams.set('$top', '250');
-      url.searchParams.set('$select', 'id,subject,start,end,location,bodyPreview,body,attendees,isCancelled,lastModifiedDateTime,changeKey,showAs,webLink');
+    const refreshWindow = !position.calendarEnd || new Date(position.calendarEnd).getTime() < this.clock() + 60 * 86_400_000;
+    const calendarStart = refreshWindow ? this.initialSince() : position.calendarStart;
+    const calendarEnd = refreshWindow ? new Date(this.clock() + 365 * 86_400_000).toISOString() : position.calendarEnd;
+    const initial = new URL('https://graph.microsoft.com/v1.0/me/calendarView/delta');
+    initial.searchParams.set('startDateTime', calendarStart); initial.searchParams.set('endDateTime', calendarEnd);
+    const continuation = position.nextUrl ?? (refreshWindow ? null : position.calendarDeltaUrl);
+    const url = continuation ? microsoftGraphUrl(continuation) : initial;
+    let listed;
+    try { listed = await this.providerJson(url, credentials, { Prefer: 'outlook.timezone="UTC", odata.maxpagesize=250' }); }
+    catch (error) {
+      if (!continuation || error?.details?.status !== 410) throw error;
+      listed = await this.providerJson(initial, credentials, { Prefer: 'outlook.timezone="UTC", odata.maxpagesize=250' });
     }
-    const listed = await this.providerJson(url, credentials);
     const next = listed.body['@odata.nextLink'] ?? null;
-    return { records: (listed.body.value ?? []).map(microsoftCalendar), nextCursor: next ? { ...position, nextUrl: next } : { resource: 'email', nextUrl: null, since: position.syncStartedAt, syncStartedAt: new Date(this.clock()).toISOString() }, hasMore: Boolean(next), credentials: listed.credentials };
+    const delta = listed.body['@odata.deltaLink'] ?? position.calendarDeltaUrl ?? null;
+    const now = new Date(this.clock()).toISOString();
+    return { records: (listed.body.value ?? []).map(event=>microsoftCalendar(event,now)), nextCursor: next ? { ...position, resource: 'calendar', nextUrl: next, calendarStart, calendarEnd } : { resource: 'email', nextUrl: null, emailDeltaUrl: position.emailDeltaUrl??null, calendarDeltaUrl: delta, calendarStart, calendarEnd, since: position.syncStartedAt, syncStartedAt: now }, hasMore: Boolean(next), credentials: listed.credentials };
   }
 }

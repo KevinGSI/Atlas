@@ -32,6 +32,13 @@
 
 - Gmail downloads supported message attachments through its read-only OAuth API
 - Microsoft 365 lists attachment metadata first and downloads supported non-inline files individually
+- One Microsoft delegated OAuth connection synchronizes both Outlook inbox mail and the primary calendar without collecting the Microsoft password
+- Microsoft mail and calendar synchronization retains Graph delta links, applies updates and source deletions, and safely rebuilds expired delta state
+- Synchronized Outlook events retain normalized times, time zone, location, attendees, organizer, Teams link, and Outlook source link
+- Microsoft continuation links are restricted to the HTTPS Microsoft Graph v1 endpoint
+- Calendar records become canonical `calendar_event` objects, emit `calendar.synchronized`, and queue `calendar.received` native-intelligence work
+- Email and Calendar display the shared connection, per-resource counts, last synchronization time, and a combined manual synchronization control
+- A production Entra configuration and real-tenant acceptance procedure is documented in `docs/MICROSOFT_365_SETUP.md`
 - Provider attachment downloads are bounded by the same configured size limit as direct uploads
 - Safe PDF, DOCX, text, CSV, JPEG, and PNG attachments enter firm-isolated durable blob storage
 - Each imported attachment becomes a canonical document connected to its canonical incoming email
@@ -364,7 +371,7 @@
 
 ## Verification completed here
 
-- 370 Phase 1 tests passed locally with 0 failures; 1 dedicated live-PostgreSQL test correctly skipped because this workspace supplied no database URL
+- 374 Phase 1 tests passed locally with 0 failures; 1 dedicated live-PostgreSQL test correctly skipped because this workspace supplied no database URL
 - Repository verification passed across 153 required launch files, 47 source modules, and 37 migration-derived database tables
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection
