@@ -2,6 +2,21 @@
 
 Atlas treats phone calls and text messages as native firm events. Both channels enter the same isolated firm workspace, are cataloged as canonical objects, and can trigger reviewable work through the interchangeable intelligence layer.
 
+## Case contact actions
+
+Every case Communications tab provides a separate recipient selector for calling, texting, emailing, and proposing a meeting. The directory contains only canonical contacts connected to that case. Each result retains the precise contact identifier defined in `CONTACTS.md`, then maps it into the guarded client, opposing counsel, judicial assistant, expert witness, or other-contact communication group. Each person remains visible when a channel is unavailable, but Atlas disables that action instead of guessing a missing phone number or email address.
+
+The browser submits only the selected canonical `contactId`. The server re-resolves that object inside the authenticated firm and case before using its stored contact details; browser-supplied addresses, numbers, client IDs, recipient lists, and role overrides are rejected. This protects firm and case isolation even if a request is modified outside the interface.
+
+The case offers four actions:
+
+1. **Call** creates a case-parented `phone_call` in `prepared` state for the selected contact and opens the user's device dialer. Atlas does not originate the call, claim it connected, or mark it complete.
+2. **Text** creates a case-parented `sms_draft` for the selected contact. The text remains unsent until a firm user separately approves the exact current version through the configured messaging provider.
+3. **Email** gives the interchangeable AI model a role-bounded snapshot of the authorized case context and creates a case-parented `email_draft`. The recipient is resolved by the server and the draft remains unsent for attorney review.
+4. **Set up meeting** creates an unsent email draft to the selected contact offering two to five attorney-selected future times for a phone call or in-person appointment. It does not create a calendar event or confirm a meeting before the recipient selects a time.
+
+Each preparation stores `contactId`, detailed `contactType`, and guarded `contactRole` on the canonical work and produces an immutable case communication event. Client communications may use the bounded client case context. Drafts to opposing counsel, judicial assistants, experts, and other contacts exclude internal tasks and intelligence observations; judicial-assistant drafting is restricted to neutral procedural administration and cannot be used for an ex parte merits communication. AI-created drafts retain provider/model provenance when the configured adapter supplies it.
+
 ## Incoming texts
 
 Twilio sends an HTTPS form-encoded webhook to:

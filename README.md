@@ -4,6 +4,10 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 
 ## Implemented
 
+- Firm-scoped Form Bank for reusable PDF, DOCX, and text forms with secure upload, search, metadata, verified download, and reversible archive controls
+- Automatic form reading, classification, summary, and encrypted retrieval indexing through the native document-intelligence pipeline
+- Provider-neutral, form-grounded case drafting with canonical caption fields, source-version provenance, attorney approval, and an explicit unfiled state; see [Form Bank](docs/FORM_BANK.md)
+
 - Multi-instance-safe PostgreSQL request limits for authentication, AI, files and migration, writes, and signed webhooks
 - HMAC-only rate-limit identifiers, explicit trusted-proxy handling, stable `429` responses, and `Retry-After` guidance
 - Append-only security events and deduplicated homepage alerts when a suspicious upload or connected-email attachment is blocked before storage
@@ -67,11 +71,13 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Firm-wide MFA policy that blocks firm operations until each active member completes enrollment
 - Administrator-controlled member deactivation and reactivation without crossing into another firm's access
 - Owner-account protection and additional safeguards around administrator deactivation
-- Active/deactivated membership state and MFA readiness visible in firm Settings
+- Account Info → Manage Users for secure invitations, pending-invitation cancellation, firm role changes, reversible access removal/restoration, MFA/session summaries, and subscription-seat visibility
+- Role and access changes revoke affected sessions and create append-only firm security events without deleting canonical work history
+- Active/deactivated membership state and MFA readiness visible only to the firm owner and administrators
 
 - Migration workspace with connected-provider and downloaded-export paths
 - Non-mutating preview for CSV and JSON exports before any canonical record is created
-- Provider-neutral classification of cases, clients, events, accounting, email, calendar, tasks, and communications
+- Provider-neutral classification of cases, contacts (including clients), events, accounting, email, calendar, tasks, and communications
 - Case ownership linking, import provenance, batch audit history, record-level errors, and repeat-safe source identities
 - Read-only OAuth coexistence for supported CMS providers with incremental synchronization and preserved source tombstones
 
@@ -201,6 +207,7 @@ Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Ver
 - Awareness cards with human-readable proposal previews
 - Attorney approval and rejection controls inside the connected homepage
 - Live homepage work queue combining open canonical tasks, case deadlines, and pending Atlas task suggestions
+- One-click case-task execution validates the task and case, retrieves canonical case and document context, performs reviews inline, and prepares generated plans or legal work as unfiled attorney-review drafts
 - Version-checked decisions preventing stale or duplicate approvals
 - Approved tasks become open task records; approved emails and legal documents remain drafts
 - Permanent `sent: false` and `filed: false` safety boundaries on approved draft creation
@@ -247,7 +254,7 @@ pnpm verify
 pnpm start
 ```
 
-Without `DATABASE_URL`, development uses the in-memory repository.
+The one-click Mac demo uses `.atlas-data/` for restart-safe local records and uploaded files. That private folder is excluded from Git. A manual development start without `DATABASE_URL` or `LOCAL_DATA_PATH` still uses the intentionally temporary in-memory repository; set `LOCAL_DATA_PATH` and `DOCUMENT_STORAGE_PATH` when durable local data is required. Production always requires PostgreSQL.
 
 Run the dedicated live-database suite against a disposable PostgreSQL database:
 
@@ -381,6 +388,10 @@ Atlas does not silently retrain a hosted model on firm data. The digital twin le
 
 Incoming connector emails enter through the read-only provider synchronization boundary or `POST /v1/workspaces/:workspaceId/ingestions/email`. Provider-downloaded attachments are accepted only after file-type validation and the configured clean scanner verdict, then stored as firm-isolated canonical documents. Binary storage, malware scanning, PDF parsing, and OCR remain replaceable adapters rather than vendor-specific domain code. See `docs/FILE_SECURITY.md` for the exact acceptance sequence and operational limits.
 
+Every accepted Atlas-owned upload queues native document intelligence. The file-capable provider reads the stored bytes, not just the filename, and must return a validated legal-document catalog containing the type, plain-language summary, classification confidence, suggested title, case number, court, document date, parties, attorneys, organizations, and source-located key dates. Atlas distinguishes discovery requests from discovery responses and recognizes motions, notices, orders, pleadings, subpoenas, correspondence, agreements, invoices, transcripts, affidavits, depositions, medical and police records, expert reports, settlement documents, and other authorized material. The resulting type and summary are written onto the same canonical document and displayed in Documents; extracted observations and any safe proposed work remain subject to attorney review.
+
+The local development application starts its document-intelligence loop automatically when a file-capable AI provider is configured. Production keeps that work in the separately deployed `atlas-intelligence-worker`, which must be running with the same PostgreSQL database, durable document storage, AI provider credentials, and content-encryption key. If the provider or worker is unavailable, the document remains securely stored with `extractionStatus: pending`; Atlas does not pretend that analysis completed.
+
 Phone and standalone-document connectors use these authenticated routes:
 
 ```text
@@ -400,7 +411,7 @@ Atlas never asks a customer to enter a Clio or MyCase password. Start a provider
 
 Connections are read-only by default. Incremental sync maps supported provider records into canonical Atlas objects, keeps stable external IDs and cursors, and emits timeline/intelligence events. Set `CMS_SYNC_ENABLED=true` to run continuous sync and configure `CMS_SYNC_INTERVAL_MS`. Production connectors require either an injected managed `credentialVault` or `CMS_CREDENTIAL_ENCRYPTION_KEY` containing a base64-encoded 32-byte key.
 
-Microsoft 365 uses one delegated OAuth connection for the read-only Outlook inbox, primary-calendar synchronization, and attorney-approved calendar additions. Atlas requests `Mail.Read`, `Calendars.ReadWrite`, and `offline_access`, retains Microsoft Graph delta links for incremental changes and source deletions, normalizes event times to UTC, and displays synchronized events in the canonical Calendar workspace. Email remains read-only. Native intelligence can propose a source-supported court date, scheduled call, deposition, deadline, or meeting from firm events; the proposal appears in **While You Were Gone**, and no Atlas or Outlook calendar event is created until an attorney approves it. Approved events are added to that user's connected Microsoft calendar without automatically inviting attendees, and pending writes retry safely. Configure `MICROSOFT_365_CLIENT_ID`, `MICROSOFT_365_CLIENT_SECRET`, and `MICROSOFT_365_TENANT`; then register the exact deployed callback URL ending in `/v1/cms/oauth/callback`. Existing Microsoft connections must reconnect to consent to the expanded calendar permission. See `docs/MICROSOFT_365_SETUP.md` for the Entra registration, consent, deployment, and live-tenant acceptance procedure.
+Microsoft 365 uses one delegated OAuth connection for the read-only Outlook inbox, primary-calendar synchronization, and attorney-approved calendar additions. Atlas requests `Mail.Read`, `Calendars.ReadWrite`, and `offline_access`, retains Microsoft Graph delta links for incremental changes and source deletions, normalizes event times to UTC, and displays synchronized events in the canonical Calendar workspace. Email remains read-only. Native intelligence can propose a source-supported court date, scheduled call, deposition, deadline, or meeting from firm events; the proposal appears in **While You Were Gone**, and no Atlas or Outlook calendar event is created until an attorney approves it. Approved events are added to that user's connected Microsoft calendar without automatically inviting attendees, and pending writes retry safely. Configure `MICROSOFT_365_CLIENT_ID`, `MICROSOFT_365_CLIENT_SECRET`, `MICROSOFT_365_TENANT`, and the public HTTPS origin in `PUBLIC_BASE_URL`; Atlas fixes the callback to that server origin instead of accepting a browser-selected redirect. Existing Microsoft connections must reconnect to consent to the expanded calendar permission. See `docs/MICROSOFT_365_SETUP.md` for the Entra registration, consent, deployment, and mandatory live-tenant acceptance procedure.
 
 Clio requires `CLIO_CLIENT_ID`, `CLIO_CLIENT_SECRET`, and optionally `CLIO_REGION`. MyCase Open API availability and endpoints must be enabled/issued for the firm; configure `MYCASE_CLIENT_ID`, `MYCASE_CLIENT_SECRET`, `MYCASE_AUTHORIZE_ENDPOINT`, `MYCASE_TOKEN_ENDPOINT`, and `MYCASE_API_BASE`. Vendor APIs, scopes, tiers, and field availability must be verified before enabling a production connection.
 

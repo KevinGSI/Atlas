@@ -4,11 +4,17 @@ function positiveInteger(value, fallback, name) {
   return parsed;
 }
 
+function licensedResearchConfig(env,prefix,label){const clientId=env[`${prefix}_CLIENT_ID`]||null;const clientSecret=env[`${prefix}_CLIENT_SECRET`]||null;const tokenEndpoint=env[`${prefix}_TOKEN_ENDPOINT`]||null;const searchEndpoint=env[`${prefix}_SEARCH_ENDPOINT`]||null;const count=[clientId,clientSecret,tokenEndpoint,searchEndpoint].filter(Boolean).length;if(count===0)return null;if(count!==4)throw new Error(`${label} legal research requires CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, and SEARCH_ENDPOINT together`);for(const [name,value] of [['TOKEN_ENDPOINT',tokenEndpoint],['SEARCH_ENDPOINT',searchEndpoint]]){let url;try{url=new URL(value);}catch{throw new Error(`${prefix}_${name} must be a valid HTTPS URL`);}if(url.protocol!=='https:'||url.username||url.password)throw new Error(`${prefix}_${name} must be a valid HTTPS URL`);}return {clientId,clientSecret,tokenEndpoint,searchEndpoint,scope:env[`${prefix}_SCOPE`]||null};}
+
+function marketingPublicSourcesConfig(env){if(!env.MARKETING_PUBLIC_DATA_SOURCES)return[];let values;try{values=JSON.parse(env.MARKETING_PUBLIC_DATA_SOURCES);}catch{throw new Error('MARKETING_PUBLIC_DATA_SOURCES must be a JSON array');}if(!Array.isArray(values)||values.length>10)throw new Error('MARKETING_PUBLIC_DATA_SOURCES must contain no more than 10 source definitions');const types=new Set(['arrests','dissolution_petitions','car_accidents']);return values.map((item,index)=>{if(!item||typeof item!=='object'||Array.isArray(item))throw new Error(`MARKETING_PUBLIC_DATA_SOURCES[${index}] must be an object`);const name=String(item.name??'').trim();const label=String(item.label??name).trim();const eventType=String(item.eventType??'').trim();const jurisdiction=String(item.jurisdiction??'').trim()||null;if(!/^[a-z0-9][a-z0-9_-]{1,79}$/i.test(name)||!label||label.length>160||!types.has(eventType))throw new Error(`MARKETING_PUBLIC_DATA_SOURCES[${index}] has invalid source metadata`);let endpoint;try{endpoint=new URL(item.endpoint);}catch{throw new Error(`MARKETING_PUBLIC_DATA_SOURCES[${index}].endpoint must be a valid HTTPS URL`);}if(endpoint.protocol!=='https:'||endpoint.username||endpoint.password)throw new Error(`MARKETING_PUBLIC_DATA_SOURCES[${index}].endpoint must be a valid HTTPS URL`);return{name,label,eventType,jurisdiction,endpoint:endpoint.toString()};});}
+
 export function loadConfig(env = process.env) {
   const nodeEnv = env.NODE_ENV ?? 'development';
   const production = nodeEnv === 'production';
   const databaseUrl = env.DATABASE_URL || null;
   if (production && !databaseUrl) throw new Error('DATABASE_URL is required in production');
+  const localDataPath=env.LOCAL_DATA_PATH||null;
+  if(production&&localDataPath)throw new Error('LOCAL_DATA_PATH is only supported for local development; use PostgreSQL in production');
   const documentStorageProvider=env.DOCUMENT_STORAGE_PROVIDER||(databaseUrl?'postgres':env.DOCUMENT_STORAGE_PATH?'filesystem':'memory');
   if(!['postgres','filesystem','memory'].includes(documentStorageProvider))throw new Error('DOCUMENT_STORAGE_PROVIDER must be postgres, filesystem, or memory');
   if(documentStorageProvider==='postgres'&&!databaseUrl)throw new Error('DATABASE_URL is required for PostgreSQL document storage');
@@ -25,6 +31,17 @@ export function loadConfig(env = process.env) {
   const corsOrigins = (env.CORS_ORIGINS ?? '')
     .split(',').map((value) => value.trim()).filter(Boolean);
   if (production && corsOrigins.includes('*')) throw new Error('Wildcard CORS is not allowed in production');
+  let publicBaseUrl=null;
+  let externalOAuthRedirectUri=null;
+  if(env.PUBLIC_BASE_URL){
+    let parsed;
+    try{parsed=new URL(env.PUBLIC_BASE_URL);}catch{throw new Error('PUBLIC_BASE_URL must be a valid URL');}
+    if(parsed.username||parsed.password||parsed.search||parsed.hash||!['http:','https:'].includes(parsed.protocol))throw new Error('PUBLIC_BASE_URL must be a clean HTTP(S) origin');
+    if(production&&parsed.protocol!=='https:')throw new Error('PUBLIC_BASE_URL must use HTTPS in production');
+    if(parsed.pathname!=='/'&&parsed.pathname!=='')throw new Error('PUBLIC_BASE_URL must not include a path');
+    publicBaseUrl=parsed.origin;
+    externalOAuthRedirectUri=`${parsed.origin}/v1/cms/oauth/callback`;
+  }
   const aiProvider = env.AI_PROVIDER || null;
   const intelligenceProvider = env.INTELLIGENCE_PROVIDER || null;
   const aiModel = env.AI_MODEL || null;
@@ -57,6 +74,11 @@ export function loadConfig(env = process.env) {
   if(cmsCredentialEncryptionKey&&Buffer.from(cmsCredentialEncryptionKey,'base64').length!==32)throw new Error('CMS_CREDENTIAL_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
   if(Boolean(env.GOOGLE_WORKSPACE_CLIENT_ID)!==Boolean(env.GOOGLE_WORKSPACE_CLIENT_SECRET))throw new Error('GOOGLE_WORKSPACE_CLIENT_ID and GOOGLE_WORKSPACE_CLIENT_SECRET must be configured together');
   if(Boolean(env.MICROSOFT_365_CLIENT_ID)!==Boolean(env.MICROSOFT_365_CLIENT_SECRET))throw new Error('MICROSOFT_365_CLIENT_ID and MICROSOFT_365_CLIENT_SECRET must be configured together');
+  const microsoft365Tenant=env.MICROSOFT_365_TENANT||'organizations';
+  const tenantGuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const tenantDomain=/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+  if(microsoft365Tenant!=='organizations'&&!tenantGuid.test(microsoft365Tenant)&&!tenantDomain.test(microsoft365Tenant))throw new Error('MICROSOFT_365_TENANT must be organizations, a tenant GUID, or a verified tenant domain');
+  if(production&&(env.MICROSOFT_365_CLIENT_ID||env.GOOGLE_WORKSPACE_CLIENT_ID)&&!externalOAuthRedirectUri)throw new Error('PUBLIC_BASE_URL is required when live email and calendar OAuth is configured in production');
   if(Boolean(env.QUICKBOOKS_CLIENT_ID)!==Boolean(env.QUICKBOOKS_CLIENT_SECRET))throw new Error('QUICKBOOKS_CLIENT_ID and QUICKBOOKS_CLIENT_SECRET must be configured together');
   const quickBooksEnvironment=env.QUICKBOOKS_ENVIRONMENT||'production';if(!['sandbox','production'].includes(quickBooksEnvironment))throw new Error('QUICKBOOKS_ENVIRONMENT must be sandbox or production');
   const cryptoEvmRpcUrl=env.CRYPTO_EVM_RPC_URL||null;const cryptoTokenAddress=env.CRYPTO_TOKEN_ADDRESS||null;const cryptoPlatformWalletAddress=env.CRYPTO_PLATFORM_WALLET_ADDRESS||null;
@@ -73,6 +95,10 @@ export function loadConfig(env = process.env) {
   const twilioAccountSid=env.TWILIO_ACCOUNT_SID||null;const twilioMessagingFrom=env.TWILIO_MESSAGING_FROM||null;
   if(Boolean(twilioAccountSid)!==Boolean(twilioMessagingFrom))throw new Error('TWILIO_ACCOUNT_SID and TWILIO_MESSAGING_FROM must be configured together');
   if(twilioAccountSid&&!twilioAuthToken)throw new Error('TWILIO_AUTH_TOKEN is required for outbound messaging');
+  const westlawResearch=licensedResearchConfig(env,'WESTLAW','Westlaw');
+  const lexisNexisResearch=licensedResearchConfig(env,'LEXISNEXIS','LexisNexis');
+  const docusignValues=[env.DOCUSIGN_WORKSPACE_ID,env.DOCUSIGN_INTEGRATION_KEY,env.DOCUSIGN_USER_ID,env.DOCUSIGN_ACCOUNT_ID,env.DOCUSIGN_PRIVATE_KEY_BASE64,env.DOCUSIGN_API_BASE_URL,env.DOCUSIGN_RETURN_URL,env.DOCUSIGN_CONNECT_HMAC_KEY];const docusignCount=docusignValues.filter(Boolean).length;let docusign=null;if(docusignCount&&docusignCount!==docusignValues.length)throw new Error('Docusign requires WORKSPACE_ID, INTEGRATION_KEY, USER_ID, ACCOUNT_ID, PRIVATE_KEY_BASE64, API_BASE_URL, RETURN_URL, and CONNECT_HMAC_KEY together');if(docusignCount){const privateKey=Buffer.from(env.DOCUSIGN_PRIVATE_KEY_BASE64,'base64').toString('utf8');if(!privateKey.includes('BEGIN PRIVATE KEY')&&!privateKey.includes('BEGIN RSA PRIVATE KEY'))throw new Error('DOCUSIGN_PRIVATE_KEY_BASE64 must contain a base64-encoded PEM private key');if(env.DOCUSIGN_CONNECT_HMAC_KEY.length<32)throw new Error('DOCUSIGN_CONNECT_HMAC_KEY must contain at least 32 characters');for(const name of ['DOCUSIGN_API_BASE_URL','DOCUSIGN_RETURN_URL']){let url;try{url=new URL(env[name]);}catch{throw new Error(`${name} must be a valid HTTPS URL`);}if(url.protocol!=='https:'||url.username||url.password)throw new Error(`${name} must be a valid HTTPS URL`);}const authBase=env.DOCUSIGN_AUTH_BASE_URL||'https://account.docusign.com';if(!authBase.startsWith('https://'))throw new Error('DOCUSIGN_AUTH_BASE_URL must be a valid HTTPS URL');docusign={workspaceId:env.DOCUSIGN_WORKSPACE_ID,integrationKey:env.DOCUSIGN_INTEGRATION_KEY,userId:env.DOCUSIGN_USER_ID,accountId:env.DOCUSIGN_ACCOUNT_ID,privateKey,apiBase:env.DOCUSIGN_API_BASE_URL,authBase,returnUrl:env.DOCUSIGN_RETURN_URL,connectHmacKey:env.DOCUSIGN_CONNECT_HMAC_KEY};}
+  const marketingPublicSources=marketingPublicSourcesConfig(env);
   let ingestionWebhookSecrets={};if(env.INGESTION_WEBHOOK_SECRETS){try{ingestionWebhookSecrets=JSON.parse(env.INGESTION_WEBHOOK_SECRETS);}catch{throw new Error('INGESTION_WEBHOOK_SECRETS must be a JSON object');}if(!ingestionWebhookSecrets||Array.isArray(ingestionWebhookSecrets)||typeof ingestionWebhookSecrets!=='object')throw new Error('INGESTION_WEBHOOK_SECRETS must be a JSON object');for(const [name,secret] of Object.entries(ingestionWebhookSecrets))if(!name.includes(':')||typeof secret!=='string'||secret.length<32)throw new Error('Each ingestion webhook secret requires a workspace:connector key and at least 32 characters');}
   return {
     nodeEnv,
@@ -81,6 +107,7 @@ export function loadConfig(env = process.env) {
     port: positiveInteger(env.PORT, 3000, 'PORT'),
     trustProxy:env.TRUST_PROXY==='true',
     databaseUrl,
+    localDataPath,
     tokenSecret,
     mfaEncryptionKey,
     accessTokenTtlSeconds: positiveInteger(env.ACCESS_TOKEN_TTL_SECONDS, 900, 'ACCESS_TOKEN_TTL_SECONDS'),
@@ -113,10 +140,16 @@ export function loadConfig(env = process.env) {
     googleWorkspaceClientSecret: env.GOOGLE_WORKSPACE_CLIENT_SECRET || null,
     microsoft365ClientId: env.MICROSOFT_365_CLIENT_ID || null,
     microsoft365ClientSecret: env.MICROSOFT_365_CLIENT_SECRET || null,
-    microsoft365Tenant: env.MICROSOFT_365_TENANT || 'organizations',
+    microsoft365Tenant,
+    publicBaseUrl,
+    externalOAuthRedirectUri,
     quickBooksClientId:env.QUICKBOOKS_CLIENT_ID||null,
     quickBooksClientSecret:env.QUICKBOOKS_CLIENT_SECRET||null,
     quickBooksEnvironment,
+    westlawResearch,
+    lexisNexisResearch,
+    docusign,
+    marketingPublicSources,
     cryptoProviderName:env.CRYPTO_PROVIDER_NAME||'base-usdc',
     cryptoEvmRpcUrl,cryptoNetwork:env.CRYPTO_NETWORK||'base',cryptoChainId:positiveInteger(env.CRYPTO_CHAIN_ID,8453,'CRYPTO_CHAIN_ID'),cryptoAsset:env.CRYPTO_ASSET||'USDC',cryptoTokenAddress,cryptoDecimals:positiveInteger(env.CRYPTO_DECIMALS,6,'CRYPTO_DECIMALS'),cryptoConfirmations:positiveInteger(env.CRYPTO_CONFIRMATIONS,12,'CRYPTO_CONFIRMATIONS'),cryptoPlatformWalletAddress,
     cryptoSubscriptionPlan:env.CRYPTO_SUBSCRIPTION_PLAN||'professional',cryptoSubscriptionPriceMinor:env.CRYPTO_SUBSCRIPTION_PRICE_MINOR?positiveInteger(env.CRYPTO_SUBSCRIPTION_PRICE_MINOR,null,'CRYPTO_SUBSCRIPTION_PRICE_MINOR'):null,
@@ -124,6 +157,7 @@ export function loadConfig(env = process.env) {
     twilioAuthToken,voicePublicBaseUrl,twilioAccountSid,twilioMessagingFrom,
     cmsSyncEnabled: env.CMS_SYNC_ENABLED === 'true',
     cmsSyncIntervalMs: positiveInteger(env.CMS_SYNC_INTERVAL_MS, 300_000, 'CMS_SYNC_INTERVAL_MS'),
+    intelligenceWorkerEnabled:env.INTELLIGENCE_WORKER_ENABLED===undefined?!production:env.INTELLIGENCE_WORKER_ENABLED==='true',
     cmsCredentialEncryptionKey,
     cmsCredentialEncryptionKeyId,
     ingestionWebhookSecrets,

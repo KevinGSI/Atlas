@@ -14,4 +14,4 @@ New views inherit the dock by default. Excluding another view requires an intent
 
 Home is the universal starting point. A clear navigation request must open the authorized Atlas destination directly, including a uniquely resolved case. A request to perform legal or operational work must move into Workspace and continue there through the same assistant conversation.
 
-Workspace is the unified lawyer work surface. It must filter the firm's authorized canonical cases, tasks, documents, communications, deadlines, clients, pending AI proposals, and review items without creating a parallel data store. Prepared work remains subject to the existing human-approval boundary; Workspace may not send, file, or publish it automatically.
+Workspace is the unified lawyer work surface. It must filter the firm's authorized canonical cases, tasks, documents, communications, deadlines, contacts (including clients), pending AI proposals, and review items without creating a parallel data store. Prepared work remains subject to the existing human-approval boundary; Workspace may not send, file, or publish it automatically.

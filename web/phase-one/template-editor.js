@@ -1,7 +1,7 @@
 const storageKey='atlas-template-studio-v1';
 const defaults=Object.freeze({
   brandName:'Atlas',firmName:'Atlas Demo Law',
-  navigation:'Home\nWorkspace\nCases\nEmail\nCalendar\nTasks\nClients\nDocuments\nCommunications\nAccounting',
+  navigation:'Home\nWorkspace\nCases\nEmail\nCalendar\nTasks\nContacts\nDocuments\nCommunications\nAccounting',
   heroEyebrow:'AI Command Center',heroTitle:'Atlas Command',
   heroDescription:'Your continuously aware digital twin can navigate the platform, analyze authorized firm knowledge, and prepare legal work for attorney approval.',
   assistantEyebrow:'Primary AI workspace',assistantTitle:'What do you need?',

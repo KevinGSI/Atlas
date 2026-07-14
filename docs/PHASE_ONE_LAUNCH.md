@@ -4,12 +4,15 @@ Atlas `1.0.0-rc.1` is the code-complete Phase 1 launch candidate. “Code comple
 
 ## Included product
 
-- Subscribing law-firm onboarding with isolated firm membership, roles, invitations, sessions, MFA, access deactivation, and firm export
-- Canonical cases, clients, documents, email, calendar, tasks, communications, accounting, timelines, relationships, audit history, and matter health
-- The native Atlas digital twin across the homepage, Workspace, `What do you need?`, event processing, situational awareness, firm search, and human review queues
+- Subscribing law-firm onboarding with isolated firm membership, Account Info user administration, roles, invitations and cancellation, sessions, MFA, reversible access removal, and firm export
+- Canonical cases, contacts (including clients), documents, email, calendar, tasks, communications, accounting, timelines, relationships, audit history, and matter health
+- The native Atlas digital twin across the homepage, Workspace, `What do you need?`, case-task execution, event processing, situational awareness, firm search, and human review queues
 - Provider-neutral AI orchestration with OpenAI as the initial configured adapter, cited firm retrieval, screened public research, immutable run history, and approval-gated work
-- Gmail and Microsoft 365 mail/calendar connections, Clio coexistence, a MyCase Open API boundary, and previewed CSV/JSON migration
-- File storage, integrity verification, pre-storage type inspection, ClamAV scanning, encrypted document passages, semantic retrieval, and visible blocked-file alerts
+- mandatory Microsoft 365 Outlook email/calendar connection, optional Gmail connection, Clio coexistence, a MyCase Open API boundary, and previewed CSV/JSON migration
+
+Atlas must not be published to production until the deployment has a Microsoft Entra application, the exact production OAuth callback derived from `PUBLIC_BASE_URL` is registered, `MICROSOFT_365_CLIENT_ID` and `MICROSOFT_365_CLIENT_SECRET` are present, the organizational tenant is valid, and continuous synchronization is enabled. The production launch gate enforces those settings. Before opening access to customers, complete every live-tenant email and calendar acceptance check in `MICROSOFT_365_SETUP.md`; repository tests cannot substitute for that external validation.
+- File storage, integrity verification, pre-storage type inspection, ClamAV scanning, automatic legal-document reading/classification/summarization, canonical catalog fields, encrypted document passages, semantic retrieval, and visible blocked-file alerts
+- Firm-scoped Form Bank with secure reusable-form storage, search, metadata and lifecycle controls, native AI access, canonical case-caption population, source-form provenance, and unfiled attorney-review drafting
 - Phone and text assistant workflows with signed Twilio boundaries, disclosure, opt-out handling, safe acknowledgment, drafts, and human send approval
 - Canonical accounting, invoice-linked ACH/card checkout, external-payment reconciliation, non-custodial crypto verification, and provider-neutral banking/financing boundaries
 - Docker, local PostgreSQL and ClamAV services, Render deployment definitions, ordered migrations, readiness, staging smoke tests, CodeQL, dependency auditing, and launch checks
@@ -40,6 +43,7 @@ These commands fail closed unless their real database, paid AI credential, or de
 3. Configure Render with the launch secrets and vendor credentials; do not rely on GitHub Secrets being copied automatically.
 4. Run the pre-deploy launch check and all 29 ordered migrations.
 5. Run the OpenAI evaluation and the HTTPS staging smoke test.
+   Upload a fictional PDF in staging and confirm its Documents card changes from pending to a visible legal type and source-faithful summary while `atlas-intelligence-worker` is healthy.
 6. Complete vendor setup for the specific mailbox, CMS, telephony, payment, and blockchain services enabled for the pilot.
 7. Configure backups, restoration testing, monitored scanner updates, logs/alerts, retention, incident ownership, privacy terms, and customer agreements.
 8. Use fictional or approved pilot data until legal, privacy, security, and professional-responsibility review authorizes real client information.

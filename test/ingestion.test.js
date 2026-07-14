@@ -14,6 +14,9 @@ test('incoming email and PDF attachment become canonical linked objects and inte
   const {repository,workspace,matter,ingestion}=await fixture();
   const result=await ingestion.ingestEmail(workspace.id,{connector:'test-mail',externalId:'msg-1',from:'counsel@example.com',to:['lawyer@example.com'],subject:'Discovery production',bodyText:'Attached production.',matterId:matter.id,attachments:[{filename:'production.pdf',storageRef:'blob://sha256/abc',sha256:'abc',mediaType:'application/pdf',size:1234}]},'usr_1');
   assert.equal(result.root.type,'incoming_email'); assert.equal(result.attachments[0].state.extractionStatus,'pending');
+  assert.equal(result.attachments[0].parentObjectId,matter.id);
+  assert.equal(result.attachments[0].state.matterId,matter.id);
+  assert.deepEqual(result.attachments[0].state.provenance,{kind:'email_attachment',sourceObjectId:result.root.id,connector:'test-mail'});
   const graph=await new AtlasService(repository).expandGraph(workspace.id,result.root.id);
   assert.equal(graph.nodes[0].id,result.attachments[0].id); assert.equal(graph.relationships[0].type,'has_attachment');
   assert.deepEqual((await repository.listIntelligenceJobs(workspace.id)).map((job)=>job.triggerType).slice(-2),['attachment.received','email.received']);
@@ -37,7 +40,7 @@ test('standalone document ingestion catalogs metadata and queues extraction exac
   const {repository,workspace,matter,ingestion}=await fixture();
   const input={connector:'portal',externalId:'upload-1',filename:'interrogatories.pdf',storageRef:'blob://sha256/document',sha256:'document',mediaType:'application/pdf',size:2048,matterId:matter.id};
   const first=await ingestion.ingestDocument(workspace.id,input,'usr_1');const duplicate=await ingestion.ingestDocument(workspace.id,input,'usr_1');
-  assert.equal(first.root.type,'uploaded_document');assert.equal(first.root.state.extractionStatus,'pending');assert.equal(first.ingestion.kind,'document');assert.equal(duplicate.duplicate,true);
+  assert.equal(first.root.type,'uploaded_document');assert.equal(first.root.state.extractionStatus,'pending');assert.equal(first.root.state.matterId,matter.id);assert.deepEqual(first.root.state.provenance,{kind:'connector_upload',connector:'portal'});assert.equal(first.ingestion.kind,'document');assert.equal(duplicate.duplicate,true);
   const jobs=await repository.listIntelligenceJobs(workspace.id);assert.equal(jobs.at(-1).triggerType,'attachment.received');assert.equal(jobs.at(-1).payload.document.id,first.root.id);
 });
 
@@ -46,6 +49,12 @@ test('invalid call and document inputs leave no partial canonical records',async
   await assert.rejects(()=>ingestion.ingestPhoneCall(workspace.id,{connector:'phone',externalId:'bad-call',direction:'sideways'}),(error)=>error.code==='INGESTION_INVALID');
   await assert.rejects(()=>ingestion.ingestDocument(workspace.id,{connector:'portal',externalId:'bad-document',filename:'empty.pdf',storageRef:'blob://empty',sha256:'empty',mediaType:'application/pdf',size:-1}),(error)=>error.code==='INGESTION_INVALID');
   const objects=await repository.listObjects(workspace.id,{});assert.equal(objects.some((object)=>['phone_call','uploaded_document'].includes(object.type)),false);
+});
+
+test('ingestion rejects a non-case object as document ownership',async()=>{
+  const {workspace,ingestion}=await fixture();
+  const nonMatter=await ingestion.repository.createObject({id:'obj_not_case',workspaceId:workspace.id,parentObjectId:null,dimension:'operation',type:'task',title:'Not a case',state:{},version:1,createdAt:'2026-07-10T13:00:00.000Z',updatedAt:'2026-07-10T13:00:00.000Z',deletedAt:null});
+  await assert.rejects(()=>ingestion.ingestDocument(workspace.id,{connector:'portal',externalId:'wrong-owner',filename:'document.pdf',storageRef:'blob://document',sha256:'document',mediaType:'application/pdf',size:10,matterId:nonMatter.id}),(error)=>error.code==='INGESTION_INVALID');
 });
 
 test('connector and extractor registries enforce interchangeable adapter contracts',()=>{

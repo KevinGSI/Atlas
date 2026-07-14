@@ -80,6 +80,31 @@ test('PostgreSQL membership lookup is scoped by workspace and user', async () =>
   assert.deepEqual(calls[0].values, ['wsp_1', 'usr_1']);
 });
 
+test('PostgreSQL managed-user role changes and invitation cancellation remain parameterized and firm scoped',async()=>{
+  const calls=[];
+  const membershipRow={id:'mem_1',workspace_id:'wsp_1',user_id:'usr_member',role:'billing',active:true,deactivated_at:null,deactivated_by:null,deactivation_reason:null,created_at:timestamp};
+  const invitationRow={id:'inv_1',workspace_id:'wsp_1',email:'new-user@firm.test',role:'paralegal',token_hash:'hashed-invitation',status:'pending',invited_by:'usr_owner',accepted_by:null,expires_at:'2026-07-17T12:00:00.000Z',created_at:timestamp,accepted_at:null};
+  const pool={async query(sql,values){calls.push({sql,values});if(sql.startsWith('UPDATE atlas_workspace_membership'))return {rows:[membershipRow]};if(sql.startsWith('UPDATE atlas_workspace_invitation'))return {rows:[{...invitationRow,status:'canceled'}]};return {rows:[invitationRow]};}};
+  const repository=new PostgresRepository(pool);
+
+  const changed=await repository.updateMembershipRole('wsp_1','usr_member','billing');
+  assert.deepEqual({workspaceId:changed.workspaceId,userId:changed.userId,role:changed.role,active:changed.active},{workspaceId:'wsp_1',userId:'usr_member',role:'billing',active:true});
+  assert.match(calls[0].sql,/workspace_id=\$1 AND user_id=\$2/);
+  assert.deepEqual(calls[0].values,['wsp_1','usr_member','billing']);
+
+  const invitation=await repository.getWorkspaceInvitation('wsp_1','inv_1');
+  assert.deepEqual({id:invitation.id,workspaceId:invitation.workspaceId,email:invitation.email,role:invitation.role,status:invitation.status},{id:'inv_1',workspaceId:'wsp_1',email:'new-user@firm.test',role:'paralegal',status:'pending'});
+  assert.equal('workspace_id' in invitation,false);
+  assert.match(calls[1].sql,/workspace_id=\$1 AND id=\$2/);
+  assert.deepEqual(calls[1].values,['wsp_1','inv_1']);
+
+  const canceled=await repository.cancelWorkspaceInvitation('wsp_1','inv_1');
+  assert.equal(canceled.status,'canceled');
+  assert.equal(canceled.workspaceId,'wsp_1');
+  assert.match(calls[2].sql,/workspace_id=\$1 AND id=\$2 AND status='pending'/);
+  assert.deepEqual(calls[2].values,['wsp_1','inv_1']);
+});
+
 test('PostgreSQL firm discovery is scoped only to the authenticated user',async()=>{const calls=[];const pool={async query(sql,values){calls.push({sql,values});return {rows:[]};}};await new PostgresRepository(pool).listMembershipsForUser('usr_1');assert.match(calls[0].sql,/WHERE user_id = \$1/);assert.deepEqual(calls[0].values,['usr_1']);});
 
 test('PostgreSQL subscription lookup is constrained to one firm workspace',async()=>{

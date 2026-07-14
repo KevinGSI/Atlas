@@ -15,6 +15,46 @@ services:
           property: connectionString
       - key: NODE_ENV
         value: production
+      - key: COMPLIANCE_PROFILE
+        value: gdpr_hipaa
+      - key: SECURITY_PROGRAM_OWNER
+        sync: false
+      - key: RISK_ASSESSMENT_REVIEWED_AT
+        sync: false
+      - key: INCIDENT_RESPONSE_PLAN_VERSION
+        sync: false
+      - key: DATA_RETENTION_POLICY_VERSION
+        sync: false
+      - key: BACKUP_RESTORE_TESTED_AT
+        sync: false
+      - key: ACCESS_REVIEW_COMPLETED_AT
+        sync: false
+      - key: SUBPROCESSOR_REGISTER_VERSION
+        sync: false
+      - key: PRIVACY_PROGRAM_OWNER
+        sync: false
+      - key: PRIVACY_NOTICE_VERSION
+        sync: false
+      - key: DATA_PROCESSING_AGREEMENT_VERSION
+        sync: false
+      - key: RECORDS_OF_PROCESSING_VERSION
+        sync: false
+      - key: DATA_SUBJECT_RIGHTS_PROCEDURE_VERSION
+        sync: false
+      - key: INTERNATIONAL_TRANSFER_MECHANISM
+        sync: false
+      - key: HIPAA_SECURITY_OFFICIAL
+        sync: false
+      - key: HIPAA_RISK_ANALYSIS_REVIEWED_AT
+        sync: false
+      - key: HIPAA_BAA_TEMPLATE_VERSION
+        sync: false
+      - key: HIPAA_SUBCONTRACTOR_BAA_REGISTER_VERSION
+        sync: false
+      - key: HIPAA_BREACH_PROCEDURE_VERSION
+        sync: false
+      - key: HIPAA_WORKFORCE_TRAINING_COMPLETED_AT
+        sync: false
       - key: HOST
         value: 0.0.0.0
       - key: TRUST_PROXY

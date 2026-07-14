@@ -42,6 +42,65 @@ export class InMemoryRepository {
   #documentBlobs = new Map();
   #rateLimitBuckets = new Map();
 
+  exportState() {
+    return clone({
+      workspaces: this.#workspaces,
+      objects: this.#objects,
+      relationships: this.#relationships,
+      events: this.#events,
+      users: this.#users,
+      memberships: this.#memberships,
+      workspaceInvitations: this.#workspaceInvitations,
+      subscriptions: this.#subscriptions,
+      audits: this.#audits,
+      refreshSessions: this.#refreshSessions,
+      passwordResets: this.#passwordResets,
+      loginThrottles: this.#loginThrottles,
+      aiRuns: this.#aiRuns,
+      aiConversations: this.#aiConversations,
+      aiMessages: this.#aiMessages,
+      aiActionProposals: this.#aiActionProposals,
+      intelligenceJobs: this.#intelligenceJobs,
+      intelligenceObservations: this.#intelligenceObservations,
+      documentKnowledgeEmbeddings: this.#documentKnowledgeEmbeddings,
+      documentKnowledgeChunks: this.#documentKnowledgeChunks,
+      ingestionRecords: this.#ingestionRecords,
+      cmsAuthorizations: this.#cmsAuthorizations,
+      cmsConnections: this.#cmsConnections,
+      cmsRecordLinks: this.#cmsRecordLinks,
+      encryptedSecrets: this.#encryptedSecrets,
+      awarenessItems: this.#awarenessItems,
+      awarenessReceipts: this.#awarenessReceipts,
+      automationMarkers: this.#automationMarkers,
+      schedulerLeases: this.#schedulerLeases,
+      canonicalEvents: this.#canonicalEvents,
+      canonicalDeliveries: this.#canonicalDeliveries,
+      mfaFactors: this.#mfaFactors,
+      securityEvents: this.#securityEvents,
+      workspaceSecurityPolicies: this.#workspaceSecurityPolicies,
+      documentBlobs: this.#documentBlobs,
+      rateLimitBuckets: this.#rateLimitBuckets
+    });
+  }
+
+  importState(state) {
+    if (!state || typeof state !== 'object') throw new Error('Atlas local data is invalid');
+    const map = (name, current) => {
+      const value = state[name];
+      if (value === undefined) return current;
+      if (!(value instanceof Map)) throw new Error(`Atlas local data store ${name} is invalid`);
+      return clone(value);
+    };
+    const set = (name, current) => {
+      const value = state[name];
+      if (value === undefined) return current;
+      if (!(value instanceof Set)) throw new Error(`Atlas local data store ${name} is invalid`);
+      return clone(value);
+    };
+    this.#workspaces=map('workspaces',this.#workspaces);this.#objects=map('objects',this.#objects);this.#relationships=map('relationships',this.#relationships);this.#events=map('events',this.#events);this.#users=map('users',this.#users);this.#memberships=map('memberships',this.#memberships);this.#workspaceInvitations=map('workspaceInvitations',this.#workspaceInvitations);this.#subscriptions=map('subscriptions',this.#subscriptions);this.#audits=map('audits',this.#audits);this.#refreshSessions=map('refreshSessions',this.#refreshSessions);this.#passwordResets=map('passwordResets',this.#passwordResets);this.#loginThrottles=map('loginThrottles',this.#loginThrottles);this.#aiRuns=map('aiRuns',this.#aiRuns);this.#aiConversations=map('aiConversations',this.#aiConversations);this.#aiMessages=map('aiMessages',this.#aiMessages);this.#aiActionProposals=map('aiActionProposals',this.#aiActionProposals);this.#intelligenceJobs=map('intelligenceJobs',this.#intelligenceJobs);this.#intelligenceObservations=map('intelligenceObservations',this.#intelligenceObservations);this.#documentKnowledgeEmbeddings=map('documentKnowledgeEmbeddings',this.#documentKnowledgeEmbeddings);this.#documentKnowledgeChunks=map('documentKnowledgeChunks',this.#documentKnowledgeChunks);this.#ingestionRecords=map('ingestionRecords',this.#ingestionRecords);this.#cmsAuthorizations=map('cmsAuthorizations',this.#cmsAuthorizations);this.#cmsConnections=map('cmsConnections',this.#cmsConnections);this.#cmsRecordLinks=map('cmsRecordLinks',this.#cmsRecordLinks);this.#encryptedSecrets=map('encryptedSecrets',this.#encryptedSecrets);this.#awarenessItems=map('awarenessItems',this.#awarenessItems);this.#awarenessReceipts=map('awarenessReceipts',this.#awarenessReceipts);this.#automationMarkers=set('automationMarkers',this.#automationMarkers);this.#schedulerLeases=map('schedulerLeases',this.#schedulerLeases);this.#canonicalEvents=map('canonicalEvents',this.#canonicalEvents);this.#canonicalDeliveries=map('canonicalDeliveries',this.#canonicalDeliveries);this.#mfaFactors=map('mfaFactors',this.#mfaFactors);this.#securityEvents=map('securityEvents',this.#securityEvents);this.#workspaceSecurityPolicies=map('workspaceSecurityPolicies',this.#workspaceSecurityPolicies);this.#documentBlobs=map('documentBlobs',this.#documentBlobs);this.#rateLimitBuckets=map('rateLimitBuckets',this.#rateLimitBuckets);
+    return this;
+  }
+
   async transaction(work) {
     const markerSnapshot=new Set(this.#automationMarkers);const leaseSnapshot=new Map(this.#schedulerLeases);const canonicalEventSnapshot=new Map(this.#canonicalEvents);const canonicalDeliverySnapshot=new Map(this.#canonicalDeliveries);const mfaSnapshot=new Map(this.#mfaFactors);const securityEventSnapshot=new Map(this.#securityEvents);const workspaceSecurityPolicySnapshot=new Map(this.#workspaceSecurityPolicies);const documentBlobSnapshot=new Map(this.#documentBlobs);
     const snapshot = [this.#workspaces, this.#objects, this.#relationships, this.#events, this.#users, this.#memberships, this.#workspaceInvitations, this.#subscriptions, this.#audits, this.#refreshSessions, this.#passwordResets, this.#loginThrottles, this.#aiRuns, this.#aiConversations, this.#aiMessages, this.#aiActionProposals, this.#intelligenceJobs, this.#intelligenceObservations,this.#documentKnowledgeEmbeddings,this.#documentKnowledgeChunks, this.#ingestionRecords,this.#cmsAuthorizations,this.#cmsConnections,this.#cmsRecordLinks,this.#encryptedSecrets,this.#awarenessItems,this.#awarenessReceipts]
@@ -328,11 +387,14 @@ export class InMemoryRepository {
     return [...this.#memberships.values()].filter((item) => item.workspaceId === workspaceId).map(clone);
   }
   listMembershipsForUser(userId){return [...this.#memberships.values()].filter(item=>item.userId===userId).map(clone);}
+  updateMembershipRole(workspaceId,userId,role){const key=`${workspaceId}:${userId}`;const current=this.#memberships.get(key);if(!current)throw new AtlasError('ACCESS_DENIED','Workspace access denied',403);const updated={...current,role};this.#memberships.set(key,clone(updated));return clone(updated);}
   updateMembershipAccess(workspaceId,userId,changes){const key=`${workspaceId}:${userId}`;const current=this.#memberships.get(key);if(!current)throw new AtlasError('ACCESS_DENIED','Workspace access denied',403);const updated={...current,...changes};this.#memberships.set(key,clone(updated));return clone(updated);}
   getWorkspaceSecurityPolicy(workspaceId){this.getWorkspace(workspaceId);return clone(this.#workspaceSecurityPolicies.get(workspaceId)??{workspaceId,requireMfa:false,updatedBy:null,createdAt:null,updatedAt:null});}
   upsertWorkspaceSecurityPolicy(value){this.getWorkspace(value.workspaceId);const current=this.#workspaceSecurityPolicies.get(value.workspaceId);const stored={...value,createdAt:current?.createdAt??value.createdAt};this.#workspaceSecurityPolicies.set(value.workspaceId,clone(stored));return clone(stored);}
   createWorkspaceInvitation(value){if([...this.#workspaceInvitations.values()].some(item=>item.workspaceId===value.workspaceId&&item.email.toLowerCase()===value.email.toLowerCase()&&item.status==='pending'))throw new AtlasError('INVITATION_EXISTS','A pending invitation already exists for this email',409);this.#workspaceInvitations.set(value.id,clone(value));return clone(value);}
   listWorkspaceInvitations(workspaceId){return [...this.#workspaceInvitations.values()].filter(item=>item.workspaceId===workspaceId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(clone);}
+  getWorkspaceInvitation(workspaceId,id){const value=this.#workspaceInvitations.get(id);if(!value||value.workspaceId!==workspaceId)throw new AtlasError('INVITATION_NOT_FOUND','Invitation was not found',404);return clone(value);}
+  cancelWorkspaceInvitation(workspaceId,id){const value=this.getWorkspaceInvitation(workspaceId,id);if(value.status!=='pending')throw new AtlasError('INVITATION_NOT_PENDING','Only a pending invitation can be canceled',409);const updated={...value,status:'canceled'};this.#workspaceInvitations.set(id,clone(updated));return clone(updated);}
   cancelExpiredWorkspaceInvitations(workspaceId,now){let count=0;for(const [id,item] of this.#workspaceInvitations)if(item.workspaceId===workspaceId&&item.status==='pending'&&new Date(item.expiresAt)<=new Date(now)){this.#workspaceInvitations.set(id,{...item,status:'canceled'});count+=1;}return count;}
   getWorkspaceInvitationByTokenHash(tokenHash){const value=[...this.#workspaceInvitations.values()].find(item=>item.tokenHash===tokenHash);if(!value)throw new AtlasError('INVITATION_INVALID','Invitation is invalid',401);return clone(value);}
   acceptWorkspaceInvitation(id,userId,acceptedAt){const value=this.#workspaceInvitations.get(id);if(!value||value.status!=='pending')throw new AtlasError('INVITATION_INVALID','Invitation is invalid or already used',401);const updated={...value,status:'accepted',acceptedBy:userId,acceptedAt};this.#workspaceInvitations.set(id,clone(updated));return clone(updated);}

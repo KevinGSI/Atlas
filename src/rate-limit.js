@@ -2,9 +2,9 @@ import { createHmac } from 'node:crypto';
 import { AtlasError } from './errors.js';
 
 const PUBLIC_AUTH_ROUTES=new Set(['register','registerFirm','login','refresh','logout','requestPasswordReset','resetPassword','acceptInvitation','cmsOAuthCallback','stripePaymentCheckout']);
-const AI_ROUTES=new Set(['assistantQuery']);
-const FILE_ROUTES=new Set(['uploadFile','previewMigration','importMigration']);
-const WEBHOOK_ROUTES=new Set(['ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook']);
+const AI_ROUTES=new Set(['assistantQuery','performMatterTask','legalResearchSearch','legalResearchChat','createMatterClientEmailDraft','createMatterClientMeetingDraft']);
+const FILE_ROUTES=new Set(['uploadFile','uploadFormBankForm','previewMigration','importMigration']);
+const WEBHOOK_ROUTES=new Set(['ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','docusignExecutionWebhook']);
 
 function positive(value,name){if(!Number.isInteger(value)||value<1)throw new AtlasError('RATE_LIMIT_CONFIGURATION_ERROR',`${name} must be a positive integer`,500);return value;}
 

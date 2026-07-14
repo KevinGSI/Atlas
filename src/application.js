@@ -3,11 +3,12 @@ import { InMemoryRepository } from './repository.js';
 import { AtlasService } from './service.js';
 import { loadConfig } from './config.js';
 import { createPostgresRuntime } from './runtime.js';
+import { createLocalFileRuntime } from './local-file-repository.js';
 import { IdentityService, TokenService } from './identity.js';
 import { AtlasAssistant, AtlasToolRegistry } from './assistant.js';
 import { createAiProviderRegistry, createWebResearchProvider } from './ai-providers.js';
 import { AesGcmContentCipher, createContentCipher } from './content-security.js';
-import { AtlasIntelligenceRuntime, DocumentIntelligenceProvider, IntelligenceProviderRegistry, StructuredModelIntelligenceProvider } from './intelligence.js';
+import { AtlasIntelligenceRuntime, DocumentIntelligenceProvider, IntelligenceProviderRegistry, StructuredModelIntelligenceProvider, runIntelligenceWorker } from './intelligence.js';
 import { IntelligenceProjectionService } from './intelligence-projection.js';
 import { AtlasIngestionService } from './ingestion.js';
 import { AtlasResolver } from './resolution.js';
@@ -24,12 +25,17 @@ import { StructuredModelVoiceIntentProvider, VoiceAssistantService } from './voi
 import { TwilioVoiceAdapter } from './telephony-provider-adapters.js';
 import { CmsExportMigrationService } from './migration-import.js';
 import { SmsAssistantService } from './sms-assistant.js';
+import { CaseCommunicationsService } from './case-communications.js';
 import { FirmExportService } from './firm-export.js';
 import { StripeCheckoutProvider } from './payment-provider-adapters.js';
 import { AtlasFileService, FileSystemBlobStore, InMemoryBlobStore, RepositoryBlobStore } from './file-storage.js';
+import { FormBankService } from './form-bank.js';
 import { createFileSecurityScanner } from './file-security.js';
 import { RepositoryRequestRateLimiter } from './rate-limit.js';
 import { SocialMediaService } from './social-media.js';
+import { ContractedLegalResearchApiProvider, LegalResearchProviderRegistry, LegalResearchService } from './legal-research.js';
+import { DocusignEsignProvider, DocumentExecutionService } from './document-execution.js';
+import { HttpAggregatePublicSource, MarketingService } from './marketing.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -37,11 +43,17 @@ function memoryRuntime() {
 
 export function createApplicationReadiness(runtime,fileSecurityScanner){return async()=>{await runtime.ready();await fileSecurityScanner.ready();return true;};}
 
+export function startApplicationIntelligenceWorker(config,intelligence,intelligenceProviders,dependencies={}){
+  const controller=new AbortController();
+  const completion=config.intelligenceWorkerEnabled&&intelligenceProviders.list().length?runIntelligenceWorker(intelligence,{signal:controller.signal,pollMs:dependencies.intelligencePollMs??250,onError:dependencies.onIntelligenceError??(()=>{})}):Promise.resolve();
+  return {controller,completion};
+}
+
 export async function startAtlas(env = process.env, dependencies = {}) {
   const config = loadConfig(env);
   const runtime = dependencies.runtime ?? (config.databaseUrl
     ? await createPostgresRuntime({ ...env, DATABASE_POOL_SIZE: String(config.databasePoolSize) })
-    : memoryRuntime());
+    : config.localDataPath ? createLocalFileRuntime(config.localDataPath) : memoryRuntime());
   const service = new AtlasService(runtime.repository);
   const identity = new IdentityService(runtime.repository, new TokenService(config.tokenSecret, config.accessTokenTtlSeconds), undefined, {
     refreshTokenTtlSeconds: config.refreshTokenTtlSeconds,
@@ -62,6 +74,12 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const ready=createApplicationReadiness(runtime,fileSecurityScanner);
   const rateLimiter=dependencies.rateLimiter??new RepositoryRequestRateLimiter(runtime.repository,config.tokenSecret,{authRequests:config.rateLimitAuthRequests,aiRequests:config.rateLimitAiRequests,fileRequests:config.rateLimitFileRequests,writeRequests:config.rateLimitWriteRequests,webhookRequests:config.rateLimitWebhookRequests});
   const files=new AtlasFileService(service,ingestion,blobStore,{maxBytes:config.documentMaxBytes,fileSecurityScanner});
+  const formBank=new FormBankService(service,files,{contentCipher,draftProvider:selectedModel});
+  const signatureProviders=new ProviderRegistry('Electronic signature');const notaryProviders=new ProviderRegistry('Remote online notary');
+  for(const [name,provider] of Object.entries(dependencies.signatureProviders??{}))signatureProviders.register(name,provider);
+  for(const [name,provider] of Object.entries(dependencies.notaryProviders??{}))notaryProviders.register(name,provider);
+  if(config.docusign&&!dependencies.signatureProviders?.docusign)signatureProviders.register('docusign',new DocusignEsignProvider({...config.docusign,transport:dependencies.docusignTransport}));
+  const documentExecution=new DocumentExecutionService(service,files,{signatureProviders,notaryProviders});
   const intelligenceProviders = new IntelligenceProviderRegistry();
   for (const [name, provider] of Object.entries(dependencies.intelligenceProviders ?? {})) intelligenceProviders.register(name, provider);
   if(selectedModel?.analyzeFile&&!dependencies.intelligenceProviders?.['document-analysis'])intelligenceProviders.register('document-analysis',new DocumentIntelligenceProvider(selectedModel,blobStore));
@@ -79,7 +97,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const externalConnectorsConfigured=config.clioClientId||config.myCaseClientId||config.googleWorkspaceClientId||config.microsoft365ClientId||config.quickBooksClientId;
   if(config.production&&externalConnectorsConfigured&&!dependencies.credentialVault&&!config.cmsCredentialEncryptionKey)throw new Error('CMS_CREDENTIAL_ENCRYPTION_KEY or a managed credentialVault is required for external connections in production');
   const credentialVault=dependencies.credentialVault??(config.cmsCredentialEncryptionKey?new RepositoryCredentialVault(runtime.repository,new AesGcmContentCipher({keys:{[config.cmsCredentialEncryptionKeyId]:config.cmsCredentialEncryptionKey},activeKeyId:config.cmsCredentialEncryptionKeyId})):new InMemoryCredentialVault());
-  const cms=new CmsCoexistenceService(runtime.repository,cmsConnectors,credentialVault,undefined,{blobStore,maxAttachmentBytes:config.documentMaxBytes,fileSecurityScanner});
+  const cms=new CmsCoexistenceService(runtime.repository,cmsConnectors,credentialVault,undefined,{blobStore,maxAttachmentBytes:config.documentMaxBytes,fileSecurityScanner,oauthRedirectUri:config.externalOAuthRedirectUri});
   service.setCalendarPublisher(({workspaceId,calendarEvent,targetUserId})=>cms.publishApprovedCalendarEvent(workspaceId,calendarEvent,targetUserId));
   const migration=new CmsExportMigrationService(service);
   const paymentProviders=new ProviderRegistry('Payment');
@@ -99,12 +117,24 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const voice=new VoiceAssistantService(service,{intentProvider:voiceIntentProvider});
   const telephony=dependencies.telephonyAdapter??(config.twilioAuthToken?new TwilioVoiceAdapter({authToken:config.twilioAuthToken,publicBaseUrl:config.voicePublicBaseUrl,accountSid:config.twilioAccountSid,messagingFrom:config.twilioMessagingFrom,transport:dependencies.telephonyTransport}):null);
   const sms=new SmsAssistantService(service,{intentProvider:voiceIntentProvider,messagingProvider:dependencies.messagingProvider??telephony});
+  const caseCommunications=new CaseCommunicationsService(service,{model:selectedModel,sms});
   const social=new SocialMediaService(service,selectedModel);
-  const assistant = new AtlasAssistant(selectedModel, new AtlasToolRegistry(service,{webResearch,embeddingProvider:selectedModel,contentCipher}), {
+  const marketingPublicSources=new ProviderRegistry('Marketing public data');
+  const marketingAdProviders=new ProviderRegistry('Advertising');
+  for(const [name,provider] of Object.entries(dependencies.marketingPublicSources??{}))marketingPublicSources.register(name,provider);
+  for(const source of config.marketingPublicSources??[])if(!dependencies.marketingPublicSources?.[source.name])marketingPublicSources.register(source.name,new HttpAggregatePublicSource({...source,transport:dependencies.marketingPublicDataTransport}));
+  for(const [name,provider] of Object.entries(dependencies.marketingAdProviders??{}))marketingAdProviders.register(name,provider);
+  const marketing=new MarketingService(service,{publicSources:marketingPublicSources,adProviders:marketingAdProviders});
+  const legalResearchProviders=new LegalResearchProviderRegistry();
+  for(const [name,provider] of Object.entries(dependencies.legalResearchProviders??{}))legalResearchProviders.register(name,provider);
+  if(config.westlawResearch&&!dependencies.legalResearchProviders?.westlaw)legalResearchProviders.register('westlaw',new ContractedLegalResearchApiProvider({name:'westlaw',...config.westlawResearch,transport:dependencies.legalResearchTransport}));
+  if(config.lexisNexisResearch&&!dependencies.legalResearchProviders?.lexisnexis)legalResearchProviders.register('lexisnexis',new ContractedLegalResearchApiProvider({name:'lexisnexis',...config.lexisNexisResearch,transport:dependencies.legalResearchTransport}));
+  const legalResearch=new LegalResearchService(service,legalResearchProviders);
+  const assistant = new AtlasAssistant(selectedModel, new AtlasToolRegistry(service,{webResearch,legalResearch,embeddingProvider:selectedModel,contentCipher}), {
     repository: runtime.repository,
     contentCipher
   });
-  const server = createAtlasServer(service, { config, ready, rateLimiter, identity, assistant, ingestion, files, webhooks, cms, migration, accounting, voice, sms, social, telephony, firmExport });
+  const server = createAtlasServer(service, { config, ready, rateLimiter, identity, assistant, ingestion, files, formBank, documentExecution, webhooks, cms, migration, accounting, voice, sms, caseCommunications, social, marketing, legalResearch, telephony, firmExport });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, resolve);
@@ -117,6 +147,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const eventController=new AbortController();
   const canonicalConsumers=dependencies.canonicalEventConsumers??new CanonicalEventConsumerRegistry().register('digital-twin-impact',new DigitalTwinImpactConsumer(runtime.repository));
   const eventDispatcher=runCanonicalEventDispatcher(new CanonicalEventDispatcher(runtime.repository,canonicalConsumers),{signal:eventController.signal,intervalMs:dependencies.canonicalEventIntervalMs??1000});
+  const {controller:intelligenceController,completion:localIntelligenceWorker}=startApplicationIntelligenceWorker(config,intelligence,intelligenceProviders,dependencies);
   let stopped = false;
   return {
     config,
@@ -124,15 +155,20 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     address: server.address(),
     intelligence,
     cms,
+    legalResearch,
+    documentExecution,
+    marketing,
     async stop() {
       if (stopped) return;
       stopped = true;
       cmsController.abort();
       sweepController.abort();
       eventController.abort();
+      intelligenceController.abort();
       await cmsScheduler;
       await sweepScheduler;
       await eventDispatcher;
+      await localIntelligenceWorker;
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
       await runtime.close();
     }

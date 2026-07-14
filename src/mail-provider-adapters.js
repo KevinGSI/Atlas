@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 
 const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/calendar.readonly'
+  'https://www.googleapis.com/auth/calendar.events'
 ];
 const MICROSOFT_SCOPES = ['offline_access', 'Mail.Read', 'Calendars.ReadWrite'];
 const DOWNLOADABLE_MEDIA_TYPES=new Set(['application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain','text/csv','image/jpeg','image/png']);
@@ -27,7 +27,7 @@ function stripHtml(value) {
 function microsoftGraphUrl(value) {
   try {
     const url = new URL(value);
-    if (url.protocol !== 'https:' || url.hostname !== 'graph.microsoft.com' || !url.pathname.startsWith('/v1.0/')) throw new Error('untrusted');
+    if (url.protocol !== 'https:' || url.hostname !== 'graph.microsoft.com' || url.port || url.username || url.password || url.hash || !url.pathname.startsWith('/v1.0/')) throw new Error('untrusted');
     return url;
   } catch {
     throw new AtlasError('MAIL_SYNC_PROVIDER_ERROR', 'Microsoft Graph returned an invalid continuation URL', 502, { provider: 'microsoft' });
@@ -43,6 +43,7 @@ function microsoftDate(value, timeZone) {
 
 function graphTransactionId(value){const hex=createHash('sha256').update(String(value)).digest('hex').slice(0,32);return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;}
 function graphDateTime(value){return new Date(value).toISOString().replace(/Z$/,'');}
+function googleEventId(value){return createHash('sha256').update(String(value)).digest('hex').slice(0,32);}
 
 function decodeBase64Url(value) {
   if (!value) return '';
@@ -92,7 +93,7 @@ function googleCalendar(event) {
   return {
     type: 'calendar', id: String(event.id), updatedAt: event.updated ?? start, checksum: event.etag ?? null,
     deleted: event.status === 'cancelled', deletedAt: event.status === 'cancelled' ? event.updated ?? new Date().toISOString() : null,
-    data: { title: event.summary || '(untitled calendar event)', start, end, location: event.location ?? null, description: event.description ?? null, attendees: (event.attendees ?? []).map((item) => item.email).filter(Boolean), status: event.status ?? 'confirmed', htmlLink: event.htmlLink ?? null }
+    data: { title: event.summary || '(untitled calendar event)', start, startsAt:start, end, endsAt:end, location: event.location ?? null, description: event.description ?? null, attendees: (event.attendees ?? []).map((item) => item.email).filter(Boolean), organizer:event.organizer?.email??null, status: event.status ?? 'confirmed', webLink: event.htmlLink ?? null }
   };
 }
 
@@ -164,6 +165,15 @@ export class GoogleWorkspaceConnector extends MailOAuthConnector {
     url.searchParams.set('prompt', 'consent');
     return url.toString();
   }
+  capabilities(){return {...super.capabilities(),calendarWriteAfterApproval:true,mailReadOnly:true};}
+  async createCalendarEvent({credentials,calendarEvent}){
+    const state=calendarEvent?.state??{};if(calendarEvent?.type!=='calendar_event'||!state.startsAt||!state.endsAt)throw new AtlasError('CALENDAR_EVENT_INVALID','A canonical approved calendar event is required',400);
+    const id=googleEventId(calendarEvent.id);const url=`https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none`;
+    const payload={id,summary:calendarEvent.title,description:state.description??'Created by Atlas after attorney approval.',start:{dateTime:new Date(state.startsAt).toISOString(),timeZone:'UTC'},end:{dateTime:new Date(state.endsAt).toISOString(),timeZone:'UTC'},location:state.location??'',visibility:'private',reminders:{useDefault:false,overrides:[{method:'popup',minutes:state.reminderMinutesBeforeStart??15}]},extendedProperties:{private:{atlasEventId:calendarEvent.id}}};
+    let result;try{result=await this.providerRequest(url,credentials,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});}catch(error){if(error?.details?.status!==409)throw error;result=await this.providerJson(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(id)}`,credentials);}
+    if(!result.body?.id)throw new AtlasError('MAIL_SYNC_PROVIDER_ERROR','Google Calendar did not return the created event',502,{provider:'google'});
+    return {record:googleCalendar(result.body),credentials:result.credentials};
+  }
   async pull({ credentials, cursor }) {
     const position = cursor ?? { resource: 'email', pageToken: null, since: this.initialSince(), syncStartedAt: new Date(this.clock()).toISOString() };
     if (position.resource === 'email') {
@@ -202,7 +212,7 @@ export class GoogleWorkspaceConnector extends MailOAuthConnector {
 export class Microsoft365Connector extends MailOAuthConnector {
   constructor(options) {
     const tenant = options.tenant ?? 'organizations';
-    super({ ...options, name: 'microsoft', authorizeEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`, tokenEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, apiBase: 'https://graph.microsoft.com/v1.0', scopes: MICROSOFT_SCOPES, resources: [] });
+    super({ ...options, name: 'microsoft', authorizeEndpoint: `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/authorize`, tokenEndpoint: `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`, apiBase: 'https://graph.microsoft.com/v1.0', scopes: MICROSOFT_SCOPES, resources: [] });
   }
   capabilities(){return {...super.capabilities(),calendarWriteAfterApproval:true,mailReadOnly:true};}
   async createCalendarEvent({credentials,calendarEvent}){

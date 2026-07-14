@@ -18,6 +18,13 @@ function documentMetadata(input) {
   return {storageRef,sha256,mediaType,size};
 }
 
+async function requireMatter(repository, workspaceId, matterId) {
+  if (!matterId) return null;
+  const matter = await repository.getObject(workspaceId, matterId);
+  if (matter.dimension !== 'matter') throw new AtlasError('INGESTION_INVALID', 'matterId must identify a case in this workspace', 400);
+  return matter;
+}
+
 export class IngestionConnectorRegistry {
   #connectors = new Map();
   register(name, connector) {
@@ -49,12 +56,12 @@ export class AtlasIngestionService {
     return this.repository.transaction(async(repository)=>{
       const existing=await repository.findIngestionRecord(workspaceId,connector,externalId);
       if(existing)return { ingestion:existing,duplicate:true,root:await repository.getObject(workspaceId,existing.rootObjectId),attachments:[] };
-      if(input.matterId)await repository.getObject(workspaceId,input.matterId);
+      await requireMatter(repository,workspaceId,input.matterId);
       const email={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'operation',type:'incoming_email',title:input.subject?.trim()||'(no subject)',state:{from:sender,to:recipients,cc:input.cc??[],bodyText:input.bodyText??null,receivedAt:input.receivedAt??now,status:'received'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
       await repository.createObject(email);
       const documents=[];
       for(const item of attachments){
-        const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:'incoming_attachment',title:required(item.filename,'filename'),state:{storageRef:item.storageRef,sha256:item.sha256,mediaType:item.mediaType,size:item.size,securityScan:item.securityScan??null,extractionStatus:'pending'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
+        const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:'incoming_attachment',title:required(item.filename,'filename'),state:{storageRef:item.storageRef,sha256:item.sha256,mediaType:item.mediaType,size:item.size,securityScan:item.securityScan??null,extractionStatus:'pending',matterId:input.matterId??null,provenance:{kind:'email_attachment',sourceObjectId:email.id,connector}},version:1,createdAt:now,updatedAt:now,deletedAt:null};
         await repository.createObject(document); documents.push(document);
         await repository.createRelationship({id:createId('rel'),workspaceId,fromObjectId:email.id,toObjectId:document.id,type:'has_attachment',attributes:{},createdAt:now});
       }
@@ -74,7 +81,7 @@ export class AtlasIngestionService {
     return this.repository.transaction(async(repository)=>{
       const existing=await repository.findIngestionRecord(workspaceId,connector,externalId);
       if(existing)return {ingestion:existing,duplicate:true,root:await repository.getObject(workspaceId,existing.rootObjectId)};
-      if(input.matterId)await repository.getObject(workspaceId,input.matterId);
+      await requireMatter(repository,workspaceId,input.matterId);
       const call={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'operation',type:'phone_call',title:input.title?.trim()||`${direction==='incoming'?'Incoming':'Outgoing'} call`,state:{direction,from:input.from??null,to:input.to??null,transcript:input.transcript??null,summary:input.summary??null,recordingRef:input.recordingRef??null,durationSeconds,occurredAt:input.occurredAt??now,status:'received'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
       await repository.createObject(call);
       const event={id:createId('evt'),workspaceId,parentObjectId:call.id,type:'phone_call.received',actorId,source:`connector:${connector}`,confidence:1,visibility:'workspace',relatedObjectIds:input.matterId?[input.matterId]:[],data:{externalId,direction,durationSeconds},occurredAt:input.occurredAt??now,createdAt:now};
@@ -85,13 +92,13 @@ export class AtlasIngestionService {
     });
   }
 
-  async ingestDocument(workspaceId,input,actorId='system') {
+  async ingestDocument(workspaceId,input,actorId='system',catalog={}) {
     const connector=required(input.connector,'connector'); const externalId=required(input.externalId,'externalId'); const file=documentMetadata(input); const now=this.clock();
     return this.repository.transaction(async(repository)=>{
       const existing=await repository.findIngestionRecord(workspaceId,connector,externalId);
       if(existing)return {ingestion:existing,duplicate:true,root:await repository.getObject(workspaceId,existing.rootObjectId)};
-      if(input.matterId)await repository.getObject(workspaceId,input.matterId);
-      const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:'uploaded_document',title:required(input.filename,'filename'),state:{...file,documentType:input.documentType??null,uploadedAt:input.uploadedAt??now,securityScan:input.securityScan??null,extractionStatus:'pending'},version:1,createdAt:now,updatedAt:now,deletedAt:null};
+      await requireMatter(repository,workspaceId,input.matterId);
+      const document={id:createId('obj'),workspaceId,parentObjectId:input.matterId??null,dimension:'document',type:catalog.objectType??'uploaded_document',title:catalog.title??required(input.filename,'filename'),state:{...(catalog.state??{}),...file,documentType:input.documentType??catalog.state?.documentType??null,uploadedAt:input.uploadedAt??now,securityScan:input.securityScan??null,extractionStatus:'pending',matterId:input.matterId??null,provenance:{kind:catalog.provenanceKind??(input.connector==='atlas-upload'?'computer_upload':'connector_upload'),connector:input.connector}},version:1,createdAt:now,updatedAt:now,deletedAt:null};
       await repository.createObject(document);
       const event={id:createId('evt'),workspaceId,parentObjectId:document.id,type:'attachment.received',actorId,source:`connector:${connector}`,confidence:1,visibility:'workspace',relatedObjectIds:input.matterId?[input.matterId]:[],data:{externalId,filename:document.title,mediaType:file.mediaType},occurredAt:input.uploadedAt??now,createdAt:now};
       await repository.createEvent(event);

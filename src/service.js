@@ -2,9 +2,19 @@ import { AtlasError, required } from './errors.js';
 import { createId } from './ids.js';
 import { ConflictScreeningService } from './conflict-screening.js';
 import { normalizeCalendarEventProposal } from './calendar-events.js';
+import { buildCanonicalContext, canonicalMatterId } from './canonical-context.js';
+import {canonicalContactType,isContactObject,normalizeContactState} from './contacts.js';
 
 const dimensions = new Set(['matter', 'client', 'evidence', 'document', 'person', 'organization', 'operation']);
 const immutableLedgerTypes = new Set(['payment', 'refund', 'trust_transaction', 'journal_entry']);
+
+function profileText(value,field,max=500){if(value===undefined)return undefined;if(value===null)return null;if(typeof value!=='string')throw new AtlasError('PROFILE_INVALID',`${field} must be text`,400,{field});return value.trim().slice(0,max)||null;}
+function profileEmail(value,field){const email=profileText(value,field,320);if(email&&!/^\S+@\S+\.\S+$/.test(email))throw new AtlasError('PROFILE_INVALID',`${field} must be a valid email address`,400,{field});return email;}
+function profileUrl(value,field){const text=profileText(value,field,1000);if(!text)return text;let url;try{url=new URL(text);}catch{throw new AtlasError('PROFILE_INVALID',`${field} must be a valid web address`,400,{field});}if(!['http:','https:'].includes(url.protocol))throw new AtlasError('PROFILE_INVALID',`${field} must use http or https`,400,{field});return url.href;}
+function profileList(value,field){if(value===undefined)return undefined;const values=Array.isArray(value)?value:typeof value==='string'?value.split(','):null;if(!values)throw new AtlasError('PROFILE_INVALID',`${field} must be a list`,400,{field});return [...new Set(values.map(item=>String(item).trim().slice(0,160)).filter(Boolean))].slice(0,30);}
+function selectedProfileState(input,previous,definitions){if(!input||typeof input!=='object'||Array.isArray(input))throw new AtlasError('PROFILE_INVALID','Profile information must be an object',400);const state={...previous};for(const [field,kind,max] of definitions){const value=kind==='email'?profileEmail(input[field],field):kind==='url'?profileUrl(input[field],field):kind==='list'?profileList(input[field],field):profileText(input[field],field,max);if(value!==undefined)state[field]=value;}return state;}
+const firmProfileFields=[['displayName','text',240],['legalName','text',240],['generalEmail','email'],['phone','text',80],['website','url'],['addressLine1','text',240],['addressLine2','text',240],['city','text',120],['state','text',120],['postalCode','text',40],['country','text',120],['jurisdictions','list'],['practiceAreas','list']];
+const attorneyProfileFields=[['name','text',240],['professionalEmail','email'],['phone','text',80],['mobilePhone','text',80],['title','text',160],['barNumber','text',120],['barJurisdictions','list'],['practiceAreas','list'],['bio','text',4000],['signatureBlock','text',4000]];
 
 export class AtlasService {
   constructor(repository, clock = () => new Date().toISOString(),options={}) {
@@ -39,11 +49,20 @@ export class AtlasService {
 
   async getWorkspace(id) { return this.repository.getWorkspace(id); }
 
+  async accountProfiles(workspaceId,user,canEditFirm=false,role=null){const [workspace,objects]=await Promise.all([this.getWorkspace(workspaceId),this.listObjects(workspaceId,{})]);const firm=objects.find(item=>item.type==='firm_profile')??null;const attorney=objects.find(item=>item.type==='attorney_profile'&&item.state?.userId===user.id)??null;return{canEditFirm,role,firm:firm??{id:null,title:workspace.name,version:null,state:{displayName:workspace.name}},attorney:attorney??{id:null,title:user.name,version:null,state:{userId:user.id,name:user.name,professionalEmail:user.email}},identity:{id:user.id,name:user.name,email:user.email}};}
+
+  async updateAccountProfiles(workspaceId,user,input,{canEditFirm=false,role=null}={}){if(!input||typeof input!=='object'||Array.isArray(input))throw new AtlasError('PROFILE_INVALID','Profile information must be an object',400);const objects=await this.listObjects(workspaceId,{});let firm=objects.find(item=>item.type==='firm_profile')??null;let attorney=objects.find(item=>item.type==='attorney_profile'&&item.state?.userId===user.id)??null;const now=this.clock();if(input.firm!==undefined){if(!canEditFirm)throw new AtlasError('ACCESS_DENIED','Only a firm owner or administrator may edit firm information',403);const state=selectedProfileState(input.firm,firm?.state??{},firmProfileFields);state.profileScope='firm';state.updatedBy=user.id;state.profileUpdatedAt=now;const title=state.displayName??state.legalName??(await this.getWorkspace(workspaceId)).name;if(firm)firm=await this.updateObject(workspaceId,firm.id,{version:firm.version,title,state},user.id);else firm=await this.createObject(workspaceId,{dimension:'operation',type:'firm_profile',title,state,actorId:user.id});}
+    if(input.attorney!==undefined){const state=selectedProfileState(input.attorney,attorney?.state??{},attorneyProfileFields);state.userId=user.id;state.profileScope='professional';state.signInEmail=user.email;state.updatedBy=user.id;state.profileUpdatedAt=now;state.name=state.name??user.name;state.professionalEmail=state.professionalEmail??user.email;const title=`Attorney profile — ${state.name}`;if(attorney)attorney=await this.updateObject(workspaceId,attorney.id,{version:attorney.version,title,state},user.id);else attorney=await this.createObject(workspaceId,{dimension:'operation',type:'attorney_profile',title,state,actorId:user.id});}
+    return this.accountProfiles(workspaceId,user,canEditFirm,role);}
+
   async createObject(workspaceId, input) {
     const dimension = required(input.dimension, 'dimension');
     if (!dimensions.has(dimension)) {
       throw new AtlasError('VALIDATION_ERROR', 'Unsupported dimension', 400, { dimension });
     }
+    const type=required(input.type, 'type');
+    const inputState=input.state??{};
+    const state=isContactObject({dimension,type,state:inputState})?normalizeContactState(inputState,{fallback:dimension==='client'||type==='client'?'client':'other'}):inputState;
     const now = this.clock();
     return this.repository.transaction(async (repository) => {
       const object = await repository.createObject({
@@ -51,9 +70,9 @@ export class AtlasService {
         workspaceId,
         parentObjectId: input.parentObjectId ?? null,
         dimension,
-        type: required(input.type, 'type'),
+        type,
         title: required(input.title, 'title'),
-        state: input.state ?? {},
+        state,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -76,6 +95,19 @@ export class AtlasService {
   async getObject(workspaceId, id) { return this.repository.getObject(workspaceId, id); }
   async listObjects(workspaceId, filters) { return this.repository.listObjects(workspaceId, filters); }
 
+  async getCanonicalContext(workspaceId,objectId,userId=null){
+    const root=await this.repository.getObject(workspaceId,objectId);
+    const [objects,relationships,events,observations,actions,awareness]=await Promise.all([
+      this.repository.listObjects(workspaceId,{}),
+      this.repository.listRelationships(workspaceId),
+      this.repository.listEvents(workspaceId),
+      this.repository.listIntelligenceObservations(workspaceId),
+      this.repository.listAiActionProposals(workspaceId),
+      userId?this.repository.listAwarenessItems(workspaceId,userId):[]
+    ]);
+    return buildCanonicalContext({rootObjectId:root.id,objects,relationships,events,observations,actions,awareness});
+  }
+
   buildAudit(workspaceId, objectId, actorId, action, beforeSnapshot, afterSnapshot) {
     return { id: createId('aud'), workspaceId, objectId, actorId, action, beforeSnapshot, afterSnapshot, createdAt: this.clock() };
   }
@@ -93,6 +125,7 @@ export class AtlasService {
     if (!Object.keys(changes).length) throw new AtlasError('VALIDATION_ERROR', 'At least one editable field is required', 400);
     return this.repository.transaction(async (repository) => {
       const before = await repository.getObject(workspaceId, objectId);
+      if(input.state!==undefined&&isContactObject(before))changes.state=normalizeContactState(input.state,{fallback:canonicalContactType(before)});
       if (immutableLedgerTypes.has(before.type)) throw new AtlasError('IMMUTABLE_LEDGER_ENTRY', 'Posted accounting entries cannot be edited; create a correcting entry instead', 409);
       const after = await repository.updateObject(workspaceId, objectId, version, changes, this.clock());
       await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: objectId, type: 'object.updated', actorId, source: 'atlas', data: { version: after.version } }));
@@ -196,9 +229,25 @@ export class AtlasService {
       if(decision==='reject')return {observation:await repository.reviewIntelligenceObservation(workspaceId,observationId,'rejected',actorId,now),result:null};
       let result=null;
       if(observation.kind==='matter_match'){
-        const matterId=required(observation.data.matterId,'matterId');await repository.getObject(workspaceId,matterId);if(!observation.sourceObjectId)throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Matter match requires a source object',400);
+        const matterId=required(observation.data.matterId,'matterId');const matter=await repository.getObject(workspaceId,matterId);if(matter.dimension!=='matter')throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Matter match must identify a case',400);if(!observation.sourceObjectId)throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Matter match requires a source object',400);
+        const sourceObject=await repository.getObject(workspaceId,observation.sourceObjectId);
         result=await repository.createRelationship({id:createId('rel'),workspaceId,fromObjectId:observation.sourceObjectId,toObjectId:matterId,type:'intelligence_matched_to',attributes:{observationId,confidence:observation.confidence},createdAt:now});
-        await repository.createEvent(this.buildEvent(workspaceId,{parentObjectId:observation.sourceObjectId,relatedObjectIds:[matterId],type:'intelligence.relationship.accepted',actorId,source:'atlas.intelligence.review',confidence:observation.confidence,data:{observationId,relationshipId:result.id}}));
+        const associated=[sourceObject];
+        if(['incoming_email','email'].includes(sourceObject.type)){
+          const relationships=await repository.listRelationships(workspaceId);
+          for(const relationship of relationships.filter(item=>item.fromObjectId===sourceObject.id&&item.type==='has_attachment')){
+            const attachment=await repository.getObject(workspaceId,relationship.toObjectId);
+            if(attachment.dimension==='document')associated.push(attachment);
+          }
+        }
+        const associatedObjectIds=[];
+        for(const object of associated){
+          if(object.state?.matterId!==matterId){
+            await repository.updateObject(workspaceId,object.id,object.version,{state:{...object.state,matterId,matterAssociation:{source:'accepted_intelligence_match',observationId,acceptedBy:actorId,acceptedAt:now}}},now);
+          }
+          associatedObjectIds.push(object.id);
+        }
+        await repository.createEvent(this.buildEvent(workspaceId,{parentObjectId:observation.sourceObjectId,relatedObjectIds:[matterId,...associatedObjectIds.filter(id=>id!==observation.sourceObjectId)],type:'intelligence.relationship.accepted',actorId,source:'atlas.intelligence.review',confidence:observation.confidence,data:{observationId,relationshipId:result.id,associatedObjectIds}}));
       }else if(['fact','deadline','duty','conflict','risk','recommendation','entity'].includes(observation.kind)){
         const entity=observation.kind==='entity';const dimension=entity?(observation.data.entityType==='organization'?'organization':'person'):'operation';
         result=await repository.createObject({id:createId('obj'),workspaceId,parentObjectId:observation.data.matterId??null,dimension,type:observation.kind,title:observation.data.title??observation.data.description??`${observation.kind} observation`,state:{...observation.data,sourceObservationId:observation.id,confidence:observation.confidence},version:1,createdAt:now,updatedAt:now,deletedAt:null});
@@ -217,9 +266,16 @@ export class AtlasService {
       if (decision === 'reject') return repository.decideAiActionProposal(workspaceId, proposalId, version, 'rejected', actorId, null, this.clock());
       const now = this.clock();
       const calendar=proposal.actionType==='create_calendar_event'?normalizeCalendarEventProposal(proposal.input,{defaultTargetUserId:actorId,sourceType:'native_intelligence'}):null;
+      const templateProvenance=proposal.actionType==='create_document'?proposal.input.templateProvenance??null:null;
+      let sourceTemplate=null;
+      if(templateProvenance){
+        sourceTemplate=await repository.getObject(workspaceId,required(templateProvenance.templateId,'templateProvenance.templateId'));
+        if(sourceTemplate.dimension!=='document'||sourceTemplate.type!=='form_bank_template'||sourceTemplate.deletedAt||sourceTemplate.parentObjectId!==null||sourceTemplate.state?.matterId||sourceTemplate.state?.formBank!==true||sourceTemplate.state?.library!=='form_bank'||sourceTemplate.state?.scope!=='firm'||sourceTemplate.state?.status!=='active'||sourceTemplate.state?.provenance?.kind!=='form_bank_upload'||sourceTemplate.state?.securityScan?.status!=='clean'||!String(sourceTemplate.state?.storageRef??'').startsWith(`atlas-blob://${workspaceId}/`)||sourceTemplate.state?.extractionStatus!=='completed'||!['cataloged','needs_review'].includes(sourceTemplate.state?.documentAnalysis?.status))throw new AtlasError('LEGAL_FORM_TEMPLATE_NOT_AVAILABLE','The source Form Bank template is no longer active, analyzed, and available to this firm',409,{templateId:sourceTemplate.id});
+        if(sourceTemplate.version!==templateProvenance.sourceVersion)throw new AtlasError('LEGAL_FORM_TEMPLATE_VERSION_CONFLICT','The source Form Bank template changed after this draft was prepared. Generate a new draft from the current form.',409,{templateId:sourceTemplate.id,expectedVersion:templateProvenance.sourceVersion,currentVersion:sourceTemplate.version});
+      }
       const specifications = {
         create_task: { dimension: 'operation', type: 'task', title: proposal.input.title, state: { description: proposal.input.description, dueDate: proposal.input.dueDate, status: 'open' } },
-        create_document: { dimension: 'document', type: proposal.input.documentType, title: proposal.input.title, state: { content: proposal.input.content, status: 'draft', filed: false } },
+        create_document: { dimension: 'document', type: proposal.input.documentType, title: proposal.input.title, state: { content: proposal.input.content, templateData: proposal.input.templateData??null, templateProvenance, generationProvenance:proposal.input.generationProvenance??null, sourceMatterVersion: proposal.input.sourceMatterVersion??null, reviewRequired: proposal.input.reviewRequired!==false, status: 'draft', filed: false } },
         draft_email: { dimension: 'operation', type: 'email_draft', title: proposal.input.subject, state: { recipients: proposal.input.recipients, body: proposal.input.body, status: 'draft', sent: false } },
         create_social_post: { dimension: 'operation', type: 'social_post_draft', title: proposal.input.title, state: { content: proposal.input.content, hashtags: proposal.input.hashtags??[], networks: proposal.input.networks??[], topic: proposal.input.topic??null, status: 'draft', approvedForEditing: true, published: false, publishingEnabled: false } },
         create_calendar_event: {dimension:'operation',type:'calendar_event',title:calendar?.title,state:{...calendar,status:'confirmed',approvedBy:actorId,approvedAt:now,externalCalendar:{provider:'microsoft',status:'pending',targetUserId:calendar?.targetUserId??actorId}}}
@@ -232,7 +288,8 @@ export class AtlasService {
         state: { ...specification.state, createdFromAiProposalId: proposal.id },
         createdAt: now, updatedAt: now, deletedAt: null, version: 1
       });
-      await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: created.id, type: 'object.created', actorId, source: 'atlas.ai.approval', data: { objectType: created.type, actionType: proposal.actionType, proposalId } }));
+      if(sourceTemplate)await repository.createRelationship({id:createId('rel'),workspaceId,fromObjectId:created.id,toObjectId:sourceTemplate.id,type:'derived_from_form_template',attributes:{sourceVersion:templateProvenance.sourceVersion,formVersion:templateProvenance.formVersion??null,sourceChunkIds:templateProvenance.sourceChunkIds??[]},createdAt:now});
+      await repository.createEvent(this.buildEvent(workspaceId, { parentObjectId: created.id, relatedObjectIds:sourceTemplate?[sourceTemplate.id]:[], type: sourceTemplate?'document.draft_created_from_form':'object.created', actorId, source: 'atlas.ai.approval', data: { objectType: created.type, actionType: proposal.actionType, proposalId,templateId:sourceTemplate?.id??null,templateVersion:templateProvenance?.sourceVersion??null } }));
       await repository.createIntelligenceJob(this.buildIntelligenceJob(workspaceId, 'ai_action.approved', created.id, null, { proposalId, actionType: proposal.actionType, object: created }));
       const decided = await repository.decideAiActionProposal(workspaceId, proposalId, version, 'approved', actorId, created.id, now);
       return { proposal: decided, result: created };
@@ -308,7 +365,9 @@ export class AtlasService {
     const matter = await this.repository.getObject(workspaceId, matterId);
     if (matter.dimension !== 'matter') throw new AtlasError('NOT_A_MATTER', 'Object is not a matter', 400);
     const reasons = [];
-    const connected=(await this.repository.listObjects(workspaceId,{})).filter((object)=>object.parentObjectId===matterId);
+    const objects=await this.repository.listObjects(workspaceId,{});
+    const byId=new Map(objects.map((object)=>[object.id,object]));
+    const connected=objects.filter((object)=>object.id!==matterId&&canonicalMatterId(object,byId)===matterId);
     if (!matter.state.clientId) reasons.push({ code: 'MISSING_CLIENT', deduction: 15 });
     if (!matter.state.nextDeadline&&!connected.some((object)=>object.type==='deadline')) reasons.push({ code: 'MISSING_DEADLINE', deduction: 10 });
     if (!matter.state.ownerId) reasons.push({ code: 'MISSING_OWNER', deduction: 10 });

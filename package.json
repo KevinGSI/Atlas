@@ -15,6 +15,7 @@
     "test:postgres": "node scripts/test-postgres.js",
     "test:ai": "node scripts/test-ai-provider.js",
     "test:staging": "node scripts/test-staging.js",
+    "check:compliance": "node scripts/check-compliance.js",
     "check:launch": "node scripts/check-launch.js",
     "verify": "node scripts/verify.js"
   },

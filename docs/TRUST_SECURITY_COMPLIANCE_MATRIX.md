@@ -2,6 +2,8 @@
 
 This matrix compares Atlas with controls publicly described by Clio as of July 13, 2026. It distinguishes implemented software from operational assurance. Atlas must not advertise a certification, regulatory status, audit result, recovery capability, or contractual protection until the named independent or organizational work is complete.
 
+Production deployments now fail closed when the selected security, GDPR, or HIPAA evidence profile is incomplete. See [Atlas compliance assurance](./COMPLIANCE_ASSURANCE.md). This deployment gate verifies named operational attestations and recency; it does not manufacture or replace certification, an assurance report, legal advice, a BAA, or the underlying evidence.
+
 | Control area | Clio public position | Atlas status | Required next assurance |
 |---|---|---|---|
 | Independent assurance | SOC 2 Type II, ISO 27001, recurring audits | Not certified | Engage an auditor, define the system boundary, operate controls for the audit period, remediate exceptions, and obtain reports |
@@ -9,7 +11,7 @@ This matrix compares Atlas with controls publicly described by Clio as of July 1
 | Encryption at rest | Encrypted hosted data | AI content and integration credentials have application encryption; MFA secrets are encrypted; PostgreSQL volume encryption is a hosting control | Select managed encrypted storage, KMS/HSM custody, rotation, backup encryption, and key-access reviews |
 | MFA | Authenticator MFA and emergency recovery codes | Implemented: TOTP, encrypted secrets, hashed single-use recovery codes, login enforcement, session revocation, and firm-wide enforcement policy | Security review, recovery support procedure, and rate and abuse testing |
 | SSO | SAML SSO with verified domains | Not implemented | Add SAML/OIDC enterprise identity, domain verification, break-glass administrator, and configuration audit |
-| Access control | Roles, permissions, user deactivation | Firm roles, workspace authorization, subscription isolation, invitations, reversible user deactivation, protected owners, and session revocation implemented | Add granular case ethical walls, periodic access certification, and least-privilege reviews |
+| Access control | Roles, permissions, user deactivation | Account Info user administration, firm roles, workspace authorization, subscription isolation, expiring invitations and cancellation, owner/admin safeguards, reversible access removal, session revocation, and append-only security events implemented | Add granular case ethical walls, periodic access certification, and least-privilege reviews |
 | Login visibility | Firm administrators can inspect login and activity history | Implemented security-event and firm-session APIs, Settings interface, and explicitly configured proxy-aware client IP collection | Add retention policy, broader anomaly rules, SIEM export, and operating-team review procedures |
 | Abuse and request controls | Layered controls and monitored service protection | Implemented PostgreSQL-backed limits for authentication, AI, file/import, write, and signed-webhook traffic; HMAC-only principals and stable retry responses | Calibrate through staging/load tests, connect monitoring and alert thresholds, document emergency overrides, and rehearse abuse response |
 | Incident containment | Administrators can sign out users; security team response | Firm-wide emergency session revocation implemented | Staff incident-response training, on-call rotation, evidence preservation, notification decision tree, exercises |

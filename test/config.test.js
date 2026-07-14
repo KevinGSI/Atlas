@@ -15,6 +15,7 @@ test('production defaults to a cloud-compatible listener', () => {
   assert.equal(config.loginFailureWindowSeconds, 900);
   assert.equal(config.loginLockSeconds, 900);
   assert.equal(config.aiProvider, null);
+  assert.equal(config.intelligenceWorkerEnabled, false);
   assert.equal(config.cmsSyncEnabled, false);
   assert.equal(config.cmsSyncIntervalMs, 300_000);
   assert.equal(config.situationalSweepEnabled, true);
@@ -26,6 +27,12 @@ test('production defaults to a cloud-compatible listener', () => {
   assert.equal(config.documentStorageProvider,'postgres');
   assert.equal(config.fileMalwareScanner,'clamav');
   assert.equal(config.clamAvHost,'clamav.internal');
+});
+
+test('local document intelligence runs automatically while production keeps the dedicated worker boundary',()=>{
+  assert.equal(loadConfig({}).intelligenceWorkerEnabled,true);
+  assert.equal(loadConfig({INTELLIGENCE_WORKER_ENABLED:'false'}).intelligenceWorkerEnabled,false);
+  assert.equal(loadConfig({...productionBase,INTELLIGENCE_WORKER_ENABLED:'true'}).intelligenceWorkerEnabled,true);
 });
 
 test('AI provider configuration is explicit and provider-specific credentials stay isolated', () => {
@@ -65,11 +72,21 @@ test('CMS coexistence configuration validates encrypted credential custody',()=>
 test('mailbox OAuth providers require paired credentials and remain independently configurable',()=>{
   assert.throws(()=>loadConfig({GOOGLE_WORKSPACE_CLIENT_ID:'google-id'}),/GOOGLE_WORKSPACE_CLIENT_ID and GOOGLE_WORKSPACE_CLIENT_SECRET/);
   assert.throws(()=>loadConfig({MICROSOFT_365_CLIENT_SECRET:'microsoft-secret'}),/MICROSOFT_365_CLIENT_ID and MICROSOFT_365_CLIENT_SECRET/);
-  const config=loadConfig({GOOGLE_WORKSPACE_CLIENT_ID:'google-id',GOOGLE_WORKSPACE_CLIENT_SECRET:'google-secret',MICROSOFT_365_CLIENT_ID:'microsoft-id',MICROSOFT_365_CLIENT_SECRET:'microsoft-secret',MICROSOFT_365_TENANT:'tenant-id'});
-  assert.equal(config.googleWorkspaceClientId,'google-id');assert.equal(config.microsoft365ClientId,'microsoft-id');assert.equal(config.microsoft365Tenant,'tenant-id');
+  assert.throws(()=>loadConfig({MICROSOFT_365_CLIENT_ID:'microsoft-id',MICROSOFT_365_CLIENT_SECRET:'microsoft-secret',MICROSOFT_365_TENANT:'common'}),/MICROSOFT_365_TENANT/);
+  const config=loadConfig({GOOGLE_WORKSPACE_CLIENT_ID:'google-id',GOOGLE_WORKSPACE_CLIENT_SECRET:'google-secret',MICROSOFT_365_CLIENT_ID:'microsoft-id',MICROSOFT_365_CLIENT_SECRET:'microsoft-secret',MICROSOFT_365_TENANT:'firm.onmicrosoft.com',PUBLIC_BASE_URL:'https://atlas.example.test'});
+  assert.equal(config.googleWorkspaceClientId,'google-id');assert.equal(config.microsoft365ClientId,'microsoft-id');assert.equal(config.microsoft365Tenant,'firm.onmicrosoft.com');assert.equal(config.publicBaseUrl,'https://atlas.example.test');assert.equal(config.externalOAuthRedirectUri,'https://atlas.example.test/v1/cms/oauth/callback');
+  assert.throws(()=>loadConfig({...productionBase,MICROSOFT_365_CLIENT_ID:'microsoft-id',MICROSOFT_365_CLIENT_SECRET:'microsoft-secret'}),/PUBLIC_BASE_URL is required/);
+  assert.throws(()=>loadConfig({...productionBase,GOOGLE_WORKSPACE_CLIENT_ID:'google-id',GOOGLE_WORKSPACE_CLIENT_SECRET:'google-secret'}),/PUBLIC_BASE_URL is required/);
+  assert.throws(()=>loadConfig({PUBLIC_BASE_URL:'https://atlas.example.test/path'}),/must not include a path/);
 });
 
 test('QuickBooks requires paired Intuit credentials and a known environment',()=>{assert.throws(()=>loadConfig({QUICKBOOKS_CLIENT_ID:'intuit-id'}),/QUICKBOOKS_CLIENT_ID and QUICKBOOKS_CLIENT_SECRET/);assert.throws(()=>loadConfig({QUICKBOOKS_ENVIRONMENT:'local'}),/sandbox or production/);const config=loadConfig({QUICKBOOKS_CLIENT_ID:'intuit-id',QUICKBOOKS_CLIENT_SECRET:'intuit-secret',QUICKBOOKS_ENVIRONMENT:'sandbox'});assert.equal(config.quickBooksClientId,'intuit-id');assert.equal(config.quickBooksClientSecret,'intuit-secret');assert.equal(config.quickBooksEnvironment,'sandbox');});
+
+test('Westlaw and LexisNexis require complete contracted HTTPS API configuration',()=>{assert.throws(()=>loadConfig({WESTLAW_CLIENT_ID:'westlaw-id'}),/Westlaw legal research requires/);assert.throws(()=>loadConfig({LEXISNEXIS_CLIENT_ID:'lexis-id',LEXISNEXIS_CLIENT_SECRET:'secret',LEXISNEXIS_TOKEN_ENDPOINT:'http:\/\/token.example',LEXISNEXIS_SEARCH_ENDPOINT:'https:\/\/search.example'}),/LEXISNEXIS_TOKEN_ENDPOINT must be a valid HTTPS URL/);const config=loadConfig({WESTLAW_CLIENT_ID:'westlaw-id',WESTLAW_CLIENT_SECRET:'secret',WESTLAW_TOKEN_ENDPOINT:'https:\/\/westlaw.example\/oauth\/token',WESTLAW_SEARCH_ENDPOINT:'https:\/\/westlaw.example\/research',LEXISNEXIS_CLIENT_ID:'lexis-id',LEXISNEXIS_CLIENT_SECRET:'secret',LEXISNEXIS_TOKEN_ENDPOINT:'https:\/\/lexis.example\/oauth\/token',LEXISNEXIS_SEARCH_ENDPOINT:'https:\/\/lexis.example\/research',LEXISNEXIS_SCOPE:'legal-research'});assert.equal(config.westlawResearch.clientId,'westlaw-id');assert.equal(config.lexisNexisResearch.scope,'legal-research');});
+
+test('Docusign requires a complete firm-bound HTTPS JWT and Connect webhook configuration',()=>{assert.throws(()=>loadConfig({DOCUSIGN_INTEGRATION_KEY:'key'}),/Docusign requires/);const values={DOCUSIGN_WORKSPACE_ID:'wsp_firm_1',DOCUSIGN_INTEGRATION_KEY:'key',DOCUSIGN_USER_ID:'user',DOCUSIGN_ACCOUNT_ID:'account',DOCUSIGN_PRIVATE_KEY_BASE64:Buffer.from('-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----').toString('base64'),DOCUSIGN_AUTH_BASE_URL:'https://account-d.docusign.com',DOCUSIGN_API_BASE_URL:'https://demo.docusign.net/restapi',DOCUSIGN_RETURN_URL:'https://atlas.example/#documents',DOCUSIGN_CONNECT_HMAC_KEY:'h'.repeat(32)};const config=loadConfig(values);assert.equal(config.docusign.workspaceId,'wsp_firm_1');assert.equal(config.docusign.accountId,'account');assert.match(config.docusign.privateKey,/BEGIN PRIVATE KEY/);assert.throws(()=>loadConfig({...values,DOCUSIGN_RETURN_URL:'http://atlas.example'}),/DOCUSIGN_RETURN_URL must be a valid HTTPS URL/);assert.throws(()=>loadConfig({...values,DOCUSIGN_CONNECT_HMAC_KEY:'short'}),/at least 32/);});
+
+test('marketing public data configuration accepts only aggregate HTTPS source definitions',()=>{const source={name:'state-crashes',label:'State crash totals',eventType:'car_accidents',jurisdiction:'Delaware',endpoint:'https://data.example.gov/crashes'};const config=loadConfig({MARKETING_PUBLIC_DATA_SOURCES:JSON.stringify([source])});assert.deepEqual(config.marketingPublicSources,[source]);assert.throws(()=>loadConfig({MARKETING_PUBLIC_DATA_SOURCES:'{}'}),/JSON array|source definitions/);assert.throws(()=>loadConfig({MARKETING_PUBLIC_DATA_SOURCES:JSON.stringify([{...source,eventType:'people'}])}),/invalid source metadata/);assert.throws(()=>loadConfig({MARKETING_PUBLIC_DATA_SOURCES:JSON.stringify([{...source,endpoint:'http://data.example.gov'}])}),/valid HTTPS URL/);});
 
 test('webhook connector secrets are workspace scoped and sufficiently strong',()=>{assert.throws(()=>loadConfig({INGESTION_WEBHOOK_SECRETS:'[]'}),/must be a JSON object/);assert.throws(()=>loadConfig({INGESTION_WEBHOOK_SECRETS:JSON.stringify({'wsp:phone':'short'})}),/at least 32 characters/);const config=loadConfig({INGESTION_WEBHOOK_SECRETS:JSON.stringify({'wsp_1:phone':'x'.repeat(32)})});assert.equal(config.ingestionWebhookSecrets['wsp_1:phone'].length,32);});
 
@@ -81,6 +98,13 @@ test('embedded payment processing requires complete Stripe credentials and a sec
 
 test('production refuses to start without PostgreSQL', () => {
   assert.throws(() => loadConfig({ NODE_ENV: 'production' }), /DATABASE_URL is required/);
+  assert.throws(() => loadConfig({ ...productionBase, LOCAL_DATA_PATH: '.atlas-data/repository.bin' }), /only supported for local development/);
+});
+
+test('local development can explicitly select restart-safe repository storage',()=>{
+  const config=loadConfig({LOCAL_DATA_PATH:'.atlas-data/repository.bin'});
+  assert.equal(config.localDataPath,'.atlas-data/repository.bin');
+  assert.equal(loadConfig({}).localDataPath,null);
 });
 
 test('document storage providers fail closed when their durable dependency is absent',()=>{assert.throws(()=>loadConfig({DOCUMENT_STORAGE_PROVIDER:'postgres'}),/DATABASE_URL is required/);assert.throws(()=>loadConfig({DOCUMENT_STORAGE_PROVIDER:'filesystem'}),/DOCUMENT_STORAGE_PATH is required/);assert.equal(loadConfig({DOCUMENT_STORAGE_PROVIDER:'memory'}).documentStorageProvider,'memory');});

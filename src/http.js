@@ -63,9 +63,10 @@ function sendXml(response,status,content,headers={}){response.writeHead(status,{
 
 function sendAsset(response,asset,headers={}){response.writeHead(200,{...headers,'content-type':asset.contentType,'content-length':asset.content.length,'content-security-policy':"default-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'"});response.end(asset.content);}
 function sendPaymentAsset(response,asset,headers={}){response.writeHead(200,{...headers,'content-type':asset.contentType,'content-length':asset.content.length,'cross-origin-opener-policy':'same-origin-allow-popups','content-security-policy':"default-src 'self'; script-src 'self' https://js.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://hooks.stripe.com"});response.end(asset.content);}
-function sendFile(response,file,headers={}){const safe=String(file.document.title).replace(/["\\\r\n]/g,'_');response.writeHead(200,{...headers,'content-type':file.document.state.mediaType,'content-length':file.content.length,'content-disposition':`attachment; filename="${safe}"`,'x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox"});response.end(file.content);}
+function sendFile(response,file,headers={}){const safe=String(file.filename??file.document.title).replace(/["\\\r\n]/g,'_');response.writeHead(200,{...headers,'content-type':file.document.state.mediaType,'content-length':file.content.length,'content-disposition':`attachment; filename="${safe}"`,'x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox"});response.end(file.content);}
 
-function sendOAuthCompletion(response,connection,headers={}){const provider=String(connection.provider??'External provider').replace(/[<>&"']/g,'');const content=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atlas connection complete</title><style>body{font:16px system-ui;background:#f5f7fb;color:#10233f;display:grid;place-items:center;min-height:100vh;margin:0}.card{background:white;border:1px solid #dbe3ee;border-radius:18px;padding:32px;max-width:520px;box-shadow:0 16px 48px #10233f18}h1{margin-top:0}</style></head><body><main class="card"><h1>Connection complete</h1><p>${provider} is securely connected to Atlas with read-only access.</p><p>You may close this window and return to Atlas. The Email and Calendar pages will detect the connection and begin synchronization.</p></main></body></html>`;response.writeHead(200,{...headers,'content-type':'text/html; charset=utf-8','content-length':Buffer.byteLength(content),'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});response.end(content);}
+function sendOAuthCompletion(response,connection,headers={}){const provider=String(connection.provider??'External provider').replace(/[<>&"']/g,'');const content=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atlas connection complete</title><style>body{font:16px system-ui;background:#f5f7fb;color:#10233f;display:grid;place-items:center;min-height:100vh;margin:0}.card{background:white;border:1px solid #dbe3ee;border-radius:18px;padding:32px;max-width:520px;box-shadow:0 16px 48px #10233f18}h1{margin-top:0}</style></head><body><main class="card"><h1>Connection complete</h1><p>${provider} is securely connected to Atlas with the permissions shown during consent.</p><p>You may close this window and return to Atlas. The Email and Calendar pages will detect the connection and begin synchronization.</p></main></body></html>`;response.writeHead(200,{...headers,'content-type':'text/html; charset=utf-8','content-length':Buffer.byteLength(content),'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});response.end(content);}
+function sendOAuthFailure(response,error,headers={}){const denied=error instanceof AtlasError&&error.code==='CMS_AUTHORIZATION_DENIED';const title=denied?'Connection canceled':'Connection could not be completed';const message=denied?'Microsoft 365 was not connected. No mailbox or calendar access was stored.':'Return to Atlas and try the connection again. If the problem continues, ask the firm administrator to verify the Microsoft 365 setup.';const content=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atlas connection</title><style>body{font:16px system-ui;background:#f5f7fb;color:#10233f;display:grid;place-items:center;min-height:100vh;margin:0}.card{background:white;border:1px solid #dbe3ee;border-radius:18px;padding:32px;max-width:520px;box-shadow:0 16px 48px #10233f18}h1{margin-top:0}</style></head><body><main class="card"><h1>${title}</h1><p>${message}</p><p>You may close this window and return to Atlas.</p></main></body></html>`;response.writeHead(denied?400:502,{...headers,'content-type':'text/html; charset=utf-8','content-length':Buffer.byteLength(content),'content-security-policy':"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});response.end(content);}
 
 function route(method, pathname) {
   const patterns = [
@@ -75,6 +76,7 @@ function route(method, pathname) {
     ['GET', /^\/payment\.js$/, 'paymentApp'],
     ['POST', /^\/v1\/payments\/stripe\/webhook$/, 'stripePaymentWebhook'],
     ['GET', /^\/v1\/payments\/stripe\/checkout\/([^/]+)$/, 'stripePaymentCheckout'],
+    ['POST', /^\/v1\/document-execution\/docusign\/([^/]+)\/webhook$/, 'docusignExecutionWebhook'],
     ['GET', /^\/template-editor\/?$/, 'templateEditor'],
     ['GET', /^\/template-editor\.js$/, 'templateEditorApp'],
     ['GET', /^\/health$/, 'health'],
@@ -88,6 +90,7 @@ function route(method, pathname) {
     ['POST', /^\/v1\/auth\/password-reset\/request$/, 'requestPasswordReset'],
     ['POST', /^\/v1\/auth\/password-reset\/complete$/, 'resetPassword'],
     ['POST', /^\/v1\/auth\/invitations\/accept$/, 'acceptInvitation'],
+    ['GET', /^\/v1\/me$/, 'getUserProfile'],
     ['GET', /^\/v1\/me\/workspaces$/, 'listUserWorkspaces'],
     ['GET', /^\/v1\/cms\/oauth\/callback$/, 'cmsOAuthCallback'],
     ['GET', /^\/v1\/auth\/sessions$/, 'listSessions'],
@@ -99,9 +102,12 @@ function route(method, pathname) {
     ['DELETE', /^\/v1\/auth\/mfa$/, 'disableMfa'],
     ['POST', /^\/v1\/workspaces$/, 'createWorkspace'],
     ['GET', /^\/v1\/workspaces\/([^/]+)$/, 'getWorkspace'],
+    ['GET', /^\/v1\/workspaces\/([^/]+)\/account-profile$/, 'getAccountProfiles'],
+    ['PATCH', /^\/v1\/workspaces\/([^/]+)\/account-profile$/, 'updateAccountProfiles'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/subscription$/, 'getSubscription'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/memberships$/, 'createMembership'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/memberships$/, 'listMemberships'],
+    ['PATCH', /^\/v1\/workspaces\/([^/]+)\/memberships\/([^/]+)$/, 'updateMembershipRole'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/memberships\/([^/]+)\/deactivate$/, 'deactivateMembership'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/memberships\/([^/]+)\/reactivate$/, 'reactivateMembership'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/security\/policy$/, 'getWorkspaceSecurityPolicy'],
@@ -111,9 +117,11 @@ function route(method, pathname) {
     ['POST', /^\/v1\/workspaces\/([^/]+)\/security\/sign-out-all$/, 'revokeWorkspaceSessions'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/invitations$/, 'inviteMember'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/invitations$/, 'listWorkspaceInvitations'],
+    ['DELETE', /^\/v1\/workspaces\/([^/]+)\/invitations\/([^/]+)$/, 'cancelWorkspaceInvitation'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/exports$/, 'createFirmExport'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/objects$/, 'createObject'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/objects$/, 'listObjects'],
+    ['GET', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)\/context$/, 'getCanonicalContext'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)$/, 'getObject'],
     ['PATCH', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)$/, 'updateObject'],
     ['DELETE', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)$/, 'deleteObject'],
@@ -125,6 +133,13 @@ function route(method, pathname) {
     ['GET', /^\/v1\/workspaces\/([^/]+)\/events$/, 'listEvents'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/conflicts$/, 'conflictAlerts'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/health$/, 'matterHealth'],
+    ['GET', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/client-communications$/, 'matterClientCommunications'],
+    ['POST', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/client-communications\/call$/, 'prepareMatterClientCall'],
+    ['POST', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/client-communications\/text-drafts$/, 'createMatterClientTextDraft'],
+    ['POST', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/client-communications\/email-drafts$/, 'createMatterClientEmailDraft'],
+    ['POST', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/client-communications\/meeting-drafts$/, 'createMatterClientMeetingDraft'],
+    ['POST', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/tasks\/([^/]+)\/perform$/, 'performMatterTask'],
+    ['POST', /^\/v1\/workspaces\/([^/]+)\/matters\/([^/]+)\/form-bank\/([^/]+)\/drafts$/, 'proposeFormBankCaseDraft'],
     ['POST', /^\/v1\/workspaces\/([^/]+)\/assistant\/query$/, 'assistantQuery'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/assistant\/runs$/, 'listAssistantRuns'],
     ['GET', /^\/v1\/workspaces\/([^/]+)\/assistant\/conversations$/, 'listAssistantConversations'],
@@ -137,6 +152,13 @@ function route(method, pathname) {
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/ingestions\/documents$/, 'ingestDocument']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/files$/, 'uploadFile']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/objects\/([^/]+)\/content$/, 'downloadFile']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/form-bank$/, 'uploadFormBankForm']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/form-bank$/, 'listFormBankForms']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/form-bank\/([^/]+)\/content$/, 'downloadFormBankForm']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/form-bank\/([^/]+)$/, 'getFormBankForm']
+    ,['PATCH', /^\/v1\/workspaces\/([^/]+)\/form-bank\/([^/]+)$/, 'updateFormBankForm']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/form-bank\/([^/]+)\/archive$/, 'archiveFormBankForm']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/form-bank\/([^/]+)\/restore$/, 'restoreFormBankForm']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/webhooks\/([^/]+)\/(email|phone-calls|documents)$/, 'ingestWebhook']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/intelligence\/search$/, 'searchTwin']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/intelligence\/observations\/([^/]+)\/decision$/, 'decideIntelligenceObservation']
@@ -152,7 +174,19 @@ function route(method, pathname) {
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/social-media$/, 'socialStatus']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/social-media\/configuration$/, 'socialConfigure']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/social-media\/suggestions$/, 'socialSuggest']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/marketing$/, 'marketingStatus']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/marketing\/public-scans$/, 'createMarketingPublicScan']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/marketing\/campaigns$/, 'createMarketingCampaign']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/marketing\/campaigns\/([^/]+)\/prepare$/, 'prepareMarketingCampaign']
     ,['PATCH', /^\/v1\/workspaces\/([^/]+)\/home\/while-you-were-gone\/([^/]+)$/, 'updateAwarenessStatus']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/legal-research\/providers$/, 'legalResearchProviders']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/legal-research\/capabilities$/, 'legalResearchCapabilities']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/legal-research\/chat$/, 'legalResearchChat']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/legal-research\/search$/, 'legalResearchSearch']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/document-execution\/status$/, 'documentExecutionStatus']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/document-execution\/documents$/, 'documentExecutionDocuments']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/document-execution\/signatures$/, 'createSignatureRequest']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/document-execution\/notarizations$/, 'createNotaryRequest']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/accounting\/summary$/, 'accountingSummary']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/accounting\/providers$/, 'accountingProviders']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/accounting\/invoices$/, 'createInvoice']
@@ -202,6 +236,8 @@ export function createAtlasHandler(service, options = {}) {
   const assistant = options.assistant;
   const ingestion = options.ingestion;
   const files = options.files;
+  const formBank=options.formBank;
+  const documentExecution=options.documentExecution;
   const webhooks = options.webhooks;
   const cms = options.cms;
   const migration=options.migration;
@@ -209,8 +245,11 @@ export function createAtlasHandler(service, options = {}) {
   const voice=options.voice;
   const sms=options.sms;
   const social=options.social;
+  const marketing=options.marketing;
+  const legalResearch=options.legalResearch;
   const telephony=options.telephony;
   const firmExport=options.firmExport;
+  const caseCommunications=options.caseCommunications;
   return async (request, response) => {
     const requestId = request.headers?.['x-atlas-request-id'] || randomUUID();
     let headers = securityHeaders(requestId);
@@ -222,11 +261,11 @@ export function createAtlasHandler(service, options = {}) {
       if (!match) throw new AtlasError('ROUTE_NOT_FOUND', 'Route not found', 404);
       const context=requestContext(request,config);
       const [workspaceId, objectId] = match.params;
-      const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout'].includes(match.name);
+      const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout','docusignExecutionWebhook'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/') && match.name!=='ingestWebhook') {
-        const permission = ['getWorkspace', 'getSubscription', 'listObjects', 'getObject', 'downloadFile', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus','socialStatus'].includes(match.name)
-          ? 'workspace:read' : ['createMembership','inviteMember','listWorkspaceInvitations','listWorkspaceSecurityEvents','listWorkspaceSessions','revokeWorkspaceSessions','deactivateMembership','reactivateMembership','getWorkspaceSecurityPolicy','updateWorkspaceSecurityPolicy','createFirmExport'].includes(match.name) ? 'members:admin' : 'workspace:write';
+        const permission = ['getWorkspace', 'getAccountProfiles', 'getSubscription', 'listObjects', 'getObject','getCanonicalContext', 'downloadFile', 'listFormBankForms', 'getFormBankForm', 'downloadFormBankForm', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'matterClientCommunications', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus','socialStatus','marketingStatus','legalResearchProviders','legalResearchCapabilities','documentExecutionStatus','documentExecutionDocuments'].includes(match.name)
+          ? 'workspace:read' : ['createMembership','listMemberships','updateMembershipRole','inviteMember','listWorkspaceInvitations','cancelWorkspaceInvitation','listWorkspaceSecurityEvents','listWorkspaceSessions','revokeWorkspaceSessions','deactivateMembership','reactivateMembership','getWorkspaceSecurityPolicy','updateWorkspaceSecurityPolicy','createFirmExport'].includes(match.name) ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
       if(rateLimiter)await rateLimiter.check({routeName:match.name,method:request.method,userId:user?.id??null,ipAddress:context.ipAddress});
@@ -236,6 +275,7 @@ export function createAtlasHandler(service, options = {}) {
         case 'paymentPage': case 'paymentApp': return sendPaymentAsset(response,await phaseOneAsset(match.name),headers);
         case 'stripePaymentWebhook': {if(!accounting)throw new AtlasError('PAYMENT_PROVIDER_NOT_CONFIGURED','Payment processing is not configured',503);result=await accounting.processPaymentWebhook('stripe',await readRawBody(request,config.maxBodyBytes),request.headers?.['stripe-signature']);break;}
         case 'stripePaymentCheckout': {if(!accounting)throw new AtlasError('PAYMENT_PROVIDER_NOT_CONFIGURED','Payment processing is not configured',503);result=await accounting.paymentCheckoutConfiguration('stripe',workspaceId);break;}
+        case 'docusignExecutionWebhook': {if(!documentExecution)throw new AtlasError('DOCUMENT_EXECUTION_NOT_CONFIGURED','Document execution is unavailable',503);result=await documentExecution.processSignatureWebhook(workspaceId,'docusign',await readRawBody(request,config.maxBodyBytes),request.headers?.['x-docusign-signature-1']);break;}
         case 'health': case 'live': result = { status: 'ok', version: '1.0.0-rc.1' }; break;
         case 'ready': await ready(); result = { status: 'ready', version: '1.0.0-rc.1' }; break;
         case 'register': result = await identity.register(await readJson(request, config.maxBodyBytes)); break;
@@ -246,8 +286,9 @@ export function createAtlasHandler(service, options = {}) {
         case 'requestPasswordReset': result = await identity.requestPasswordReset(await readJson(request, config.maxBodyBytes)); break;
         case 'resetPassword': result = await identity.resetPassword(await readJson(request, config.maxBodyBytes)); break;
         case 'acceptInvitation': result = await identity.acceptInvitation(await readJson(request,config.maxBodyBytes)); break;
+        case 'getUserProfile': result = await identity.getUserProfile(user.id); break;
         case 'listUserWorkspaces': result = await identity.listUserWorkspaces(user.id); break;
-        case 'cmsOAuthCallback': result = await cms.completeAuthorization({state:url.searchParams.get('state'),code:url.searchParams.get('code'),realmId:url.searchParams.get('realmId')}); return sendOAuthCompletion(response,result,headers);
+        case 'cmsOAuthCallback': try{result = await cms.completeAuthorization({state:url.searchParams.get('state'),code:url.searchParams.get('code'),realmId:url.searchParams.get('realmId'),error:url.searchParams.get('error')});return sendOAuthCompletion(response,result,headers);}catch(error){return sendOAuthFailure(response,error,headers);}
         case 'listSessions': result = await identity.listSessions(user.id, user.sessionId); break;
         case 'revokeSession': result = await identity.revokeSession(user.id, workspaceId); break;
         case 'revokeAllSessions': result = await identity.revokeAllSessions(user.id); break;
@@ -257,9 +298,12 @@ export function createAtlasHandler(service, options = {}) {
         case 'disableMfa': result=await identity.disableMfa(user.id,await readJson(request,config.maxBodyBytes)); break;
         case 'createWorkspace': result = await service.createWorkspace(await readJson(request, config.maxBodyBytes), user?.id); break;
         case 'getWorkspace': result = await service.getWorkspace(workspaceId); break;
+        case 'getAccountProfiles': {const membership=await identity.repository.getMembership(workspaceId,user.id);result=await service.accountProfiles(workspaceId,user,['owner','admin'].includes(membership.role),membership.role);break;}
+        case 'updateAccountProfiles': {const input=await readJson(request,config.maxBodyBytes);const membership=await identity.repository.getMembership(workspaceId,user.id);const canEditFirm=['owner','admin'].includes(membership.role);if(input.firm!==undefined&&!canEditFirm)throw new AtlasError('ACCESS_DENIED','Only a firm owner or administrator may edit firm information',403);result=await service.updateAccountProfiles(workspaceId,user,input,{canEditFirm,role:membership.role});break;}
         case 'getSubscription': result = await identity.repository.getSubscription(workspaceId); break;
-        case 'createMembership': { const input = await readJson(request, config.maxBodyBytes); result = await identity.addMembership(workspaceId, input.userId, input.role); break; }
-        case 'listMemberships': result = await identity.listWorkspaceMembers(workspaceId); break;
+        case 'createMembership': { const input = await readJson(request, config.maxBodyBytes); result = await identity.addManagedMembership(workspaceId,input.userId,input.role,user.id); break; }
+        case 'listMemberships': result = await identity.listWorkspaceMembers(workspaceId,user.id); break;
+        case 'updateMembershipRole': result=await identity.updateMembershipRole(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'deactivateMembership': result=await identity.deactivateMembership(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'reactivateMembership': result=await identity.reactivateMembership(workspaceId,objectId,user.id); break;
         case 'getWorkspaceSecurityPolicy': result=await identity.getWorkspaceSecurityPolicy(workspaceId); break;
@@ -268,10 +312,12 @@ export function createAtlasHandler(service, options = {}) {
         case 'listWorkspaceSessions': result=await identity.listWorkspaceSessions(workspaceId,user.sessionId); break;
         case 'revokeWorkspaceSessions': result=await identity.revokeWorkspaceSessions(workspaceId,user.id); break;
         case 'inviteMember': result = await identity.inviteMember(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
-        case 'listWorkspaceInvitations': result = await identity.listWorkspaceInvitations(workspaceId); break;
+        case 'listWorkspaceInvitations': result = await identity.listWorkspaceInvitations(workspaceId,user.id); break;
+        case 'cancelWorkspaceInvitation': result=await identity.cancelWorkspaceInvitation(workspaceId,objectId,user.id); break;
         case 'createFirmExport': {if(!firmExport)throw new AtlasError('FIRM_EXPORT_NOT_CONFIGURED','Firm export is unavailable',503);result=await firmExport.create(workspaceId,await readJson(request,config.maxBodyBytes));await identity.recordSecurityEvent({userId:user.id,workspaceId,type:'firm.export_created',outcome:'success',context:requestContext(request),details:{digest:result.manifest.digest,counts:result.manifest.counts}});break;}
         case 'createObject': result = await service.createObject(workspaceId, await readJson(request, config.maxBodyBytes)); break;
         case 'listObjects': result = await service.listObjects(workspaceId, { type: url.searchParams.get('type'), dimension: url.searchParams.get('dimension') }); break;
+        case 'getCanonicalContext': result=await service.getCanonicalContext(workspaceId,objectId,user?.id??null); break;
         case 'getObject': result = await service.getObject(workspaceId, objectId); break;
         case 'updateObject': result = await service.updateObject(workspaceId, objectId, await readJson(request, config.maxBodyBytes), user?.id); break;
         case 'deleteObject': result = await service.deleteObject(workspaceId, objectId, await readJson(request, config.maxBodyBytes), user?.id); break;
@@ -283,7 +329,14 @@ export function createAtlasHandler(service, options = {}) {
         case 'listEvents': result = await service.listEvents(workspaceId, url.searchParams.get('parentObjectId')); break;
         case 'conflictAlerts': result = await service.conflictAlerts(workspaceId); break;
         case 'matterHealth': result = await service.matterHealth(workspaceId, objectId); break;
-        case 'assistantQuery': { const input = await readJson(request, config.maxBodyBytes); result = await assistant.query({ workspaceId, userId: user.id, prompt: input.prompt, conversationId: input.conversationId }); break; }
+        case 'matterClientCommunications': {if(!caseCommunications)throw new AtlasError('CASE_COMMUNICATIONS_NOT_CONFIGURED','Case client communications are unavailable',503);result=await caseCommunications.status(workspaceId,objectId);break;}
+        case 'prepareMatterClientCall': {if(!caseCommunications)throw new AtlasError('CASE_COMMUNICATIONS_NOT_CONFIGURED','Case communications are unavailable',503);result=await caseCommunications.prepareCall(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user?.id??'system');break;}
+        case 'createMatterClientTextDraft': {if(!caseCommunications)throw new AtlasError('CASE_COMMUNICATIONS_NOT_CONFIGURED','Case client communications are unavailable',503);result=await caseCommunications.createTextDraft(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user?.id??'system');break;}
+        case 'createMatterClientEmailDraft': {if(!caseCommunications)throw new AtlasError('CASE_COMMUNICATIONS_NOT_CONFIGURED','Case client communications are unavailable',503);result=await caseCommunications.createEmailDraft(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user?.id??'system');break;}
+        case 'createMatterClientMeetingDraft': {if(!caseCommunications)throw new AtlasError('CASE_COMMUNICATIONS_NOT_CONFIGURED','Case client communications are unavailable',503);result=await caseCommunications.createMeetingDraft(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user?.id??'system');break;}
+        case 'performMatterTask': result=await assistant.performTask({workspaceId,userId:user.id,matterId:objectId,taskId:match.params[2]}); break;
+        case 'proposeFormBankCaseDraft': {if(!formBank)throw new AtlasError('FORM_BANK_NOT_CONFIGURED','Form Bank is unavailable',503);result=await formBank.proposeCaseDraft(workspaceId,objectId,match.params[2],await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'assistantQuery': { const input = await readJson(request, config.maxBodyBytes);let developerContext=null;if(input.contextObjectId!==undefined){if(typeof input.contextObjectId!=='string'||!input.contextObjectId.trim()||input.contextObjectId.length>200)throw new AtlasError('AI_CONTEXT_INVALID','contextObjectId must identify one authorized case',400);const contextObject=await service.getObject(workspaceId,input.contextObjectId);if(contextObject.dimension!=='matter')throw new AtlasError('AI_CONTEXT_INVALID','The selected assistant context is not a case',400);developerContext=`This conversation is bound to the authorized Atlas case object ${contextObject.id}. Before answering, call get_canonical_context for that case so the response accounts for its saved tasks, Atlas-identified work, documents, email, communications, calendar, deadlines, billing, events, and accepted intelligence. Keep all proposed work linked to this case. Consequential actions remain proposals requiring human review.`;}result = await assistant.query({ workspaceId, userId: user.id, prompt: input.prompt, conversationId: input.conversationId,developerContext }); break; }
         case 'listAssistantRuns': result = await assistant.listRuns(workspaceId, Number(url.searchParams.get('limit') ?? 50)); break;
         case 'listAssistantConversations': result = await assistant.listConversations(workspaceId,user.id); break;
         case 'listAssistantMessages': result = await assistant.listMessages(workspaceId,user.id,objectId); break;
@@ -295,6 +348,13 @@ export function createAtlasHandler(service, options = {}) {
         case 'ingestDocument': result = await ingestion.ingestDocument(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
         case 'uploadFile': {if(!files)throw new AtlasError('FILE_STORAGE_NOT_CONFIGURED','File storage is unavailable',503);result=await files.upload(workspaceId,await readJson(request,Math.ceil(config.documentMaxBytes*1.4)+100_000),user.id);break;}
         case 'downloadFile': {if(!files)throw new AtlasError('FILE_STORAGE_NOT_CONFIGURED','File storage is unavailable',503);return sendFile(response,await files.download(workspaceId,objectId),headers);}
+        case 'uploadFormBankForm': {if(!formBank)throw new AtlasError('FORM_BANK_NOT_CONFIGURED','Form Bank is unavailable',503);result=await formBank.upload(workspaceId,await readJson(request,Math.ceil(config.documentMaxBytes*1.4)+100_000),user.id);break;}
+        case 'listFormBankForms': {if(!formBank)throw new AtlasError('FORM_BANK_NOT_CONFIGURED','Form Bank is unavailable',503);result=await formBank.list(workspaceId,{q:url.searchParams.get('q'),documentType:url.searchParams.get('documentType'),practiceArea:url.searchParams.get('practiceArea'),jurisdiction:url.searchParams.get('jurisdiction'),tag:url.searchParams.get('tag'),status:url.searchParams.get('status')});break;}
+        case 'getFormBankForm': {if(!formBank)throw new AtlasError('FORM_BANK_NOT_CONFIGURED','Form Bank is unavailable',503);result=await formBank.get(workspaceId,objectId);break;}
+        case 'downloadFormBankForm': {if(!formBank)throw new AtlasError('FORM_BANK_NOT_CONFIGURED','Form Bank is unavailable',503);return sendFile(response,await formBank.download(workspaceId,objectId),headers);}
+        case 'updateFormBankForm': {if(!formBank)throw new AtlasError('FORM_BANK_NOT_CONFIGURED','Form Bank is unavailable',503);result=await formBank.update(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'archiveFormBankForm': {if(!formBank)throw new AtlasError('FORM_BANK_NOT_CONFIGURED','Form Bank is unavailable',503);result=await formBank.archive(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'restoreFormBankForm': {if(!formBank)throw new AtlasError('FORM_BANK_NOT_CONFIGURED','Form Bank is unavailable',503);result=await formBank.restore(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'ingestWebhook': {const connector=objectId;const kind=match.params[2];const input=await webhooks.verifyAndParse(request,workspaceId,connector,config.maxBodyBytes);const secured={...input,connector};result=kind==='email'?await ingestion.ingestEmail(workspaceId,secured,`connector:${connector}`):kind==='phone-calls'?await ingestion.ingestPhoneCall(workspaceId,secured,`connector:${connector}`):await ingestion.ingestDocument(workspaceId,secured,`connector:${connector}`);break;}
         case 'searchTwin': result = await service.searchTwin(workspaceId,url.searchParams.get('q')); break;
         case 'decideIntelligenceObservation': result = await service.decideIntelligenceObservation(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id); break;
@@ -310,7 +370,19 @@ export function createAtlasHandler(service, options = {}) {
         case 'socialStatus': {if(!social)throw new AtlasError('SOCIAL_MEDIA_NOT_CONFIGURED','Social media suggestions are unavailable',503);result=await social.status(workspaceId);break;}
         case 'socialConfigure': {if(!social)throw new AtlasError('SOCIAL_MEDIA_NOT_CONFIGURED','Social media suggestions are unavailable',503);result=await social.configure(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'socialSuggest': {if(!social)throw new AtlasError('SOCIAL_MEDIA_NOT_CONFIGURED','Social media suggestions are unavailable',503);result=await social.suggest(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'marketingStatus': {if(!marketing)throw new AtlasError('MARKETING_NOT_CONFIGURED','Marketing is unavailable',503);result=await marketing.status(workspaceId);break;}
+        case 'createMarketingPublicScan': {if(!marketing)throw new AtlasError('MARKETING_NOT_CONFIGURED','Marketing is unavailable',503);result=await marketing.scan(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'createMarketingCampaign': {if(!marketing)throw new AtlasError('MARKETING_NOT_CONFIGURED','Marketing is unavailable',503);result=await marketing.createCampaign(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'prepareMarketingCampaign': {if(!marketing)throw new AtlasError('MARKETING_NOT_CONFIGURED','Marketing is unavailable',503);result=await marketing.prepareCampaign(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'updateAwarenessStatus': {const input=await readJson(request,config.maxBodyBytes);result=await service.updateAwarenessStatus(workspaceId,objectId,user.id,input.status);break;}
+        case 'legalResearchProviders': {if(!legalResearch)throw new AtlasError('LEGAL_RESEARCH_NOT_CONFIGURED','Legal research is unavailable',503);result=legalResearch.listProviders();break;}
+        case 'legalResearchCapabilities': {result=assistant.legalResearchCapabilities();break;}
+        case 'legalResearchChat': {const input=await readJson(request,config.maxBodyBytes);result=await assistant.research({workspaceId,userId:user.id,prompt:input.prompt,conversationId:input.conversationId,matterId:input.matterId,sourceMode:input.sourceMode,jurisdiction:input.jurisdiction,practiceArea:input.practiceArea});break;}
+        case 'legalResearchSearch': {if(!legalResearch)throw new AtlasError('LEGAL_RESEARCH_NOT_CONFIGURED','Legal research is unavailable',503);result=await legalResearch.search(workspaceId,await readJson(request,config.maxBodyBytes),user?.id??'system');break;}
+        case 'documentExecutionStatus': {if(!documentExecution)throw new AtlasError('DOCUMENT_EXECUTION_NOT_CONFIGURED','Document execution is unavailable',503);result=documentExecution.status(workspaceId);break;}
+        case 'documentExecutionDocuments': {if(!documentExecution)throw new AtlasError('DOCUMENT_EXECUTION_NOT_CONFIGURED','Document execution is unavailable',503);result=await documentExecution.documents(workspaceId,{query:url.searchParams.get('query'),matterId:url.searchParams.get('matterId')});break;}
+        case 'createSignatureRequest': {if(!documentExecution)throw new AtlasError('DOCUMENT_EXECUTION_NOT_CONFIGURED','Document execution is unavailable',503);result=await documentExecution.requestSignature(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'createNotaryRequest': {if(!documentExecution)throw new AtlasError('DOCUMENT_EXECUTION_NOT_CONFIGURED','Document execution is unavailable',503);result=await documentExecution.requestNotarization(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'accountingSummary': result=await accounting.summary(workspaceId); break;
         case 'accountingProviders': result=accounting.listProviders(); break;
         case 'createInvoice': result=await accounting.createInvoice(workspaceId,await readJson(request,config.maxBodyBytes),user.id); break;
@@ -345,7 +417,7 @@ export function createAtlasHandler(service, options = {}) {
         case 'simulateSms': {const input=await readJson(request,config.maxBodyBytes);result=await sms.receive(workspaceId,{externalMessageId:input.externalMessageId??`demo-sms-${Date.now()}`,from:input.from??'+15550102026',to:input.to??'+15550109999',body:input.body,provider:'atlas-simulator'},user?.id??'system');break;}
         case 'twilioSmsIncoming': {if(!telephony||!sms)throw new AtlasError('SMS_PROVIDER_NOT_CONFIGURED','Live text messaging is not configured',503);const input=await readForm(request,config.maxBodyBytes);telephony.verify(url.pathname,input,request.headers?.['x-twilio-signature']);const received=await sms.receive(workspaceId,telephony.incomingMessage(input));return sendXml(response,200,telephony.renderMessageResponse(received.reply),headers);}
       }
-      send(response, match.name.startsWith('create')||['registerFirm','inviteMember','importMigration'].includes(match.name) ? 201 : 200, { data: result }, headers);
+      send(response, match.name.startsWith('create')||['registerFirm','inviteMember','importMigration','uploadFormBankForm','proposeFormBankCaseDraft'].includes(match.name) ? 201 : 200, { data: result }, headers);
     } catch (error) {
       const known = error instanceof AtlasError;
       const status = known ? error.status : (request.url === '/ready' ? 503 : 500);

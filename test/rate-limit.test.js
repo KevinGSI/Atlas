@@ -31,6 +31,6 @@ test('read-only workspace traffic is not application-rate-limited while sensitiv
   let calls=0;const repository={consumeRateLimitBucket(){calls+=1;return {count:1,expiresAt:'2026-07-13T12:01:00.000Z'};}};
   const limiter=new RepositoryRequestRateLimiter(repository,'r'.repeat(32),{},()=> '2026-07-13T12:00:00.000Z');
   assert.deepEqual(await limiter.check({routeName:'listObjects',method:'GET',userId:'usr_1'}),{limited:false});
-  for(const input of [{routeName:'login',method:'POST'},{routeName:'assistantQuery',method:'POST',userId:'usr_1'},{routeName:'uploadFile',method:'POST',userId:'usr_1'},{routeName:'ingestWebhook',method:'POST'},{routeName:'createObject',method:'POST',userId:'usr_1'}])await limiter.check(input);
-  assert.equal(calls,5);
+  for(const input of [{routeName:'login',method:'POST'},{routeName:'assistantQuery',method:'POST',userId:'usr_1'},{routeName:'performMatterTask',method:'POST',userId:'usr_1'},{routeName:'legalResearchSearch',method:'POST',userId:'usr_1'},{routeName:'legalResearchChat',method:'POST',userId:'usr_1'},{routeName:'createMatterClientEmailDraft',method:'POST',userId:'usr_1'},{routeName:'createMatterClientMeetingDraft',method:'POST',userId:'usr_1'},{routeName:'uploadFile',method:'POST',userId:'usr_1'},{routeName:'ingestWebhook',method:'POST'},{routeName:'createObject',method:'POST',userId:'usr_1'}])await limiter.check(input);
+  assert.equal(calls,10);
 });

@@ -99,7 +99,7 @@ export class AtlasFileService {
     this.fileSecurityIncidents=fileSecurityIncidents;
   }
 
-  async upload(workspaceId, input, actorId) {
+  async upload(workspaceId, input, actorId, catalog = {}) {
     const filename = cleanFilename(input.filename);
     const mediaType = required(input.mediaType, 'mediaType').toLowerCase();
     if (!SAFE_MEDIA_TYPES.has(mediaType)) throw new AtlasError('FILE_TYPE_NOT_ALLOWED', 'This file type is not allowed', 415);
@@ -121,11 +121,13 @@ export class AtlasFileService {
         storageRef,
         documentType: input.documentType ?? null,
         securityScan
-      }, actorId);
+      }, actorId, catalog);
   }
 
-  async download(workspaceId, objectId) {
-    const document = await this.atlas.getObject(workspaceId, objectId);
+  async download(workspaceId, objectId, options = {}) {
+    const document = options.includeDeleted
+      ? await this.atlas.repository.getObject(workspaceId, objectId, { includeDeleted: true })
+      : await this.atlas.getObject(workspaceId, objectId);
     if (document.dimension !== 'document' || !document.state?.storageRef) {
       throw new AtlasError('FILE_NOT_AVAILABLE', 'This object does not contain a stored file', 404);
     }

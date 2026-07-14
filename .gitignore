@@ -3,5 +3,22 @@ node_modules/
 coverage/
 *.log
 .atlas-local-demo.pid
+.atlas-data/
 .DS_Store
 atlas-core-*.zip
+
+# Generated local packages and previews
+/deliverables/
+/outputs/
+
+# Accidental Finder duplicate copies; canonical files without " 2" remain tracked
+/.dockerignore 2
+/.env 2.example
+/.gitignore 2
+/Dockerfile 2
+/IMPLEMENTATION_STATUS 2.md
+/README 2.md
+/docker-compose 2.yml
+/package 2.json
+/pnpm-lock 2.yaml
+/render 2.yaml

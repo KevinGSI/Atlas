@@ -10,6 +10,12 @@ BUNDLED_NODE="/Users/kevinmeredith/.cache/codex-runtimes/codex-primary-runtime/d
 LOG_FILE="$PROJECT_DIR/atlas-local-demo.log"
 PID_FILE="$PROJECT_DIR/.atlas-local-demo.pid"
 
+# The fictional demo is restart-safe: records and uploaded files remain on this
+# Mac until the .atlas-data folder is intentionally removed.
+export LOCAL_DATA_PATH="${LOCAL_DATA_PATH:-$PROJECT_DIR/.atlas-data/repository.bin}"
+export DOCUMENT_STORAGE_PROVIDER="${DOCUMENT_STORAGE_PROVIDER:-filesystem}"
+export DOCUMENT_STORAGE_PATH="${DOCUMENT_STORAGE_PATH:-$PROJECT_DIR/.atlas-data/documents}"
+
 cd "$PROJECT_DIR"
 
 if /usr/bin/curl --silent --fail "$HEALTH_URL" >/dev/null 2>&1; then

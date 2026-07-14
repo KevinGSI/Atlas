@@ -24,6 +24,7 @@ test('Atlas uploads, hashes, catalogs, links, and retrieves a matter file',async
   assert.match(uploaded.root.state.sha256,/^[a-f0-9]{64}$/);
   assert.match(uploaded.root.state.storageRef,new RegExp(`^atlas-blob://${workspace.id}/`));
   assert.equal(uploaded.root.state.securityScan.status,'clean');
+  assert.deepEqual(uploaded.root.state.provenance,{kind:'computer_upload',connector:'atlas-upload'});
   assert.equal((await repository.listIntelligenceJobs(workspace.id)).at(-1).triggerType,'attachment.received');
   const downloaded=await files.download(workspace.id,uploaded.root.id);
   assert.deepEqual(downloaded.content,content);

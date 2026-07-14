@@ -11,7 +11,7 @@ async function fixture() {
   const otherWorkspace = await service.createWorkspace({ name: 'Firm Two' });
   const matter = await service.createObject(workspace.id, {
     dimension: 'matter', type: 'civil', title: 'Reed v. Northline',
-    state: { nextDeadline: '2026-07-09', ownerId: 'usr_1', clientId: 'obj_client' }
+    state: { caseNumber: '2026-CV-0042', courtName: 'Superior Court of Test County', courtJurisdiction: 'Civil Division', judgeName: 'Hon. Casey Example', nextDeadline: '2026-07-09', ownerId: 'usr_1', clientId: 'obj_client' }
   });
   await service.createObject(workspace.id, { dimension: 'document', type: 'motion_to_compel', title: 'Motion to Compel Discovery' });
   await service.createObject(otherWorkspace.id, { dimension: 'document', type: 'motion_to_compel', title: 'Secret Motion to Compel' });
@@ -69,6 +69,10 @@ test('matter context and priorities include canonical child tasks and deadlines'
   const task = await service.createObject(workspace.id, { parentObjectId: matter.id, dimension: 'operation', type: 'task', title: 'Review discovery plan', state: { status: 'open' } });
   const deadline = await service.createObject(workspace.id, { parentObjectId: matter.id, dimension: 'operation', type: 'deadline', title: 'Discovery responses due', state: { status: 'open', date: '2026-07-11T12:00:00.000Z' } });
   const context = await tools.execute('get_matter_context', workspace.id, { matterId: matter.id });
+  assert.equal(tools.definitions().some(tool=>tool.name==='get_canonical_context'),true);
+  const canonical=await tools.execute('get_canonical_context',workspace.id,{objectId:task.id});
+  assert.equal(canonical.data.matter.id,matter.id);
+  assert.deepEqual(new Set(canonical.data.objects.map(item=>item.id)),new Set([matter.id,task.id,deadline.id]));
   assert.deepEqual(context.data.related.map((item) => item.id), [task.id, deadline.id]);
   assert.deepEqual(new Set(context.sources.map((item) => item.id ?? item.objectId)), new Set([matter.id, task.id, deadline.id]));
   const priorities = await tools.execute('list_daily_priorities', workspace.id, { limit: 1 });
@@ -77,6 +81,8 @@ test('matter context and priorities include canonical child tasks and deadlines'
 });
 
 test('firm metrics compute recent-case work and client-contact counts on the server',async()=>{const {service,tools,workspace,matter}=await fixture();await service.createObject(workspace.id,{parentObjectId:matter.id,dimension:'operation',type:'communication',title:'Client status call',state:{status:'completed',occurredAt:'2026-07-09T15:00:00.000Z'}});await service.createObject(workspace.id,{parentObjectId:matter.id,dimension:'operation',type:'task',title:'Prepare discovery response',state:{status:'open',date:'2026-07-09T10:00:00.000Z'}});await service.createObject(workspace.id,{parentObjectId:matter.id,dimension:'operation',type:'deadline',title:'Discovery due',state:{status:'open',date:'2026-07-12T12:00:00.000Z'}});const metrics=await tools.execute('compute_firm_metrics',workspace.id,{recentMatterLimit:10});assert.equal(metrics.data.totals.matters,1);assert.equal(metrics.data.totals.openTasks,1);assert.equal(metrics.data.totals.overdueTasks,1);assert.equal(metrics.data.totals.deadlinesWithinSevenDays,1);assert.equal(metrics.data.totals.communications,1);assert.equal(metrics.data.recentMatters[0].clientContactCount,1);assert.equal(metrics.data.recentMatters[0].lastClientContactAt,'2026-07-09T15:00:00.000Z');assert.equal(metrics.sources.some(item=>item.objectId===matter.id),true);});
+
+test('priorities and metrics include nested records through canonical case ownership',async()=>{const {service,tools,workspace,matter}=await fixture();const email=await service.createObject(workspace.id,{parentObjectId:matter.id,dimension:'operation',type:'incoming_email',title:'Client email',state:{occurredAt:'2026-07-09T15:00:00.000Z'}});const document=await service.createObject(workspace.id,{parentObjectId:email.id,dimension:'document',type:'discovery',title:'Discovery attachment'});await service.createObject(workspace.id,{parentObjectId:document.id,dimension:'operation',type:'task',title:'Review nested discovery',state:{status:'open',dueDate:'2026-07-09T10:00:00.000Z'}});await service.createObject(workspace.id,{parentObjectId:email.id,dimension:'operation',type:'deadline',title:'Nested response deadline',state:{status:'open',date:'2026-07-12T12:00:00.000Z'}});const priorities=await tools.execute('list_daily_priorities',workspace.id,{limit:1});assert.equal(priorities.data[0].openTaskCount,1);assert.equal(priorities.data[0].openDeadlineCount,1);assert.equal(priorities.sources.some(item=>item.objectId===document.id),true);const metrics=await tools.execute('compute_firm_metrics',workspace.id,{recentMatterLimit:1});assert.equal(metrics.data.recentMatters[0].clientContactCount,1);assert.equal(metrics.data.recentMatters[0].openTaskCount,1);assert.equal(metrics.data.recentMatters[0].openDeadlineCount,1);assert.equal(metrics.data.recentMatters[0].documentCount,1);});
 
 test('public web research is isolated, cited, and rejects private firm identifiers',async()=>{const {service,workspace}=await fixture();const calls=[];const webResearch={async search(input){calls.push(input);return {answer:'Rule 26 requires proportionality.',sources:[{url:'https://www.law.cornell.edu/rules/frcp/rule_26',title:'Federal Rule 26'}],usage:{inputTokens:3,outputTokens:4,totalTokens:7}};}};const tools=new AtlasToolRegistry(service,{webResearch});assert.equal(tools.definitions().some(tool=>tool.name==='search_public_web'),true);const researched=await tools.execute('search_public_web',workspace.id,{query:'current federal discovery proportionality standard'});assert.deepEqual(calls,[{query:'current federal discovery proportionality standard'}]);assert.deepEqual(researched.webSources,[{url:'https://www.law.cornell.edu/rules/frcp/rule_26',title:'Federal Rule 26'}]);await assert.rejects(()=>tools.execute('search_public_web',workspace.id,{query:'search Reed v. Northline on the web'}),error=>error.code==='AI_WEB_QUERY_CONFIDENTIAL');await assert.rejects(()=>tools.execute('search_public_web',workspace.id,{query:'research client@example.com'}),error=>error.code==='AI_WEB_QUERY_CONFIDENTIAL');});
 
@@ -193,6 +199,94 @@ test('approved document and email actions create drafts but never file or send t
   assert.deepEqual({ type: email.result.type, status: email.result.state.status, sent: email.result.state.sent }, { type: 'email_draft', status: 'draft', sent: false });
   assert.equal(document.result.parentObjectId, matter.id);
   assert.equal(email.result.parentObjectId, matter.id);
+});
+
+test('Atlas populates legal-document captions only from canonical case data and keeps drafts unfiled for attorney review', async () => {
+  const { service, tools, workspace, matter } = await fixture();
+  let turn = 0;
+  const model = { async complete(input) {
+    turn += 1;
+    if (turn === 1) {
+      assert.match(input.messages[0].content, /propose_create_legal_document/);
+      assert.ok(input.tools.some((tool) => tool.name === 'propose_create_legal_document'));
+      return { toolCalls: [{ id: 'context_1', name: 'get_matter_context', arguments: { matterId: matter.id } }] };
+    }
+    if (turn === 2) return { toolCalls: [{ id: 'legal_1', name: 'propose_create_legal_document', arguments: { matterId: matter.id, documentType: 'complaint', title: 'Verified Complaint', body: 'Plaintiff alleges only the facts supported by the reviewed case record.\n\n[ATTORNEY INPUT REQUIRED: requested relief]' } }] };
+    return { text: 'I populated the canonical caption and prepared an unfiled complaint draft for attorney review.' };
+  } };
+  const assistant = new AtlasAssistant(model, tools, { repository: service.repository });
+  const response = await assistant.query({ workspaceId: workspace.id, userId: 'usr_attorney', prompt: 'Draft a complaint in Reed v. Northline' });
+  assert.equal(response.actionProposals.length, 1);
+  const proposal = response.actionProposals[0];
+  assert.equal(proposal.status, 'pending');
+  assert.equal((await service.listObjects(workspace.id, { dimension: 'document' })).some((item) => item.title === 'Verified Complaint'), false);
+  assert.match(proposal.input.content, /DRAFT FOR ATTORNEY REVIEW — NOT FILED/);
+  assert.match(proposal.input.content, /IN THE SUPERIOR COURT OF TEST COUNTY/);
+  assert.match(proposal.input.content, /Civil Division/);
+  assert.match(proposal.input.content, /Reed v\. Northline/);
+  assert.match(proposal.input.content, /Case No\. 2026-CV-0042/);
+  assert.match(proposal.input.content, /Before: Hon\. Casey Example/);
+  assert.equal(proposal.input.templateData.matterId, matter.id);
+  assert.equal(proposal.input.templateData.caseNumber, '2026-CV-0042');
+  const approved = await service.decideAiActionProposal(workspace.id, proposal.id, { version: 1, decision: 'approve' }, 'usr_attorney');
+  assert.deepEqual({ status: approved.result.state.status, filed: approved.result.state.filed, reviewRequired: approved.result.state.reviewRequired }, { status: 'draft', filed: false, reviewRequired: true });
+  assert.equal(approved.result.state.templateData.courtName, 'Superior Court of Test County');
+  assert.equal(approved.result.state.sourceMatterVersion, matter.version);
+  assert.equal(approved.result.parentObjectId, matter.id);
+});
+
+test('Atlas uses sanitized public guidance and standard structure when a subpoena has no firm Form Bank template', async () => {
+  const { service, workspace, matter } = await fixture();
+  const searches = [];
+  const webResearch = { async search({ query }) {
+    searches.push(query);
+    return {
+      answer: 'The official civil rule describes subpoena commands, document production, objections, and protection duties.',
+      sources: [{ url: 'https://courts.example.gov/civil/subpoena-rule', title: 'Official court subpoena rule' }]
+    };
+  } };
+  const tools = new AtlasToolRegistry(service, { webResearch });
+  let turn = 0;
+  const model = { async complete(input) {
+    turn += 1;
+    if (turn === 1) {
+      assert.match(input.messages[0].content, /drafting must not stop merely because the firm twin lacks a compatible Form Bank template/);
+      return { toolCalls: [{ id: 'find_subpoena_case', name: 'search_objects', arguments: { query: 'Reed v. Northline' } }] };
+    }
+    if (turn === 2) return { toolCalls: [{ id: 'context_subpoena', name: 'get_canonical_context', arguments: { objectId: matter.id } }] };
+    if (turn === 3) return { toolCalls: [{ id: 'form_subpoena', name: 'get_form_bank_template', arguments: { matterId: matter.id, documentType: 'subpoena' } }] };
+    if (turn === 4) {
+      assert.equal(input.messages.at(-1).content.template, null);
+      assert.equal(input.messages.at(-1).content.recovery.continueDrafting, true);
+      return { toolCalls: [{ id: 'web_subpoena', name: 'search_public_web', arguments: { query: 'official civil subpoena duces tecum deposition form rule' } }] };
+    }
+    if (turn === 5) return { toolCalls: [{ id: 'draft_subpoena', name: 'propose_create_legal_document', arguments: {
+      matterId: matter.id,
+      documentType: 'subpoena',
+      title: 'Subpoena Duces Tecum for Deposition',
+      body: 'COMMAND TO APPEAR AND TESTIFY\n[ATTORNEY INPUT REQUIRED: deponent, deposition date, time, and location]\n\nCOMMAND TO PRODUCE\n[ATTORNEY INPUT REQUIRED: document categories and method, place, and time of compliance]\n\nPROTECTIONS AND OBJECTIONS\n[ATTORNEY INPUT REQUIRED: verify current jurisdiction-specific notices and protections]\n\nPROOF OF SERVICE\n[ATTORNEY INPUT REQUIRED: service details]'
+    } }] };
+    return { text: 'I prepared an unfiled subpoena duces tecum draft using the canonical case caption and cited official public guidance. Attorney review and completion of the marked fields are required.' };
+  } };
+  const result = await new AtlasAssistant(model, tools, { repository: service.repository }).query({ workspaceId: workspace.id, userId: 'usr_attorney', prompt: 'Draft a subpoena duces tecum for deposition in Reed v. Northline' });
+  assert.deepEqual(searches, ['official civil subpoena duces tecum deposition form rule']);
+  assert.equal(result.toolCalls, 5);
+  assert.equal(result.webSources[0].url, 'https://courts.example.gov/civil/subpoena-rule');
+  assert.equal(result.actionProposals.length, 1);
+  assert.equal(result.actionProposals[0].input.templateProvenance, null);
+  assert.match(result.actionProposals[0].input.content, /SUBPOENA DUCES TECUM FOR DEPOSITION/);
+  assert.match(result.actionProposals[0].input.content, /COMMAND TO PRODUCE/);
+  assert.match(result.actionProposals[0].input.content, /ATTORNEY INPUT REQUIRED: service details/);
+  assert.match(result.actionProposals[0].input.content, /Reed v\. Northline/);
+});
+
+test('legal-document drafting refuses to invent a missing case number or court', async () => {
+  const { service, tools, workspace } = await fixture();
+  const incomplete = await service.createObject(workspace.id, { dimension: 'matter', type: 'civil', title: 'Incomplete Caption', state: { status: 'open' } });
+  await assert.rejects(
+    () => tools.execute('propose_create_legal_document', workspace.id, { matterId: incomplete.id, documentType: 'motion', body: '[ATTORNEY INPUT REQUIRED: grounds]' }),
+    (error) => error.code === 'LEGAL_DOCUMENT_CONTEXT_INCOMPLETE' && error.details.missing.includes('caseNumber') && error.details.missing.includes('courtName')
+  );
 });
 
 test('calendar proposals remain review-only until an attorney approves one canonical event',async()=>{
