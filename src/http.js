@@ -149,6 +149,9 @@ function route(method, pathname) {
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/migration\/imports$/, 'importMigration']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/migration\/imports$/, 'listMigrations']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/home\/while-you-were-gone$/, 'whileYouWereGone']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/social-media$/, 'socialStatus']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/social-media\/configuration$/, 'socialConfigure']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/social-media\/suggestions$/, 'socialSuggest']
     ,['PATCH', /^\/v1\/workspaces\/([^/]+)\/home\/while-you-were-gone\/([^/]+)$/, 'updateAwarenessStatus']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/accounting\/summary$/, 'accountingSummary']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/accounting\/providers$/, 'accountingProviders']
@@ -202,6 +205,7 @@ export function createAtlasHandler(service, options = {}) {
   const accounting = options.accounting;
   const voice=options.voice;
   const sms=options.sms;
+  const social=options.social;
   const telephony=options.telephony;
   const firmExport=options.firmExport;
   return async (request, response) => {
@@ -218,7 +222,7 @@ export function createAtlasHandler(service, options = {}) {
       const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/') && match.name!=='ingestWebhook') {
-        const permission = ['getWorkspace', 'getSubscription', 'listObjects', 'getObject', 'downloadFile', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus'].includes(match.name)
+        const permission = ['getWorkspace', 'getSubscription', 'listObjects', 'getObject', 'downloadFile', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'listMemberships', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus','socialStatus'].includes(match.name)
           ? 'workspace:read' : ['createMembership','inviteMember','listWorkspaceInvitations','listWorkspaceSecurityEvents','listWorkspaceSessions','revokeWorkspaceSessions','deactivateMembership','reactivateMembership','getWorkspaceSecurityPolicy','updateWorkspaceSecurityPolicy','createFirmExport'].includes(match.name) ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
@@ -300,6 +304,9 @@ export function createAtlasHandler(service, options = {}) {
         case 'importMigration': result=await migration.import(workspaceId,await readJson(request,config.migrationMaxBodyBytes??config.maxBodyBytes),user?.id??'system'); break;
         case 'listMigrations': result=await migration.list(workspaceId); break;
         case 'whileYouWereGone': result = await service.whileYouWereGone(workspaceId,user.id,url.searchParams.get('since')); break;
+        case 'socialStatus': {if(!social)throw new AtlasError('SOCIAL_MEDIA_NOT_CONFIGURED','Social media suggestions are unavailable',503);result=await social.status(workspaceId);break;}
+        case 'socialConfigure': {if(!social)throw new AtlasError('SOCIAL_MEDIA_NOT_CONFIGURED','Social media suggestions are unavailable',503);result=await social.configure(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'socialSuggest': {if(!social)throw new AtlasError('SOCIAL_MEDIA_NOT_CONFIGURED','Social media suggestions are unavailable',503);result=await social.suggest(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'updateAwarenessStatus': {const input=await readJson(request,config.maxBodyBytes);result=await service.updateAwarenessStatus(workspaceId,objectId,user.id,input.status);break;}
         case 'accountingSummary': result=await accounting.summary(workspaceId); break;
         case 'accountingProviders': result=accounting.listProviders(); break;

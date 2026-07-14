@@ -2,7 +2,7 @@ import { AtlasError } from './errors.js';
 import { createId } from './ids.js';
 
 const kinds = new Set(['classification','entity','matter_match','fact','deadline','duty','conflict','risk','recommendation']);
-const actions = new Set(['create_task','create_document','draft_email']);
+const actions = new Set(['create_task','create_document','draft_email','create_social_post']);
 
 export class IntelligenceProjectionService {
   constructor(clock = () => new Date().toISOString(),options={}) { this.clock = clock;this.contentCipher=options.contentCipher??{encrypt:value=>value}; }

@@ -215,7 +215,8 @@ export class AtlasService {
       const specifications = {
         create_task: { dimension: 'operation', type: 'task', title: proposal.input.title, state: { description: proposal.input.description, dueDate: proposal.input.dueDate, status: 'open' } },
         create_document: { dimension: 'document', type: proposal.input.documentType, title: proposal.input.title, state: { content: proposal.input.content, status: 'draft', filed: false } },
-        draft_email: { dimension: 'operation', type: 'email_draft', title: proposal.input.subject, state: { recipients: proposal.input.recipients, body: proposal.input.body, status: 'draft', sent: false } }
+        draft_email: { dimension: 'operation', type: 'email_draft', title: proposal.input.subject, state: { recipients: proposal.input.recipients, body: proposal.input.body, status: 'draft', sent: false } },
+        create_social_post: { dimension: 'operation', type: 'social_post_draft', title: proposal.input.title, state: { content: proposal.input.content, hashtags: proposal.input.hashtags??[], networks: proposal.input.networks??[], topic: proposal.input.topic??null, status: 'draft', approvedForEditing: true, published: false, publishingEnabled: false } }
       };
       const specification = specifications[proposal.actionType];
       if (!specification) throw new AtlasError('AI_ACTION_TYPE_UNSUPPORTED', 'AI action type is not supported', 400);

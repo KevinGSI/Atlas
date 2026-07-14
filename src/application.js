@@ -29,6 +29,7 @@ import { StripeCheckoutProvider } from './payment-provider-adapters.js';
 import { AtlasFileService, FileSystemBlobStore, InMemoryBlobStore, RepositoryBlobStore } from './file-storage.js';
 import { createFileSecurityScanner } from './file-security.js';
 import { RepositoryRequestRateLimiter } from './rate-limit.js';
+import { SocialMediaService } from './social-media.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -96,11 +97,12 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const voice=new VoiceAssistantService(service,{intentProvider:voiceIntentProvider});
   const telephony=dependencies.telephonyAdapter??(config.twilioAuthToken?new TwilioVoiceAdapter({authToken:config.twilioAuthToken,publicBaseUrl:config.voicePublicBaseUrl,accountSid:config.twilioAccountSid,messagingFrom:config.twilioMessagingFrom,transport:dependencies.telephonyTransport}):null);
   const sms=new SmsAssistantService(service,{intentProvider:voiceIntentProvider,messagingProvider:dependencies.messagingProvider??telephony});
+  const social=new SocialMediaService(service,selectedModel);
   const assistant = new AtlasAssistant(selectedModel, new AtlasToolRegistry(service,{webResearch,embeddingProvider:selectedModel,contentCipher}), {
     repository: runtime.repository,
     contentCipher
   });
-  const server = createAtlasServer(service, { config, ready, rateLimiter, identity, assistant, ingestion, files, webhooks, cms, migration, accounting, voice, sms, telephony, firmExport });
+  const server = createAtlasServer(service, { config, ready, rateLimiter, identity, assistant, ingestion, files, webhooks, cms, migration, accounting, voice, sms, social, telephony, firmExport });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, resolve);
