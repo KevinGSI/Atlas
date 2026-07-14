@@ -49,6 +49,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   });
   const providers = createAiProviderRegistry(config, dependencies);
   const selectedModel=dependencies.aiModel ?? providers.resolve(config.aiProvider);
+  const contentCipher=createContentCipher(config,dependencies);
   const webResearch=createWebResearchProvider(config,dependencies);
   const ingestion = new AtlasIngestionService(runtime.repository);
   const blobStore=dependencies.blobStore??(config.documentStorageProvider==='postgres'?new RepositoryBlobStore(runtime.repository):config.documentStorageProvider==='filesystem'?new FileSystemBlobStore(config.documentStoragePath):new InMemoryBlobStore());
@@ -57,7 +58,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   for (const [name, provider] of Object.entries(dependencies.intelligenceProviders ?? {})) intelligenceProviders.register(name, provider);
   if(selectedModel?.analyzeFile&&!dependencies.intelligenceProviders?.['document-analysis'])intelligenceProviders.register('document-analysis',new DocumentIntelligenceProvider(selectedModel,blobStore));
   if(selectedModel&&!dependencies.intelligenceProviders?.['configured-model'])intelligenceProviders.register('configured-model',new StructuredModelIntelligenceProvider(selectedModel));
-  const intelligence = new AtlasIntelligenceRuntime(runtime.repository, intelligenceProviders, { providerName: config.intelligenceProvider, projector: new IntelligenceProjectionService(), resolver: new AtlasResolver(runtime.repository), playbooks:new SituationalPlaybookEngine(dependencies.nativeCapabilities) });
+  const intelligence = new AtlasIntelligenceRuntime(runtime.repository, intelligenceProviders, { providerName: config.intelligenceProvider, projector: new IntelligenceProjectionService(undefined,{contentCipher}), resolver: new AtlasResolver(runtime.repository), playbooks:new SituationalPlaybookEngine(dependencies.nativeCapabilities) });
   const firmExport = new FirmExportService(runtime.repository);
   const webhooks = new IngestionWebhookVerifier(config.ingestionWebhookSecrets);
   const cmsConnectors=new CmsConnectorRegistry();
@@ -88,9 +89,9 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const voice=new VoiceAssistantService(service,{intentProvider:voiceIntentProvider});
   const telephony=dependencies.telephonyAdapter??(config.twilioAuthToken?new TwilioVoiceAdapter({authToken:config.twilioAuthToken,publicBaseUrl:config.voicePublicBaseUrl,accountSid:config.twilioAccountSid,messagingFrom:config.twilioMessagingFrom,transport:dependencies.telephonyTransport}):null);
   const sms=new SmsAssistantService(service,{intentProvider:voiceIntentProvider,messagingProvider:dependencies.messagingProvider??telephony});
-  const assistant = new AtlasAssistant(selectedModel, new AtlasToolRegistry(service,{webResearch,embeddingProvider:selectedModel}), {
+  const assistant = new AtlasAssistant(selectedModel, new AtlasToolRegistry(service,{webResearch,embeddingProvider:selectedModel,contentCipher}), {
     repository: runtime.repository,
-    contentCipher: createContentCipher(config, dependencies)
+    contentCipher
   });
   const server = createAtlasServer(service, { config, ready: runtime.ready, identity, assistant, ingestion, files, webhooks, cms, migration, accounting, voice, sms, telephony, firmExport });
   await new Promise((resolve, reject) => {

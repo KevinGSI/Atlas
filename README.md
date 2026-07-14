@@ -1,10 +1,13 @@
 # Atlas Core
 
-Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.50.0` makes semantic retrieval operational for existing as well as newly analyzed document findings. A bounded, repeat-safe background indexer fills missing vectors firm by firm, while a controlled backfill command can drain historical work during deployment. OpenAI is the initial embedding adapter; Atlas retains storage, tenancy, ranking, citations, safety, and review control.
+Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `0.51.0` adds encrypted source-passage retrieval over firm-owned uploaded documents. Atlas extracts page- or section-located passages through an interchangeable file-capable AI adapter, stores passage text encrypted at rest, embeds it for firm-scoped semantic search, and decrypts only authorized matches immediately before AI use. OpenAI remains the initial adapter; Atlas retains storage, tenancy, ranking, citations, safety, and review control.
 
 ## Implemented
 
 - Automatic background semantic indexing for existing document findings
+- Repeat-safe raw-document passage indexing for Atlas-owned uploaded files
+- AES-GCM encrypted source passages with page and section citations
+- Raw passages excluded from intelligence-job results and ciphertext excluded from model-visible retrieval results
 - Repeat-safe, firm-scoped, model-aware backfill with rejected-result exclusion
 - Bounded worker batches and graceful shutdown
 - Controlled historical backfill command for deployment operations

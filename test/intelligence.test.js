@@ -62,16 +62,20 @@ test('normalized intelligence projects candidate twin observations and non-chat 
   const registry = new IntelligenceProviderRegistry().register('extractor', { capabilities() { return { structuredExtraction: true }; }, async analyze() { return {
     observations: [{ kind: 'deadline', data: { date: '2026-07-20', description: 'Response due' }, confidence: 0.94, sourceLocation: { page: 2 } }],
     actionProposals: [{ actionType: 'create_task', input: { title: 'Prepare response', matterId: null, dueDate: '2026-07-20' } }],
-    knowledgeEmbeddings:{vectors:[[1,0,0]],provider:'local',model:'semantic-test',dimensions:3}
+    knowledgeEmbeddings:{vectors:[[1,0,0]],provider:'local',model:'semantic-test',dimensions:3},
+    retrievalChunks:[{text:'Response is due July 20.',sourceLocation:{page:2}}],
+    chunkEmbeddings:{vectors:[[0,1,0]],provider:'local',model:'semantic-test',dimensions:3}
   }; } });
-  const runtime = new AtlasIntelligenceRuntime(repository, registry, { providerName: 'extractor', projector: new IntelligenceProjectionService(() => '2026-07-10T12:01:00.000Z'), clock: () => '2026-07-10T12:01:00.000Z' });
+  const cipher={encrypt:(value,context)=>`sealed:${context}:${value}`};
+  const runtime = new AtlasIntelligenceRuntime(repository, registry, { providerName: 'extractor', projector: new IntelligenceProjectionService(() => '2026-07-10T12:01:00.000Z',{contentCipher:cipher}), clock: () => '2026-07-10T12:01:00.000Z' });
   await runtime.processNext();
   const observations = await repository.listIntelligenceObservations(workspace.id, 'candidate');
   const proposals = await repository.listAiActionProposals(workspace.id, 'pending');
   assert.equal(observations[0].kind, 'deadline');
   assert.equal(observations[0].sourceLocation.page, 2);
   assert.equal((await repository.listDocumentKnowledgeEmbeddings(workspace.id,'semantic-test'))[0].observationId,observations[0].id);
-  assert.equal((await repository.listIntelligenceJobs(workspace.id))[0].result.knowledgeEmbeddings,undefined);
+  const chunk=(await repository.listDocumentKnowledgeChunks(workspace.id,'semantic-test'))[0];assert.match(chunk.content,/^sealed:document-chunk:dkc_/);assert.equal(chunk.sourceLocation.page,2);
+  const persistedResult=(await repository.listIntelligenceJobs(workspace.id))[0].result;assert.equal(persistedResult.knowledgeEmbeddings,undefined);assert.equal(persistedResult.retrievalChunks,undefined);assert.equal(persistedResult.chunkEmbeddings,undefined);
   assert.equal(proposals[0].originType, 'intelligence');
   assert.equal(proposals[0].runId, null);
   assert.match(proposals[0].intelligenceJobId, /^inj_/);

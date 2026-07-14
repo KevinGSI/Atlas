@@ -81,6 +81,10 @@ export class OpenAiResponsesProvider {
     const text=outputText(Array.isArray(body.output)?body.output:[]);let result;try{result=JSON.parse(text);}catch{throw new AtlasError('AI_PROVIDER_INVALID_RESPONSE','AI document provider returned invalid structured output',502,{provider:'openai'});}
     return {...result,provider:'openai',model:body.model??this.model,usage:{inputTokens:body.usage?.input_tokens??0,outputTokens:body.usage?.output_tokens??0,totalTokens:body.usage?.total_tokens??0}};
   }
+  async extractDocumentChunks({content,filename,mediaType,context}){
+    const result=await this.analyzeFile({content,filename,mediaType,context,instruction:'Extract source-faithful retrieval passages from this authorized law-firm document. Return JSON only as {"retrievalChunks":[{"text":"...","sourceLocation":{"page":1,"section":"..."}}]}. Preserve the source meaning and wording; never invent or summarize missing content. Prefer complete paragraphs or coherent sections, include page and section when available, limit each passage to 4000 characters, return no more than 100 passages and no more than 100000 characters total.'});
+    if(!Array.isArray(result.retrievalChunks))throw new AtlasError('AI_PROVIDER_INVALID_RESPONSE','Document provider did not return retrieval passages',502,{provider:'openai'});return result;
+  }
   async complete({ messages, tools, state }) {
     let response;
     const input = openAiInput(messages, state);

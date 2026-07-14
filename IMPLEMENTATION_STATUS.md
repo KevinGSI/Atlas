@@ -1,6 +1,14 @@
-# Atlas Core 0.50.0 — Automatic Semantic Backfill
+# Atlas Core 0.51.0 — Encrypted Source-Passage Retrieval
 
 ## Verified as implemented
+
+- Raw Atlas-owned document files are extracted into bounded, source-faithful retrieval passages
+- Passage text is encrypted with context-bound AES-256-GCM before persistent storage
+- Firm-scoped semantic search ranks source passages alongside structured intelligence observations
+- Authorized passages are decrypted only inside the Atlas tool boundary immediately before model use
+- Passage citations preserve document, matter, page, section, and source-extraction provenance
+- Intelligence jobs exclude raw passages and embeddings from their persisted result ledger
+- Background and deployment backfills are repeat-safe and verify stored-file integrity before extraction
 
 - Existing document observations are automatically added to semantic retrieval without re-uploading source files
 - Repeat-safe indexing skips findings already embedded by the configured model
