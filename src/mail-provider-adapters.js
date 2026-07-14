@@ -1,11 +1,12 @@
 import { AtlasError } from './errors.js';
 import { OAuthCmsConnector } from './cms-provider-adapters.js';
+import { createHash } from 'node:crypto';
 
 const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/calendar.readonly'
 ];
-const MICROSOFT_SCOPES = ['offline_access', 'Mail.Read', 'Calendars.Read'];
+const MICROSOFT_SCOPES = ['offline_access', 'Mail.Read', 'Calendars.ReadWrite'];
 const DOWNLOADABLE_MEDIA_TYPES=new Set(['application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain','text/csv','image/jpeg','image/png']);
 
 function expiresAt(value, now = Date.now()) {
@@ -39,6 +40,9 @@ function microsoftDate(value, timeZone) {
   const parsed = new Date(candidate);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 }
+
+function graphTransactionId(value){const hex=createHash('sha256').update(String(value)).digest('hex').slice(0,32);return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;}
+function graphDateTime(value){return new Date(value).toISOString().replace(/Z$/,'');}
 
 function decodeBase64Url(value) {
   if (!value) return '';
@@ -134,16 +138,18 @@ class MailOAuthConnector extends OAuthCmsConnector {
     const refreshed = await response.json();
     return { ...credentials, ...refreshed, refresh_token: refreshed.refresh_token ?? credentials.refresh_token, expires_at: expiresAt(refreshed, this.clock()) };
   }
-  async providerJson(url, credentials, additionalHeaders = {}) {
+  async providerRequest(url, credentials, request = {}) {
     let current = await this.currentCredentials(credentials);
-    let response = await this.transport(url, { headers: { authorization: `Bearer ${current.access_token}`, ...additionalHeaders } });
+    const options={method:request.method??'GET',headers:{authorization:`Bearer ${current.access_token}`,...(request.headers??{})},...(request.body===undefined?{}:{body:request.body})};
+    let response = await this.transport(url, options);
     if (response.status === 401 && current.refresh_token) {
       current = await this.currentCredentials(current, true);
-      response = await this.transport(url, { headers: { authorization: `Bearer ${current.access_token}`, ...additionalHeaders } });
+      options.headers.authorization=`Bearer ${current.access_token}`;response = await this.transport(url, options);
     }
     if (!response.ok) throw new AtlasError('MAIL_SYNC_PROVIDER_ERROR', 'Mailbox provider synchronization failed', 502, { provider: this.name, status: response.status });
     return { body: await response.json(), credentials: current };
   }
+  async providerJson(url,credentials,additionalHeaders={}){return this.providerRequest(url,credentials,{headers:additionalHeaders});}
   initialSince() { return new Date(this.clock() - 30 * 86_400_000).toISOString(); }
 }
 
@@ -197,6 +203,14 @@ export class Microsoft365Connector extends MailOAuthConnector {
   constructor(options) {
     const tenant = options.tenant ?? 'organizations';
     super({ ...options, name: 'microsoft', authorizeEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`, tokenEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, apiBase: 'https://graph.microsoft.com/v1.0', scopes: MICROSOFT_SCOPES, resources: [] });
+  }
+  capabilities(){return {...super.capabilities(),calendarWriteAfterApproval:true,mailReadOnly:true};}
+  async createCalendarEvent({credentials,calendarEvent}){
+    const state=calendarEvent?.state??{};if(calendarEvent?.type!=='calendar_event'||!state.startsAt||!state.endsAt)throw new AtlasError('CALENDAR_EVENT_INVALID','A canonical approved calendar event is required',400);
+    const payload={subject:calendarEvent.title,body:{contentType:'Text',content:state.description??'Created by Atlas after attorney approval.'},start:{dateTime:graphDateTime(state.startsAt),timeZone:'UTC'},end:{dateTime:graphDateTime(state.endsAt),timeZone:'UTC'},location:{displayName:state.location??''},isAllDay:Boolean(state.isAllDay),isReminderOn:true,reminderMinutesBeforeStart:state.reminderMinutesBeforeStart??15,showAs:'busy',transactionId:graphTransactionId(calendarEvent.id),categories:['Atlas']};
+    const result=await this.providerRequest('https://graph.microsoft.com/v1.0/me/events',credentials,{method:'POST',headers:{'content-type':'application/json',Prefer:'outlook.timezone="UTC"'},body:JSON.stringify(payload)});
+    if(!result.body?.id)throw new AtlasError('MAIL_SYNC_PROVIDER_ERROR','Microsoft Graph did not return the created calendar event',502,{provider:'microsoft'});
+    return {record:microsoftCalendar(result.body,new Date(this.clock()).toISOString()),credentials:result.credentials};
   }
   async pull({ credentials, cursor }) {
     const position = cursor ?? { resource: 'email', nextUrl: null, since: this.initialSince(), syncStartedAt: new Date(this.clock()).toISOString() };

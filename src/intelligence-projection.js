@@ -1,8 +1,9 @@
 import { AtlasError } from './errors.js';
 import { createId } from './ids.js';
+import { calendarProposalKey, normalizeCalendarEventProposal } from './calendar-events.js';
 
 const kinds = new Set(['classification','entity','matter_match','fact','deadline','duty','conflict','risk','recommendation']);
-const actions = new Set(['create_task','create_document','draft_email','create_social_post']);
+const actions = new Set(['create_task','create_document','draft_email','create_social_post','create_calendar_event']);
 
 export class IntelligenceProjectionService {
   constructor(clock = () => new Date().toISOString(),options={}) { this.clock = clock;this.contentCipher=options.contentCipher??{encrypt:value=>value}; }
@@ -14,7 +15,10 @@ export class IntelligenceProjectionService {
     for (const item of observations) {
       if (!kinds.has(item.kind) || typeof item.data !== 'object' || typeof item.confidence !== 'number' || item.confidence < 0 || item.confidence > 1) throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Intelligence observation is invalid',502);
     }
-    for (const item of actionProposals) if (!actions.has(item.actionType) || typeof item.input !== 'object') throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Intelligence action proposal is invalid',502);
+    for (const item of actionProposals) {
+      if (!actions.has(item.actionType) || typeof item.input !== 'object') throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Intelligence action proposal is invalid',502);
+      if(item.actionType==='create_calendar_event')try{item.input=normalizeCalendarEventProposal(item.input,{sourceType:'native_intelligence'});}catch(error){throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Intelligence calendar proposal is invalid',502,{cause:error.code??'CALENDAR_EVENT_INVALID'});}
+    }
     const awareness=result.awareness??null;if(awareness&&(typeof awareness!=='object'||!['low','normal','high','urgent'].includes(awareness.priority??'normal')||typeof (awareness.headline??'')!=='string'||typeof (awareness.summary??'')!=='string'))throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Situational awareness result is invalid',502);
     const knowledgeEmbeddings=result.knowledgeEmbeddings??null;if(knowledgeEmbeddings){if(!Array.isArray(knowledgeEmbeddings.vectors)||knowledgeEmbeddings.vectors.length!==observations.length||!knowledgeEmbeddings.provider||!knowledgeEmbeddings.model||!Number.isInteger(knowledgeEmbeddings.dimensions)||knowledgeEmbeddings.dimensions<1||knowledgeEmbeddings.dimensions>3072||knowledgeEmbeddings.vectors.some(vector=>!Array.isArray(vector)||vector.length!==knowledgeEmbeddings.dimensions||vector.some(value=>!Number.isFinite(value))))throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Document knowledge embeddings are invalid',502);}
     const retrievalChunks=result.retrievalChunks??[];let total=0;if(!Array.isArray(retrievalChunks)||retrievalChunks.length>100)throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Document retrieval passages are invalid',502);for(const chunk of retrievalChunks){const text=String(chunk?.text??'').trim();total+=text.length;if(!text||text.length>4000||total>100000||chunk.sourceLocation!==undefined&&chunk.sourceLocation!==null&&(typeof chunk.sourceLocation!=='object'||Array.isArray(chunk.sourceLocation)))throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Document retrieval passage is invalid',502);}
@@ -29,10 +33,8 @@ export class IntelligenceProjectionService {
     })));
     if(normalized.knowledgeEmbeddings)await Promise.all(observations.map((observation,index)=>repository.createDocumentKnowledgeEmbedding({id:createId('dke'),workspaceId:job.workspaceId,observationId:observation.id,provider:normalized.knowledgeEmbeddings.provider,model:normalized.knowledgeEmbeddings.indexModel??normalized.knowledgeEmbeddings.model,dimensions:normalized.knowledgeEmbeddings.dimensions,embedding:normalized.knowledgeEmbeddings.vectors[index],createdAt:this.clock()})));
     const documentChunks=[];if(normalized.chunkEmbeddings)for(let index=0;index<normalized.retrievalChunks.length;index+=1){const id=createId('dkc');const item=normalized.retrievalChunks[index];documentChunks.push(await repository.createDocumentKnowledgeChunk({id,workspaceId:job.workspaceId,sourceObjectId:job.objectId,ordinal:index,content:this.contentCipher.encrypt(String(item.text).trim(),`document-chunk:${id}:content`),sourceLocation:item.sourceLocation??null,provider:normalized.chunkEmbeddings.provider,model:normalized.chunkEmbeddings.indexModel??normalized.chunkEmbeddings.model,dimensions:normalized.chunkEmbeddings.dimensions,embedding:normalized.chunkEmbeddings.vectors[index],createdAt:this.clock()}));}
-    const actionProposals = await Promise.all(normalized.actionProposals.map((item) => repository.createAiActionProposal({
-      id:createId('aap'),workspaceId:job.workspaceId,runId:null,intelligenceJobId:job.id,originType:'intelligence',proposedBy:null,
-      actionType:item.actionType,input:item.input,status:'pending',version:1,decidedBy:null,resultObjectId:null,createdAt:this.clock(),decidedAt:null
-    })));
+    const actionProposals=[];const existingCalendarKeys=new Set((await repository.listAiActionProposals(job.workspaceId)).filter(item=>item.actionType==='create_calendar_event').map(item=>{try{return calendarProposalKey(item.input);}catch{return null;}}).filter(Boolean));
+    for(const item of normalized.actionProposals){if(item.actionType==='create_calendar_event'){const key=calendarProposalKey(item.input);if(existingCalendarKeys.has(key))continue;existingCalendarKeys.add(key);}actionProposals.push(await repository.createAiActionProposal({id:createId('aap'),workspaceId:job.workspaceId,runId:null,intelligenceJobId:job.id,originType:'intelligence',proposedBy:null,actionType:item.actionType,input:item.input,status:'pending',version:1,decidedBy:null,resultObjectId:null,createdAt:this.clock(),decidedAt:null}));}
     const awarenessData=normalized.awareness;
     const awareness=awarenessData?await repository.createAwarenessItem({id:createId('awi'),workspaceId:job.workspaceId,targetUserId:awarenessData.targetUserId??null,sourceJobId:job.id,sourceObjectId:job.objectId,category:awarenessData.category??'firm_activity',priority:awarenessData.priority??'normal',headline:awarenessData.headline??'Atlas completed background work',summary:awarenessData.summary??`${observations.length} observation(s) and ${actionProposals.length} action(s) are ready.`,observationIds:observations.map((item)=>item.id),actionProposalIds:actionProposals.map((item)=>item.id),createdAt:this.clock()}):null;
     return { observations, actionProposals, awareness, documentChunks };

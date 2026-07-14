@@ -80,6 +80,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   if(config.production&&externalConnectorsConfigured&&!dependencies.credentialVault&&!config.cmsCredentialEncryptionKey)throw new Error('CMS_CREDENTIAL_ENCRYPTION_KEY or a managed credentialVault is required for external connections in production');
   const credentialVault=dependencies.credentialVault??(config.cmsCredentialEncryptionKey?new RepositoryCredentialVault(runtime.repository,new AesGcmContentCipher({keys:{[config.cmsCredentialEncryptionKeyId]:config.cmsCredentialEncryptionKey},activeKeyId:config.cmsCredentialEncryptionKeyId})):new InMemoryCredentialVault());
   const cms=new CmsCoexistenceService(runtime.repository,cmsConnectors,credentialVault,undefined,{blobStore,maxAttachmentBytes:config.documentMaxBytes,fileSecurityScanner});
+  service.setCalendarPublisher(({workspaceId,calendarEvent,targetUserId})=>cms.publishApprovedCalendarEvent(workspaceId,calendarEvent,targetUserId));
   const migration=new CmsExportMigrationService(service);
   const paymentProviders=new ProviderRegistry('Payment');
   const bankProviders=new ProviderRegistry('Bank connection');

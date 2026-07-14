@@ -1,15 +1,19 @@
 import { AtlasError, required } from './errors.js';
 import { createId } from './ids.js';
 import { ConflictScreeningService } from './conflict-screening.js';
+import { normalizeCalendarEventProposal } from './calendar-events.js';
 
 const dimensions = new Set(['matter', 'client', 'evidence', 'document', 'person', 'organization', 'operation']);
 const immutableLedgerTypes = new Set(['payment', 'refund', 'trust_transaction', 'journal_entry']);
 
 export class AtlasService {
-  constructor(repository, clock = () => new Date().toISOString()) {
+  constructor(repository, clock = () => new Date().toISOString(),options={}) {
     this.repository = repository;
     this.clock = clock;
+    this.calendarPublisher=options.calendarPublisher??null;
   }
+
+  setCalendarPublisher(publisher){if(publisher!==null&&typeof publisher!=='function')throw new AtlasError('CALENDAR_PUBLISHER_INVALID','Calendar publisher must be a function',500);this.calendarPublisher=publisher;return this;}
 
   async createWorkspace(input, ownerUserId = null) {
     const now = this.clock();
@@ -208,20 +212,22 @@ export class AtlasService {
     const version = this.validateVersion(input.version);
     const decision = required(input.decision, 'decision');
     if (!['approve', 'reject'].includes(decision)) throw new AtlasError('VALIDATION_ERROR', 'decision must be approve or reject', 400);
-    return this.repository.transaction(async (repository) => {
+    const outcome=await this.repository.transaction(async (repository) => {
       const proposal = await repository.getAiActionProposal(workspaceId, proposalId);
       if (decision === 'reject') return repository.decideAiActionProposal(workspaceId, proposalId, version, 'rejected', actorId, null, this.clock());
       const now = this.clock();
+      const calendar=proposal.actionType==='create_calendar_event'?normalizeCalendarEventProposal(proposal.input,{defaultTargetUserId:actorId,sourceType:'native_intelligence'}):null;
       const specifications = {
         create_task: { dimension: 'operation', type: 'task', title: proposal.input.title, state: { description: proposal.input.description, dueDate: proposal.input.dueDate, status: 'open' } },
         create_document: { dimension: 'document', type: proposal.input.documentType, title: proposal.input.title, state: { content: proposal.input.content, status: 'draft', filed: false } },
         draft_email: { dimension: 'operation', type: 'email_draft', title: proposal.input.subject, state: { recipients: proposal.input.recipients, body: proposal.input.body, status: 'draft', sent: false } },
-        create_social_post: { dimension: 'operation', type: 'social_post_draft', title: proposal.input.title, state: { content: proposal.input.content, hashtags: proposal.input.hashtags??[], networks: proposal.input.networks??[], topic: proposal.input.topic??null, status: 'draft', approvedForEditing: true, published: false, publishingEnabled: false } }
+        create_social_post: { dimension: 'operation', type: 'social_post_draft', title: proposal.input.title, state: { content: proposal.input.content, hashtags: proposal.input.hashtags??[], networks: proposal.input.networks??[], topic: proposal.input.topic??null, status: 'draft', approvedForEditing: true, published: false, publishingEnabled: false } },
+        create_calendar_event: {dimension:'operation',type:'calendar_event',title:calendar?.title,state:{...calendar,status:'confirmed',approvedBy:actorId,approvedAt:now,externalCalendar:{provider:'microsoft',status:'pending',targetUserId:calendar?.targetUserId??actorId}}}
       };
       const specification = specifications[proposal.actionType];
       if (!specification) throw new AtlasError('AI_ACTION_TYPE_UNSUPPORTED', 'AI action type is not supported', 400);
       const created = await repository.createObject({
-        id: createId('obj'), workspaceId, parentObjectId: proposal.input.matterId,
+        id: createId('obj'), workspaceId, parentObjectId: calendar?.matterId??proposal.input.matterId,
         dimension: specification.dimension, type: specification.type, title: specification.title,
         state: { ...specification.state, createdFromAiProposalId: proposal.id },
         createdAt: now, updatedAt: now, deletedAt: null, version: 1
@@ -231,6 +237,9 @@ export class AtlasService {
       const decided = await repository.decideAiActionProposal(workspaceId, proposalId, version, 'approved', actorId, created.id, now);
       return { proposal: decided, result: created };
     });
+    if(outcome?.result?.type!=='calendar_event')return outcome;
+    if(!this.calendarPublisher)return {...outcome,calendarDelivery:{status:'pending',provider:'microsoft',reason:'publisher_unavailable'}};
+    try{const delivery=await this.calendarPublisher({workspaceId,calendarEvent:outcome.result,targetUserId:outcome.result.state.targetUserId??actorId,actorId});return {...outcome,result:delivery.calendarEvent??outcome.result,calendarDelivery:{status:delivery.status,provider:delivery.provider??'microsoft',reason:delivery.reason??null}};}catch(error){return {...outcome,calendarDelivery:{status:'pending',provider:'microsoft',reason:error.code??'CALENDAR_PUBLICATION_FAILED'}};}
   }
 
   async createRelationship(workspaceId, input) {

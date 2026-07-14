@@ -1,6 +1,6 @@
 # Microsoft 365 email and calendar setup
 
-Atlas uses one Microsoft OAuth connection for read-only Outlook inbox and primary-calendar synchronization. The lawyer signs in on Microsoft's site; Atlas never receives the Microsoft 365 password. Imported messages and events become firm-isolated canonical Atlas objects and enter the same native-intelligence event pipeline as other firm activity.
+Atlas uses one Microsoft OAuth connection for a read-only Outlook inbox, primary-calendar synchronization, and attorney-approved calendar additions. The lawyer signs in on Microsoft's site; Atlas never receives the Microsoft 365 password. Imported messages and events become firm-isolated canonical Atlas objects and enter the same native-intelligence event pipeline as other firm activity. Atlas may propose a calendar event after analyzing an email, attachment, call, case deadline, or other case activity, but it cannot create the Atlas or Outlook event until an attorney approves the proposal in **While You Were Gone**.
 
 ## 1. Register Atlas in Microsoft Entra
 
@@ -19,11 +19,11 @@ Atlas uses one Microsoft OAuth connection for read-only Outlook inbox and primar
 
    ```text
    Mail.Read
-   Calendars.Read
+   Calendars.ReadWrite
    offline_access
    ```
 
-   Atlas Phase 1 does not request `Mail.Send` or `Calendars.ReadWrite`. It cannot send Microsoft email or change the Outlook calendar.
+   Atlas Phase 1 does not request `Mail.Send`. Email remains read-only. `Calendars.ReadWrite` is used only to synchronize the calendar and add an Atlas event after an attorney's explicit approval. Atlas does not put attendees in the Microsoft Graph create request, so approval does not automatically send invitations.
 5. Create a client secret. Copy the secret value once and store it in the deployment's secret manager. Do not commit it to Git.
 
 ## 2. Configure the Atlas runtime
@@ -50,15 +50,20 @@ Restart the API and synchronization worker after changing deployment secrets. In
 3. Complete Microsoft's consent screen in the secure Microsoft window.
 4. Return to Atlas and choose **Sync email & calendar**.
 5. Confirm that the connection card reports email and calendar counts, then open **Calendar** and confirm an Outlook event appears with the correct time, location, and attendees.
+6. Cause Atlas to detect a source-supported court date, scheduled call, deposition, deadline, or meeting. Confirm that it appears in **While You Were Gone**, approve it, and verify that one event appears in Atlas and in the approving user's Microsoft calendar.
+
+An existing Microsoft connection created before this permission change must be disconnected and connected again so Microsoft can obtain consent for `Calendars.ReadWrite`.
 
 The first synchronization reads the most recent 30 days of inbox messages and a calendar window extending through the next year. Atlas then retains Microsoft Graph delta links, so subsequent cycles retrieve changes and deletions instead of rescanning the entire mailbox and calendar. If Microsoft expires a delta token, Atlas safely rebuilds that resource's synchronization window.
 
 ## Operational boundary
 
-- The connection is read-only and can be disconnected from Atlas without deleting already imported canonical records.
+- Email ingestion and provider synchronization remain read-only. The only Phase 1 Microsoft write is creation of an attorney-approved calendar event.
+- The approving or assigned user's own Microsoft connection is used. If that user has not connected Microsoft 365, the canonical Atlas event remains marked pending and the next successful Microsoft synchronization retries it.
+- Atlas uses a stable Microsoft Graph transaction ID to reduce duplicate event creation during safe retries.
+- Attendee addresses may be retained in the Atlas proposal for review, but Atlas does not send invitations or include attendees in the automatic Microsoft write.
 - OAuth credentials are stored only through the encrypted connector vault.
 - Microsoft continuation links are accepted only from the HTTPS Microsoft Graph v1 endpoint.
 - Source deletions are preserved as reconciliation state in Atlas rather than silently erasing firm history.
 - Imported calendar events create `calendar.synchronized` events and `calendar.received` intelligence work so the digital twin can evaluate them with the rest of the firm's current situation.
 - A production acceptance test must still authorize a real test mailbox in the target Microsoft tenant and confirm the deployed redirect URI, tenant policy, consent, and network access.
-

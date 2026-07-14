@@ -205,7 +205,11 @@
 - Rotating QuickBooks refresh tokens retained only in the encrypted connector vault
 - QuickBooks financial mirror with canonical source provenance, separate financial summary, manual refresh, scheduled refresh compatibility, and safe revocation
 - Unchanged source checksums suppress duplicate canonical updates, events, and AI jobs
-- Real Google Workspace and Microsoft 365 read-only OAuth mail/calendar connectors
+- Real Google Workspace read-only OAuth mail/calendar connector and Microsoft 365 read-only email plus governed calendar connector
+- Proactive native-intelligence calendar proposals for court dates, scheduled calls, depositions, case deadlines, and traditional meetings found in email, attachments, calls, cases, and canonical deadline activity
+- **While You Were Gone** calendar review with strict date/type validation, duplicate-proposal suppression, and no calendar mutation before attorney approval
+- Attorney approval creates one case-linked canonical Atlas calendar event and, when connected, publishes it to that user's Microsoft 365 primary calendar
+- Stable Microsoft transaction IDs, encrypted credential rotation, pending-write retry, and automatic attendee-invitation suppression
 - Encrypted credential rotation and continuous synchronization into canonical firm intelligence
 - One-time professional firm invitations and reload-safe authenticated browser sessions
 - Fail-closed launch-readiness check used before production migrations
@@ -314,7 +318,7 @@
 - Malformed provider-output failure handling
 - Fail-closed live provider command with JSON report
 - Disposable-schema live PostgreSQL integration harness
-- All 29 migrations discovered and checksum-verified in order, with idempotent rerun behavior covered by the migration harness
+- All 31 migrations discovered and checksum-verified in order, with idempotent rerun behavior covered by the migration harness
 - Live integration derives the complete application-table contract from migration SQL and checks canonical persistence, rate-limit persistence, awareness receipts, transactional rollback, and immutable timeline triggers
 - Complete repository verification runs automatically on every main-branch push and pull request
 - GitHub workflows use the package manifest as the single pnpm version source
@@ -371,8 +375,8 @@
 
 ## Verification completed here
 
-- 374 Phase 1 tests passed locally with 0 failures; 1 dedicated live-PostgreSQL test correctly skipped because this workspace supplied no database URL
-- Repository verification passed across 153 required launch files, 47 source modules, and 37 migration-derived database tables
+- 381 Phase 1 tests passed locally with 0 failures; 1 dedicated live-PostgreSQL test correctly skipped because this workspace supplied no database URL
+- Repository verification passed across 157 required launch files, 48 source modules, and 37 migration-derived database tables
 - 1 live PostgreSQL integration test correctly skipped because this workspace has no database URL
 - Deterministic provider evaluation and unsafe/malformed provider rejection
 - Live AI command environment and failure behavior verified locally
@@ -416,7 +420,7 @@
 - MyCase Advanced Tier/Open API enablement, issued endpoints, or real API data
 - A live Intuit developer application, real QuickBooks company authorization, or production QuickBooks data
 - Other CMS vendors beyond the implemented Clio, MyCase, Google Workspace, Microsoft 365, and QuickBooks boundaries
-- Live PostgreSQL execution was not available inside this local release workspace; the dedicated GitHub PostgreSQL workflow applies all 29 migrations against PostgreSQL 16
+- Live PostgreSQL execution was not available inside this local release workspace; the dedicated GitHub PostgreSQL workflow applies all 31 migrations against PostgreSQL 16
 - A real mailbox, telephony provider, document store, or production AI model processing an event end to end
 - Deployment of the connected homepage against a public production environment
 - Execution of the integration harness against a real PostgreSQL daemon in this workspace; no `TEST_DATABASE_URL` or database service was supplied to this release gate
@@ -426,7 +430,7 @@
 - Real vendor webhook delivery; no mailbox, telephony, or document vendor credentials were supplied here
 - Execution against a public staging deployment; `STAGING_BASE_URL` has not been supplied and Atlas has not yet been deployed
 - A production KMS/HSM-backed vault, production load/abuse testing of the rate policy, or large-firm migration volumes
-- Two-way write-back; this release intentionally defaults to source-to-Atlas read-only coexistence
+- General two-way write-back; this release defaults to source-to-Atlas read-only coexistence except for the narrowly governed Microsoft calendar event created after attorney approval
 
 ## Safety boundary
 
