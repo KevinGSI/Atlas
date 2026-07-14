@@ -254,7 +254,7 @@ pnpm verify
 pnpm start
 ```
 
-The one-click Mac demo uses `.atlas-data/` for restart-safe local records and uploaded files. That private folder is excluded from Git. A manual development start without `DATABASE_URL` or `LOCAL_DATA_PATH` still uses the intentionally temporary in-memory repository; set `LOCAL_DATA_PATH` and `DOCUMENT_STORAGE_PATH` when durable local data is required. Production always requires PostgreSQL.
+The one-click Mac demo keeps restart-safe local records and uploaded files in `~/Library/Application Support/Atlas Demo`, outside the source checkout. Code edits, Git pulls, branch changes, and replacement project folders therefore do not replace the private demo twin. The launcher copies any legacy `.atlas-data/` content into that permanent location without deleting the original and creates a repository snapshot in the `backups` subfolder before every launch. The repository also maintains a last-known-good `.previous` snapshot and restores it if the current local state file is unreadable. A manual development start without `DATABASE_URL` or `LOCAL_DATA_PATH` still uses the intentionally temporary in-memory repository; set `LOCAL_DATA_PATH` and `DOCUMENT_STORAGE_PATH` when durable local data is required. Production always requires PostgreSQL.
 
 Run the dedicated live-database suite against a disposable PostgreSQL database:
 

@@ -6,6 +6,7 @@ unsetopt BG_NICE
 PROJECT_DIR="${0:A:h}"
 PID_FILE="$PROJECT_DIR/.atlas-local-demo.pid"
 HEALTH_URL="http://127.0.0.1:3000/health"
+ATLAS_DEMO_HOME="${ATLAS_DEMO_HOME:-$HOME/Library/Application Support/Atlas Demo}"
 
 SERVER_PID=""
 if [[ -f "$PID_FILE" ]]; then
@@ -50,5 +51,6 @@ fi
 
 /bin/rm -f "$PID_FILE"
 echo "Atlas has stopped."
+echo "Your demo records and uploaded files remain at: $ATLAS_DEMO_HOME"
 echo
 read -k 1 "?Press any key to close."

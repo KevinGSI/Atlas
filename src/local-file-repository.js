@@ -1,10 +1,34 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { deserialize, serialize } from 'node:v8';
 import { InMemoryRepository } from './repository.js';
 
 const FORMAT_VERSION = 1;
 const MUTATING_METHOD = /^(transaction|create|update|delete|softDelete|restore|record|clear|consume|revoke|invalidate|decide|claim|complete|fail|review|upsert|cancel|accept|acquire|renew|release)/;
+
+function readEnvelope(path) {
+  let envelope;
+  try { envelope = deserialize(readFileSync(path)); }
+  catch (cause) {
+    const error = new Error(`Atlas could not read durable local data at ${path}: ${cause.message}`);
+    error.code = 'ATLAS_LOCAL_DATA_CORRUPT';
+    throw error;
+  }
+  if (envelope?.formatVersion !== FORMAT_VERSION || !envelope.state) {
+    const error = new Error(`Atlas local data at ${path} uses an unsupported format`);
+    error.code = 'ATLAS_LOCAL_DATA_UNSUPPORTED';
+    throw error;
+  }
+  return envelope;
+}
+
+function atomicCopy(source, destination) {
+  const temporaryPath = `${destination}.${process.pid}.tmp`;
+  copyFileSync(source, temporaryPath);
+  chmodSync(temporaryPath, 0o600);
+  renameSync(temporaryPath, destination);
+  chmodSync(destination, 0o600);
+}
 
 export class LocalFileRepository {
   constructor(path) {
@@ -36,10 +60,13 @@ export class LocalFileRepository {
   load() {
     if (!existsSync(this.path)) return false;
     let envelope;
-    try { envelope = deserialize(readFileSync(this.path)); }
-    catch (error) { throw new Error(`Atlas could not read durable local data at ${this.path}: ${error.message}`); }
-    if (envelope?.formatVersion !== FORMAT_VERSION || !envelope.state) {
-      throw new Error(`Atlas local data at ${this.path} uses an unsupported format`);
+    try { envelope = readEnvelope(this.path); }
+    catch (error) {
+      const previousPath = `${this.path}.previous`;
+      if (error.code !== 'ATLAS_LOCAL_DATA_CORRUPT' || !existsSync(previousPath)) throw error;
+      envelope = readEnvelope(previousPath);
+      atomicCopy(previousPath, this.path);
+      console.warn(`Atlas recovered durable local data from ${previousPath}`);
     }
     this.repository.importState(envelope.state);
     return true;
@@ -48,6 +75,7 @@ export class LocalFileRepository {
   save() {
     const directory = dirname(this.path);
     mkdirSync(directory, { recursive: true, mode: 0o700 });
+    if (existsSync(this.path)) atomicCopy(this.path, `${this.path}.previous`);
     const temporaryPath = `${this.path}.${process.pid}.tmp`;
     writeFileSync(temporaryPath, serialize({ formatVersion: FORMAT_VERSION, state: this.repository.exportState() }), { mode: 0o600 });
     renameSync(temporaryPath, this.path);

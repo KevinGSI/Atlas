@@ -9,14 +9,41 @@ HEALTH_URL="http://127.0.0.1:3000/health"
 BUNDLED_NODE="/Users/kevinmeredith/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
 LOG_FILE="$PROJECT_DIR/atlas-local-demo.log"
 PID_FILE="$PROJECT_DIR/.atlas-local-demo.pid"
+ATLAS_DEMO_HOME="${ATLAS_DEMO_HOME:-$HOME/Library/Application Support/Atlas Demo}"
+DEMO_DATA_DIR="$ATLAS_DEMO_HOME/data"
+DEMO_BACKUP_DIR="$ATLAS_DEMO_HOME/backups"
+LEGACY_DATA_DIR="$PROJECT_DIR/.atlas-data"
 
-# The fictional demo is restart-safe: records and uploaded files remain on this
-# Mac until the .atlas-data folder is intentionally removed.
-export LOCAL_DATA_PATH="${LOCAL_DATA_PATH:-$PROJECT_DIR/.atlas-data/repository.bin}"
+# Keep firm data outside the source checkout so edits, Git operations, branch
+# switches, and replacement application folders cannot erase the demo twin.
+export LOCAL_DATA_PATH="${LOCAL_DATA_PATH:-$DEMO_DATA_DIR/repository.bin}"
 export DOCUMENT_STORAGE_PROVIDER="${DOCUMENT_STORAGE_PROVIDER:-filesystem}"
-export DOCUMENT_STORAGE_PATH="${DOCUMENT_STORAGE_PATH:-$PROJECT_DIR/.atlas-data/documents}"
+export DOCUMENT_STORAGE_PATH="${DOCUMENT_STORAGE_PATH:-$DEMO_DATA_DIR/documents}"
 
 cd "$PROJECT_DIR"
+
+/bin/mkdir -p "$DEMO_DATA_DIR" "$DEMO_BACKUP_DIR"
+/bin/chmod 700 "$ATLAS_DEMO_HOME" "$DEMO_DATA_DIR" "$DEMO_BACKUP_DIR"
+
+# Import the original repository-local data once. The source is copied, never
+# moved or deleted, so an interrupted upgrade cannot destroy the old demo.
+if [[ -d "$LEGACY_DATA_DIR" && ! -e "$DEMO_DATA_DIR/.legacy-import-complete" ]]; then
+  if [[ ! -e "$DEMO_DATA_DIR/repository.bin" ]]; then
+    echo "Preserving the existing Atlas demo data in its permanent Mac location..."
+    /usr/bin/ditto "$LEGACY_DATA_DIR" "$DEMO_DATA_DIR"
+  fi
+  /usr/bin/touch "$DEMO_DATA_DIR/.legacy-import-complete"
+  /bin/chmod 600 "$DEMO_DATA_DIR/.legacy-import-complete"
+fi
+
+# Create a non-destructive point-in-time repository snapshot before every
+# launch. Uploaded document bytes are content-addressed and remain untouched in
+# the permanent documents directory.
+if [[ -f "$LOCAL_DATA_PATH" ]]; then
+  SNAPSHOT_TIME="$(/bin/date -u '+%Y%m%dT%H%M%SZ')"
+  /bin/cp -p "$LOCAL_DATA_PATH" "$DEMO_BACKUP_DIR/repository-$SNAPSHOT_TIME.bin"
+  /bin/chmod 600 "$DEMO_BACKUP_DIR/repository-$SNAPSHOT_TIME.bin"
+fi
 
 if /usr/bin/curl --silent --fail "$HEALTH_URL" >/dev/null 2>&1; then
   if [[ -f "$PID_FILE" ]] && [[ "$(<"$PID_FILE")" == <-> ]] && kill -0 "$(<"$PID_FILE")" >/dev/null 2>&1; then
@@ -53,6 +80,7 @@ if [[ ! -d node_modules ]]; then
 fi
 
 echo "Starting the Atlas Phase 1 fictional demo..."
+echo "Demo records are retained at: $ATLAS_DEMO_HOME"
 : > "$LOG_FILE"
 /usr/bin/nohup "$NODE_BIN" src/server.js >"$LOG_FILE" 2>&1 </dev/null &
 SERVER_PID=$!

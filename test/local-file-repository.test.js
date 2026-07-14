@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createLocalFileRuntime } from '../src/local-file-repository.js';
@@ -27,5 +27,23 @@ test('durable local repository retains firm data and document bytes across resta
     assert.equal((await second.repository.getDocumentBlob(workspace.id,'a'.repeat(64))).content.toString(),'persistent document');
     assert.ok((await readFile(path)).length>0);
     await second.close();
+  } finally { await rm(directory,{recursive:true,force:true}); }
+});
+
+test('durable local repository restores the last known good state after an unreadable write', async () => {
+  const directory=await mkdtemp(join(tmpdir(),'atlas-local-recovery-'));
+  const path=join(directory,'repository.bin');
+  try {
+    const first=createLocalFileRuntime(path);
+    const workspace={id:'wsp_recovery',name:'Recovered Firm',createdAt:'2026-07-14T12:00:00.000Z'};
+    await first.repository.createWorkspace(workspace);
+    await first.close();
+    assert.ok((await readFile(`${path}.previous`)).length>0);
+
+    await writeFile(path,'not an Atlas repository');
+    const recovered=createLocalFileRuntime(path);
+    assert.equal((await recovered.repository.getWorkspace(workspace.id)).name,'Recovered Firm');
+    assert.ok((await readFile(path)).length>0);
+    await recovered.close();
   } finally { await rm(directory,{recursive:true,force:true}); }
 });
