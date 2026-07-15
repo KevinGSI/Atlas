@@ -36,6 +36,7 @@ import { SocialMediaService } from './social-media.js';
 import { ContractedLegalResearchApiProvider, LegalResearchProviderRegistry, LegalResearchService } from './legal-research.js';
 import { DocusignEsignProvider, DocumentExecutionService } from './document-execution.js';
 import { HttpAggregatePublicSource, MarketingService } from './marketing.js';
+import { WebsiteBuilderService } from './website-builder.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -125,6 +126,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   for(const source of config.marketingPublicSources??[])if(!dependencies.marketingPublicSources?.[source.name])marketingPublicSources.register(source.name,new HttpAggregatePublicSource({...source,transport:dependencies.marketingPublicDataTransport}));
   for(const [name,provider] of Object.entries(dependencies.marketingAdProviders??{}))marketingAdProviders.register(name,provider);
   const marketing=new MarketingService(service,{publicSources:marketingPublicSources,adProviders:marketingAdProviders});
+  const websiteBuilder=new WebsiteBuilderService(service);
   const legalResearchProviders=new LegalResearchProviderRegistry();
   for(const [name,provider] of Object.entries(dependencies.legalResearchProviders??{}))legalResearchProviders.register(name,provider);
   if(config.westlawResearch&&!dependencies.legalResearchProviders?.westlaw)legalResearchProviders.register('westlaw',new ContractedLegalResearchApiProvider({name:'westlaw',...config.westlawResearch,transport:dependencies.legalResearchTransport}));
@@ -134,7 +136,7 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     repository: runtime.repository,
     contentCipher
   });
-  const server = createAtlasServer(service, { config, ready, rateLimiter, identity, assistant, ingestion, files, formBank, documentExecution, webhooks, cms, migration, accounting, voice, sms, caseCommunications, social, marketing, legalResearch, telephony, firmExport });
+  const server = createAtlasServer(service, { config, ready, rateLimiter, identity, assistant, ingestion, files, formBank, documentExecution, webhooks, cms, migration, accounting, voice, sms, caseCommunications, social, marketing, websiteBuilder, legalResearch, telephony, firmExport });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, resolve);

@@ -2,6 +2,8 @@
 
 Atlas Core is the verified rebuild of the Atlas legal intelligence platform. Version `1.0.0-rc.1` is the code-complete Phase 1 launch candidate. It combines the continuously aware digital twin, connected legal-work platform, production persistence and deployment boundaries, shared request-rate protection, and fail-closed file security in one release. The [Atlas Product Constitution](docs/ATLAS_PRODUCT_CONSTITUTION.md) is the highest-level product source of truth, and the [Business Model](docs/BUSINESS_MODEL.md) records the approved commercial structure without inventing unresolved prices. See [Phase 1 launch](docs/PHASE_ONE_LAUNCH.md) for the exact code-complete and external-deployment boundary.
 
+The repository also contains the first Atlas Website Builder foundation: an editable, server-rendered criminal-defense authority template with canonical firm storage, practice/location/guide page architecture, structured data, sitemap/robots generation, and a fail-closed SEO release-candidate gate. Its bundled identity is fictional and its preview is intentionally excluded from indexing. See [Website Builder SEO and release contract](docs/WEBSITE_BUILDER_SEO_RELEASE.md).
+
 ## Implemented
 
 - Firm-scoped Form Bank for reusable PDF, DOCX, and text forms with secure upload, search, metadata, verified download, and reversible archive controls

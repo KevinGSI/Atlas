@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
 import { AtlasError } from './errors.js';
 import { phaseOneAsset } from './phase-one-web.js';
+import { CRIMINAL_DEFENSE_TEMPLATE, renderWebsitePage, renderWebsiteRobots, renderWebsiteSitemap } from './website-builder.js';
 
 async function readJson(request, maxBodyBytes) {
   const chunks = [];
@@ -62,6 +63,9 @@ function send(response, status, body, headers = {}) {
 function sendXml(response,status,content,headers={}){response.writeHead(status,{...headers,'content-type':'application/xml; charset=utf-8','content-length':Buffer.byteLength(content),'content-security-policy':"default-src 'none'; frame-ancestors 'none'"});response.end(content);}
 
 function sendAsset(response,asset,headers={}){response.writeHead(200,{...headers,'content-type':asset.contentType,'content-length':asset.content.length,'content-security-policy':"default-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'"});response.end(asset.content);}
+function sendWebsiteAsset(response,asset,headers={}){response.writeHead(200,{...headers,'content-type':asset.contentType,'content-length':asset.content.length,'content-security-policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"});response.end(asset.content);}
+function sendWebsiteHtml(response,rendered,headers={}){const content=Buffer.from(rendered.html);response.writeHead(rendered.status??200,{...headers,'content-type':'text/html; charset=utf-8','content-length':content.length,'cache-control':'no-store','content-security-policy':`default-src 'self'; script-src 'self' 'nonce-${rendered.nonce}'; style-src 'self' 'nonce-${rendered.nonce}'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'none'`});response.end(content);}
+function sendPlain(response,status,content,contentType,headers={}){const body=Buffer.from(content);response.writeHead(status,{...headers,'content-type':contentType,'content-length':body.length,'cache-control':'no-store','content-security-policy':"default-src 'none'; frame-ancestors 'none'"});response.end(body);}
 function sendPaymentAsset(response,asset,headers={}){response.writeHead(200,{...headers,'content-type':asset.contentType,'content-length':asset.content.length,'cross-origin-opener-policy':'same-origin-allow-popups','content-security-policy':"default-src 'self'; script-src 'self' https://js.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://hooks.stripe.com"});response.end(asset.content);}
 function sendFile(response,file,headers={}){const safe=String(file.filename??file.document.title).replace(/["\\\r\n]/g,'_');response.writeHead(200,{...headers,'content-type':file.document.state.mediaType,'content-length':file.content.length,'content-disposition':`attachment; filename="${safe}"`,'x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox"});response.end(file.content);}
 
@@ -79,6 +83,14 @@ function route(method, pathname) {
     ['POST', /^\/v1\/document-execution\/docusign\/([^/]+)\/webhook$/, 'docusignExecutionWebhook'],
     ['GET', /^\/template-editor\/?$/, 'templateEditor'],
     ['GET', /^\/template-editor\.js$/, 'templateEditorApp'],
+    ['GET', /^\/website-builder\/?$/, 'websiteBuilderEditor'],
+    ['GET', /^\/website-builder\.js$/, 'websiteBuilderApp'],
+    ['GET', /^\/website-builder\.css$/, 'websiteBuilderStyles'],
+    ['GET', /^\/website-template\.js$/, 'websiteTemplateApp'],
+    ['GET', /^\/website-template\.css$/, 'websiteTemplateStyles'],
+    ['GET', /^\/website-preview\/robots\.txt$/, 'websitePreviewRobots'],
+    ['GET', /^\/website-preview\/sitemap\.xml$/, 'websitePreviewSitemap'],
+    ['GET', /^\/website-preview(\/.*)?$/, 'websitePreview'],
     ['GET', /^\/health$/, 'health'],
     ['GET', /^\/live$/, 'live'],
     ['GET', /^\/ready$/, 'ready'],
@@ -185,6 +197,11 @@ function route(method, pathname) {
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/marketing\/public-scans$/, 'createMarketingPublicScan']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/marketing\/campaigns$/, 'createMarketingCampaign']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/marketing\/campaigns\/([^/]+)\/prepare$/, 'prepareMarketingCampaign']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/website-builder$/, 'websiteBuilderStatus']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/preview$/, 'websiteBuilderPreview']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites$/, 'createWebsiteSite']
+    ,['PATCH', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)$/, 'updateWebsiteSite']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/release-candidate$/, 'prepareWebsiteRelease']
     ,['PATCH', /^\/v1\/workspaces\/([^/]+)\/home\/while-you-were-gone\/([^/]+)$/, 'updateAwarenessStatus']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/legal-research\/providers$/, 'legalResearchProviders']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/legal-research\/capabilities$/, 'legalResearchCapabilities']
@@ -253,6 +270,7 @@ export function createAtlasHandler(service, options = {}) {
   const sms=options.sms;
   const social=options.social;
   const marketing=options.marketing;
+  const websiteBuilder=options.websiteBuilder;
   const legalResearch=options.legalResearch;
   const telephony=options.telephony;
   const firmExport=options.firmExport;
@@ -268,10 +286,10 @@ export function createAtlasHandler(service, options = {}) {
       if (!match) throw new AtlasError('ROUTE_NOT_FOUND', 'Route not found', 404);
       const context=requestContext(request,config);
       const [workspaceId, objectId] = match.params;
-      const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout','docusignExecutionWebhook'].includes(match.name);
+      const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp','websiteBuilderEditor','websiteBuilderApp','websiteBuilderStyles','websiteTemplateApp','websiteTemplateStyles','websitePreview','websitePreviewRobots','websitePreviewSitemap', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout','docusignExecutionWebhook'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/') && match.name!=='ingestWebhook') {
-        const permission = ['getWorkspace', 'getAccountProfiles', 'getSubscription', 'listObjects', 'getObject','getCanonicalContext', 'downloadFile', 'listFormBankForms', 'getFormBankForm', 'downloadFormBankForm', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'matterClientCommunications', 'firmCommunications', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus','socialStatus','marketingStatus','legalResearchProviders','legalResearchCapabilities','documentExecutionStatus','documentExecutionDocuments'].includes(match.name)
+        const permission = ['getWorkspace', 'getAccountProfiles', 'getSubscription', 'listObjects', 'getObject','getCanonicalContext', 'downloadFile', 'listFormBankForms', 'getFormBankForm', 'downloadFormBankForm', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'matterClientCommunications', 'firmCommunications', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus','socialStatus','marketingStatus','websiteBuilderStatus','websiteBuilderPreview','legalResearchProviders','legalResearchCapabilities','documentExecutionStatus','documentExecutionDocuments'].includes(match.name)
           ? 'workspace:read' : ['createMembership','listMemberships','updateMembershipRole','inviteMember','listWorkspaceInvitations','cancelWorkspaceInvitation','listWorkspaceSecurityEvents','listWorkspaceSessions','revokeWorkspaceSessions','deactivateMembership','reactivateMembership','getWorkspaceSecurityPolicy','updateWorkspaceSecurityPolicy','createFirmExport'].includes(match.name) ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
@@ -279,6 +297,10 @@ export function createAtlasHandler(service, options = {}) {
       let result;
       switch (match.name) {
         case 'frontendIndex': case 'frontendApp': case 'templateEditor': case 'templateEditorApp': return sendAsset(response,await phaseOneAsset(match.name),headers);
+        case 'websiteBuilderEditor': case 'websiteBuilderApp': case 'websiteBuilderStyles': case 'websiteTemplateApp': case 'websiteTemplateStyles': return sendWebsiteAsset(response,await phaseOneAsset(match.name),headers);
+        case 'websitePreview': return sendWebsiteHtml(response,renderWebsitePage(CRIMINAL_DEFENSE_TEMPLATE,match.params[0]??'/',{routePrefix:'/website-preview',nonce:requestId}),headers);
+        case 'websitePreviewRobots': return sendPlain(response,200,renderWebsiteRobots(CRIMINAL_DEFENSE_TEMPLATE,{preview:true}),'text/plain; charset=utf-8',headers);
+        case 'websitePreviewSitemap': return sendPlain(response,200,renderWebsiteSitemap(CRIMINAL_DEFENSE_TEMPLATE),'application/xml; charset=utf-8',headers);
         case 'paymentPage': case 'paymentApp': return sendPaymentAsset(response,await phaseOneAsset(match.name),headers);
         case 'stripePaymentWebhook': {if(!accounting)throw new AtlasError('PAYMENT_PROVIDER_NOT_CONFIGURED','Payment processing is not configured',503);result=await accounting.processPaymentWebhook('stripe',await readRawBody(request,config.maxBodyBytes),request.headers?.['stripe-signature']);break;}
         case 'stripePaymentCheckout': {if(!accounting)throw new AtlasError('PAYMENT_PROVIDER_NOT_CONFIGURED','Payment processing is not configured',503);result=await accounting.paymentCheckoutConfiguration('stripe',workspaceId);break;}
@@ -388,6 +410,11 @@ export function createAtlasHandler(service, options = {}) {
         case 'createMarketingPublicScan': {if(!marketing)throw new AtlasError('MARKETING_NOT_CONFIGURED','Marketing is unavailable',503);result=await marketing.scan(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'createMarketingCampaign': {if(!marketing)throw new AtlasError('MARKETING_NOT_CONFIGURED','Marketing is unavailable',503);result=await marketing.createCampaign(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'prepareMarketingCampaign': {if(!marketing)throw new AtlasError('MARKETING_NOT_CONFIGURED','Marketing is unavailable',503);result=await marketing.prepareCampaign(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'websiteBuilderStatus': {if(!websiteBuilder)throw new AtlasError('WEBSITE_BUILDER_NOT_CONFIGURED','Website Builder is unavailable',503);result=await websiteBuilder.status(workspaceId);break;}
+        case 'websiteBuilderPreview': {if(!websiteBuilder)throw new AtlasError('WEBSITE_BUILDER_NOT_CONFIGURED','Website Builder is unavailable',503);result=websiteBuilder.preview(await readJson(request,config.maxBodyBytes),{routePrefix:'/website-preview',nonce:requestId});break;}
+        case 'createWebsiteSite': {if(!websiteBuilder)throw new AtlasError('WEBSITE_BUILDER_NOT_CONFIGURED','Website Builder is unavailable',503);result=await websiteBuilder.save(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'updateWebsiteSite': {if(!websiteBuilder)throw new AtlasError('WEBSITE_BUILDER_NOT_CONFIGURED','Website Builder is unavailable',503);const input=await readJson(request,config.maxBodyBytes);result=await websiteBuilder.save(workspaceId,{...input,id:objectId},user.id);break;}
+        case 'prepareWebsiteRelease': {if(!websiteBuilder)throw new AtlasError('WEBSITE_BUILDER_NOT_CONFIGURED','Website Builder is unavailable',503);result=await websiteBuilder.prepareRelease(workspaceId,objectId,user.id);break;}
         case 'updateAwarenessStatus': {const input=await readJson(request,config.maxBodyBytes);result=await service.updateAwarenessStatus(workspaceId,objectId,user.id,input.status);break;}
         case 'legalResearchProviders': {if(!legalResearch)throw new AtlasError('LEGAL_RESEARCH_NOT_CONFIGURED','Legal research is unavailable',503);result=legalResearch.listProviders();break;}
         case 'legalResearchCapabilities': {result=assistant.legalResearchCapabilities();break;}
