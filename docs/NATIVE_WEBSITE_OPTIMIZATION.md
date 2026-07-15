@@ -10,6 +10,19 @@ Atlas implements the website as an adaptive legal growth system while retaining 
 2. **Conversion:** an approved-module decision engine may select presentation modes using controlled, non-identifying categories such as device class, referral source, local/informational/comparison intent, office-hours status, and return-visit status. It may change the emphasis and order of approved calls to action and proof modules, but not the public facts, paths, contact endpoints, forms, navigation, tracking contract, or content shown to crawlers.
 3. **Intake qualification:** urgency, geography, matter fit, readiness, and conflict status produce a review route. Potential conflicts always route to conflict review. A qualified result may offer scheduling, but never creates representation, completes a conflict check, changes a calendar, or contacts someone without the existing Atlas approval controls.
 
+## Canonical JSON content graph
+
+The editable website remains backward-compatible with the original page configuration, but every save now compiles that configuration into linked, firm-scoped Atlas records:
+
+- `website_seo_page` for each stable canonical path and its SEO, schema, intent, review, and conversion metadata;
+- `website_page_module` for reusable hero, substantive article, and conversion modules;
+- `website_faq_set` for structured attorney-reviewable questions and answers;
+- `website_cta_profile` and `website_form_variant` for controlled calls to action and progressive intake;
+- `website_internal_link_set` for explicit crawlable topic relationships;
+- `website_lead_routing_rule` for conflict-first professional intake routing.
+
+The compiler creates canonical graph relationships between pages and their modules, FAQs, CTA profiles, forms, routing rules, and related pages. Re-saving updates the same stable records instead of duplicating them, and content removed from the model is retired rather than silently erased. The renderer continues to use the established page format, so this structural improvement does not replace or destabilize the working website.
+
 ## Continuous learning loop
 
 1. The deployed website adapter sends aggregate, non-identifying performance signals to Atlas: search impressions, search arrivals, page views, engaged visits, consultation actions, qualified leads, scheduled consultations, attorney connections, retained matters, and telephone clicks.
