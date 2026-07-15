@@ -202,6 +202,10 @@ function route(method, pathname) {
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites$/, 'createWebsiteSite']
     ,['PATCH', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)$/, 'updateWebsiteSite']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/release-candidate$/, 'prepareWebsiteRelease']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/performance$/, 'recordWebsitePerformance']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/performance$/, 'websitePerformanceSummary']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/optimize$/, 'proposeWebsiteOptimization']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/optimizations\/([^/]+)\/decision$/, 'decideWebsiteOptimization']
     ,['PATCH', /^\/v1\/workspaces\/([^/]+)\/home\/while-you-were-gone\/([^/]+)$/, 'updateAwarenessStatus']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/legal-research\/providers$/, 'legalResearchProviders']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/legal-research\/capabilities$/, 'legalResearchCapabilities']
@@ -271,6 +275,7 @@ export function createAtlasHandler(service, options = {}) {
   const social=options.social;
   const marketing=options.marketing;
   const websiteBuilder=options.websiteBuilder;
+  const websiteOptimization=options.websiteOptimization;
   const legalResearch=options.legalResearch;
   const telephony=options.telephony;
   const firmExport=options.firmExport;
@@ -289,7 +294,7 @@ export function createAtlasHandler(service, options = {}) {
       const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp','websiteBuilderEditor','websiteBuilderApp','websiteBuilderStyles','websiteTemplateApp','websiteTemplateStyles','websitePreview','websitePreviewRobots','websitePreviewSitemap', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout','docusignExecutionWebhook'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/') && match.name!=='ingestWebhook') {
-        const permission = ['getWorkspace', 'getAccountProfiles', 'getSubscription', 'listObjects', 'getObject','getCanonicalContext', 'downloadFile', 'listFormBankForms', 'getFormBankForm', 'downloadFormBankForm', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'matterClientCommunications', 'firmCommunications', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus','socialStatus','marketingStatus','websiteBuilderStatus','websiteBuilderPreview','legalResearchProviders','legalResearchCapabilities','documentExecutionStatus','documentExecutionDocuments'].includes(match.name)
+        const permission = ['getWorkspace', 'getAccountProfiles', 'getSubscription', 'listObjects', 'getObject','getCanonicalContext', 'downloadFile', 'listFormBankForms', 'getFormBankForm', 'downloadFormBankForm', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'matterClientCommunications', 'firmCommunications', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus','socialStatus','marketingStatus','websiteBuilderStatus','websiteBuilderPreview','websitePerformanceSummary','legalResearchProviders','legalResearchCapabilities','documentExecutionStatus','documentExecutionDocuments'].includes(match.name)
           ? 'workspace:read' : ['createMembership','listMemberships','updateMembershipRole','inviteMember','listWorkspaceInvitations','cancelWorkspaceInvitation','listWorkspaceSecurityEvents','listWorkspaceSessions','revokeWorkspaceSessions','deactivateMembership','reactivateMembership','getWorkspaceSecurityPolicy','updateWorkspaceSecurityPolicy','createFirmExport'].includes(match.name) ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
@@ -415,6 +420,10 @@ export function createAtlasHandler(service, options = {}) {
         case 'createWebsiteSite': {if(!websiteBuilder)throw new AtlasError('WEBSITE_BUILDER_NOT_CONFIGURED','Website Builder is unavailable',503);result=await websiteBuilder.save(workspaceId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'updateWebsiteSite': {if(!websiteBuilder)throw new AtlasError('WEBSITE_BUILDER_NOT_CONFIGURED','Website Builder is unavailable',503);const input=await readJson(request,config.maxBodyBytes);result=await websiteBuilder.save(workspaceId,{...input,id:objectId},user.id);break;}
         case 'prepareWebsiteRelease': {if(!websiteBuilder)throw new AtlasError('WEBSITE_BUILDER_NOT_CONFIGURED','Website Builder is unavailable',503);result=await websiteBuilder.prepareRelease(workspaceId,objectId,user.id);break;}
+        case 'recordWebsitePerformance': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.record(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
+        case 'websitePerformanceSummary': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.summary(workspaceId,objectId);break;}
+        case 'proposeWebsiteOptimization': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.propose(workspaceId,objectId,user.id);break;}
+        case 'decideWebsiteOptimization': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.decide(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'updateAwarenessStatus': {const input=await readJson(request,config.maxBodyBytes);result=await service.updateAwarenessStatus(workspaceId,objectId,user.id,input.status);break;}
         case 'legalResearchProviders': {if(!legalResearch)throw new AtlasError('LEGAL_RESEARCH_NOT_CONFIGURED','Legal research is unavailable',503);result=legalResearch.listProviders();break;}
         case 'legalResearchCapabilities': {result=assistant.legalResearchCapabilities();break;}
