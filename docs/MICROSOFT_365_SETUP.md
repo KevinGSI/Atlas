@@ -23,7 +23,9 @@ Atlas uses one Microsoft OAuth connection for a read-only Outlook inbox, primary
    offline_access
    ```
 
-   Atlas Phase 1 does not request `Mail.Send`. Email remains read-only. `Calendars.ReadWrite` is used only to synchronize the calendar and add an Atlas event after an attorney's explicit approval. Atlas does not put attendees in the Microsoft Graph create request, so approval does not automatically send invitations.
+   Atlas Phase 1 and the ingestion acceptance test do not request `Mail.Send`. Email remains read-only, and the Microsoft connector exposes no email-send operation. `Calendars.ReadWrite` is used only to synchronize the calendar and add an Atlas event after an attorney's explicit approval. Atlas does not put attendees in the Microsoft Graph create request, so approval does not automatically send invitations.
+
+   If this Entra application previously included `Mail.Send`, remove that delegated permission before the acceptance test. Then disconnect the existing Microsoft mailbox in Atlas and reconnect it so Microsoft issues consent and tokens for only the current least-privilege scopes.
 5. Create a client secret. Copy the secret value once and store it in the deployment's secret manager. Do not commit it to Git.
 
 ## 2. Configure the Atlas runtime

@@ -34,7 +34,7 @@ Provider redirect URIs must match exactly. Production must use the public HTTPS 
 5. Register the exact Atlas callback URI.
 6. Store the client ID and client secret only in the Atlas runtime as `GOOGLE_WORKSPACE_CLIENT_ID` and `GOOGLE_WORKSPACE_CLIENT_SECRET`.
 
-Atlas requests offline access, Gmail read-only access, and Calendar Events access. Restricted/sensitive Google scopes may require Google verification before broad public use. Never place the downloaded client secret file in GitHub or the browser application.
+Atlas requests offline access, Gmail read and approved-send access, and Calendar Events access. Restricted/sensitive Google scopes may require Google verification before broad public use. Never place the downloaded client secret file in GitHub or the browser application.
 
 Official reference: [Google OAuth for web-server applications](https://developers.google.com/identity/protocols/oauth2/web-server)
 
@@ -43,10 +43,12 @@ Official reference: [Google OAuth for web-server applications](https://developer
 1. Register Atlas as a web application in Microsoft Entra ID.
 2. Select the intended organizational account audience.
 3. Register the exact Atlas callback URI under the web platform.
-4. Add delegated Microsoft Graph permissions for `Mail.Read` and `Calendars.ReadWrite`; Atlas also requests `offline_access` for refresh.
+4. Add delegated Microsoft Graph permissions for `Mail.Read` and `Calendars.ReadWrite`; Atlas also requests `offline_access` for refresh. The least-privilege Outlook ingestion connection does not request `Mail.Send` and cannot send email.
 5. Complete tenant consent as required by the organization's policies.
 6. Store the application ID and client secret only in the Atlas runtime as `MICROSOFT_365_CLIENT_ID` and `MICROSOFT_365_CLIENT_SECRET`.
 7. Set `MICROSOFT_365_TENANT` to `organizations`, the tenant ID, or a verified tenant domain.
+
+If the Entra application or an existing Atlas connection previously granted `Mail.Send`, remove that delegated permission from the Entra application, disconnect the mailbox in Atlas, and reconnect it. This ensures the ingestion test uses only the current least-privilege grant.
 
 Official references: [Microsoft authorization-code flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow) and [Microsoft application registration](https://learn.microsoft.com/en-us/graph/auth-register-app-v2)
 
@@ -74,4 +76,3 @@ After configuring the provider application and restarting Atlas, open **Email** 
 The UI discovers any registered connector that advertises both email and calendar capabilities. Adding another provider requires one connector implementation for that provider's supported OAuth, mail, calendar, refresh, revocation, and incremental-sync APIs; it does not require changing the canonical case, event, intelligence, or UI workflow.
 
 Atlas does not accept mailbox passwords and does not claim universal compatibility with providers that offer no suitable OAuth mail/calendar API.
-
