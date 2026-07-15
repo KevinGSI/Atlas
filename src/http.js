@@ -205,6 +205,8 @@ function route(method, pathname) {
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/performance$/, 'recordWebsitePerformance']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/performance$/, 'websitePerformanceSummary']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/optimize$/, 'proposeWebsiteOptimization']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/experience$/, 'decideWebsiteExperience']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/intake-qualification$/, 'qualifyWebsiteIntake']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/optimizations\/([^/]+)\/decision$/, 'decideWebsiteOptimization']
     ,['PATCH', /^\/v1\/workspaces\/([^/]+)\/home\/while-you-were-gone\/([^/]+)$/, 'updateAwarenessStatus']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/legal-research\/providers$/, 'legalResearchProviders']
@@ -423,6 +425,8 @@ export function createAtlasHandler(service, options = {}) {
         case 'recordWebsitePerformance': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.record(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'websitePerformanceSummary': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.summary(workspaceId,objectId);break;}
         case 'proposeWebsiteOptimization': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.propose(workspaceId,objectId,user.id);break;}
+        case 'decideWebsiteExperience': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.experience(workspaceId,objectId,await readJson(request,config.maxBodyBytes));break;}
+        case 'qualifyWebsiteIntake': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.qualifyForSite(workspaceId,objectId,await readJson(request,config.maxBodyBytes));break;}
         case 'decideWebsiteOptimization': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.decide(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'updateAwarenessStatus': {const input=await readJson(request,config.maxBodyBytes);result=await service.updateAwarenessStatus(workspaceId,objectId,user.id,input.status);break;}
         case 'legalResearchProviders': {if(!legalResearch)throw new AtlasError('LEGAL_RESEARCH_NOT_CONFIGURED','Legal research is unavailable',503);result=legalResearch.listProviders();break;}
