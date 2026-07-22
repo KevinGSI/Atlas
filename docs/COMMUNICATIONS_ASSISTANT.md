@@ -41,6 +41,8 @@ An authenticated firm user can create and edit a draft. Sending requires all of 
 
 Successful sends create an outgoing canonical `sms_message` and an immutable `sms.sent` event recording the provider message ID and approving user.
 
+Website consultation scheduling uses the canonical SMS path and intentionally bypasses the Atlas Attorney Inbox. A firm may explicitly enable consultation alerts and save the attorney mobile number in authenticated Communications settings. Atlas texts the attorney calendar-derived options without scheduling them; the attorney replies `1`, `2`, or `3` to the authenticated Atlas text. Atlas then texts that proposal—not an appointment—to the consented prospective client. A signed inbound client `YES` reply is stored as a canonical communication, rechecks availability under an attorney-scoped database transaction lock, publishes the event, and texts final call details directly to both sides. A client may instead text a better time; Atlas forwards it directly to the attorney with refreshed numbered options. If the client declines the final proposal, subsequent texts are relayed directly between the prospective client and attorney for scheduling. Every proposal, reply, state transition, provider delivery, conflict, and final event remains attached to the canonical consultation request without creating an Attorney Inbox card.
+
 ## Runtime configuration
 
 Set these server-side values; never put them in browser code:
@@ -55,4 +57,4 @@ The same provider-neutral service can be connected to another messaging provider
 
 ## Production boundary
 
-Local fictional simulation works without Twilio. Real carrier delivery requires a Twilio account, an SMS-capable number, a public HTTPS Atlas URL, applicable sender registration, and documented recipient consent. Delivery status callbacks, media download, shared-inbox assignment, and high-volume campaign tooling are not claimed in this release.
+Local fictional simulation works without Twilio. Real carrier delivery requires a Twilio account, an SMS-capable number, a public HTTPS Atlas URL, applicable A2P sender registration, and documented recipient consent. Consultation alerts also require the firm to enable that setting and save the attorney mobile number. Delivery status callbacks, media download, shared-inbox assignment, and high-volume campaign tooling are not claimed in this release.

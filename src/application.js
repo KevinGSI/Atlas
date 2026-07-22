@@ -36,8 +36,10 @@ import { SocialMediaService } from './social-media.js';
 import { ContractedLegalResearchApiProvider, LegalResearchProviderRegistry, LegalResearchService } from './legal-research.js';
 import { DocusignEsignProvider, DocumentExecutionService } from './document-execution.js';
 import { HttpAggregatePublicSource, MarketingService } from './marketing.js';
+import { DivorceDigitalService } from './divorce-digital.js';
 import { WebsiteBuilderService } from './website-builder.js';
 import { StructuredModelWebsiteOptimizationProvider, WebsiteOptimizationService } from './website-optimization.js';
+import { WebsiteIntakeService } from './website-intake.js';
 
 function memoryRuntime() {
   return { repository: new InMemoryRepository(), ready: async () => true, close: async () => {} };
@@ -120,6 +122,8 @@ export async function startAtlas(env = process.env, dependencies = {}) {
   const telephony=dependencies.telephonyAdapter??(config.twilioAuthToken?new TwilioVoiceAdapter({authToken:config.twilioAuthToken,publicBaseUrl:config.voicePublicBaseUrl,accountSid:config.twilioAccountSid,messagingFrom:config.twilioMessagingFrom,transport:dependencies.telephonyTransport}):null);
   const sms=new SmsAssistantService(service,{intentProvider:voiceIntentProvider,messagingProvider:dependencies.messagingProvider??telephony});
   const caseCommunications=new CaseCommunicationsService(service,{model:selectedModel,sms,emailSender:({workspaceId,emailDraft,targetUserId})=>cms.sendApprovedEmailDraft(workspaceId,emailDraft,targetUserId)});
+  const websiteIntake=new WebsiteIntakeService(service,runtime.repository,{connections:config.publicWebsiteConnections,attorneySmsSender:({workspaceId,requestId,prospectiveClient,body})=>sms.sendConsultationNotification(workspaceId,{consultationRequestId:requestId,title:`Consultation scheduling — ${prospectiveClient.name}`,body}),clientSmsSender:({workspaceId,targetUserId,requestId,to,textConsent,authorizationType,body})=>sms.sendConsultationConfirmation(workspaceId,{consultationRequestId:requestId,to,textConsent,authorizationType,body},targetUserId)});
+  sms.setConsultationReplyHandler((workspaceId,input)=>websiteIntake.handleSmsReply(workspaceId,input));
   const social=new SocialMediaService(service,selectedModel);
   const marketingPublicSources=new ProviderRegistry('Marketing public data');
   const marketingAdProviders=new ProviderRegistry('Advertising');
@@ -138,7 +142,8 @@ export async function startAtlas(env = process.env, dependencies = {}) {
     repository: runtime.repository,
     contentCipher
   });
-  const server = createAtlasServer(service, { config, ready, rateLimiter, identity, assistant, ingestion, files, formBank, documentExecution, webhooks, cms, migration, accounting, voice, sms, caseCommunications, social, marketing, websiteBuilder, websiteOptimization, legalResearch, telephony, firmExport });
+  const divorceDigital=new DivorceDigitalService(service,runtime.repository,{assistant,files,connections:config.publicWebsiteConnections,catalog:dependencies.divorceDigitalServiceCatalog??config.divorceDigitalServiceCatalog,paymentSessionFactory:dependencies.divorcePaymentSessionFactory});
+  const server = createAtlasServer(service, { config, ready, rateLimiter, identity, assistant, ingestion, files, formBank, documentExecution, webhooks, cms, migration, accounting, voice, sms, caseCommunications, social, marketing, websiteBuilder, websiteOptimization, websiteIntake, divorceDigital, legalResearch, telephony, firmExport });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, resolve);

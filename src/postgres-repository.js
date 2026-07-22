@@ -92,6 +92,8 @@ export class PostgresRepository {
     } finally { client.release(); }
   }
 
+  async lockCalendarSchedule(workspaceId,targetUserId){await this.executor.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))',[workspaceId,String(targetUserId)]);return true;}
+
   async createWorkspace(value) {
     const result = await this.executor.query(
       `INSERT INTO atlas_workspace (id, name, version, created_at, updated_at)

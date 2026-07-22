@@ -10,7 +10,7 @@ Atlas supports live Microsoft 365/Outlook and Google Workspace/Gmail connections
 - Email and calendar events enter the same canonical event and intelligence pipeline as cases, tasks, documents, communications, and Attorney Inbox work.
 - Provider access and refresh tokens are encrypted in the server-side credential vault and excluded from API responses and exports.
 - Disconnect revokes provider authorization where supported and deletes Atlas's stored credential reference while retaining already-imported records and provenance.
-- Email access is read-only. Atlas cannot send, delete, or modify mailbox messages.
+- Email ingestion is read-only. Atlas can send a stored draft only after an authenticated attorney explicitly approves that action; it cannot delete or modify mailbox messages.
 - An attorney-approved Atlas event can be written to the connected Google or Microsoft calendar. No event is added before approval, and attendees are not automatically invited.
 
 ## One callback for every provider
@@ -43,12 +43,12 @@ Official reference: [Google OAuth for web-server applications](https://developer
 1. Register Atlas as a web application in Microsoft Entra ID.
 2. Select the intended organizational account audience.
 3. Register the exact Atlas callback URI under the web platform.
-4. Add delegated Microsoft Graph permissions for `Mail.Read` and `Calendars.ReadWrite`; Atlas also requests `offline_access` for refresh. The least-privilege Outlook ingestion connection does not request `Mail.Send` and cannot send email.
+4. Add delegated Microsoft Graph permissions for `Mail.Read`, `Mail.Send`, and `Calendars.ReadWrite`; Atlas also requests `offline_access` for refresh. `Mail.Send` is used only for an attorney-approved stored draft.
 5. Complete tenant consent as required by the organization's policies.
 6. Store the application ID and client secret only in the Atlas runtime as `MICROSOFT_365_CLIENT_ID` and `MICROSOFT_365_CLIENT_SECRET`.
 7. Set `MICROSOFT_365_TENANT` to `organizations`, the tenant ID, or a verified tenant domain.
 
-If the Entra application or an existing Atlas connection previously granted `Mail.Send`, remove that delegated permission from the Entra application, disconnect the mailbox in Atlas, and reconnect it. This ensures the ingestion test uses only the current least-privilege grant.
+After adding `Mail.Send`, disconnect any existing mailbox connection in Atlas and reconnect it so Microsoft issues a token containing the current consent. Verify that ingestion remains read-only and that an email cannot send until the attorney approves its stored draft.
 
 Official references: [Microsoft authorization-code flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow) and [Microsoft application registration](https://learn.microsoft.com/en-us/graph/auth-register-app-v2)
 

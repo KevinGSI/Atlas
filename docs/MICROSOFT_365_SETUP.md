@@ -1,6 +1,6 @@
 # Microsoft 365 email and calendar setup
 
-Atlas uses one Microsoft OAuth connection for a read-only Outlook inbox, primary-calendar synchronization, and attorney-approved calendar additions. The lawyer signs in on Microsoft's site; Atlas never receives the Microsoft 365 password. Imported messages and events become firm-isolated canonical Atlas objects and enter the same native-intelligence event pipeline as other firm activity. Atlas may propose a calendar event after analyzing an email, attachment, call, case deadline, or other case activity, but it cannot create the Atlas or Outlook event until an attorney approves the proposal in **While You Were Gone**.
+Atlas uses one Microsoft OAuth connection for Outlook inbox synchronization, primary-calendar synchronization, attorney-approved calendar additions, and attorney-approved email. The lawyer signs in on Microsoft's site; Atlas never receives the Microsoft 365 password. Imported messages and events become firm-isolated canonical Atlas objects and enter the same native-intelligence event pipeline as other firm activity. Atlas may propose a calendar event or draft after analyzing firm activity, but it cannot create an Outlook event or send an email until an attorney approves the action in Atlas.
 
 ## 1. Register Atlas in Microsoft Entra
 
@@ -19,13 +19,14 @@ Atlas uses one Microsoft OAuth connection for a read-only Outlook inbox, primary
 
    ```text
    Mail.Read
+   Mail.Send
    Calendars.ReadWrite
    offline_access
    ```
 
-   Atlas Phase 1 and the ingestion acceptance test do not request `Mail.Send`. Email remains read-only, and the Microsoft connector exposes no email-send operation. `Calendars.ReadWrite` is used only to synchronize the calendar and add an Atlas event after an attorney's explicit approval. Atlas does not put attendees in the Microsoft Graph create request, so approval does not automatically send invitations.
+   Atlas requests `Mail.Send` only for an attorney-approved confirmation or draft. It is never invoked from an unapproved AI proposal or directly from a public website request. `Calendars.ReadWrite` is used to synchronize the calendar and add an Atlas event after an attorney's explicit approval. Atlas does not put attendees in the Microsoft Graph create request, so approval does not automatically send invitations.
 
-   If this Entra application previously included `Mail.Send`, remove that delegated permission before the acceptance test. Then disconnect the existing Microsoft mailbox in Atlas and reconnect it so Microsoft issues consent and tokens for only the current least-privilege scopes.
+   Add delegated `Mail.Send`, then disconnect and reconnect any existing Microsoft mailbox in Atlas so Microsoft issues consent and tokens containing the current scopes. Test that an unapproved draft cannot send and that a confirmation sends only after the attorney approves the consultation time.
 5. Create a client secret. Copy the secret value once and store it in the deployment's secret manager. Do not commit it to Git.
 
 ## 2. Configure the Atlas runtime
@@ -61,7 +62,7 @@ The first synchronization reads the most recent 30 days of inbox messages and a 
 
 ## Operational boundary
 
-- Email ingestion and provider synchronization remain read-only. The only Phase 1 Microsoft write is creation of an attorney-approved calendar event.
+- Email ingestion and provider synchronization remain read-only. Microsoft writes are limited to an attorney-approved calendar event or an attorney-approved email draft.
 - The approving or assigned user's own Microsoft connection is used. If that user has not connected Microsoft 365, the canonical Atlas event remains marked pending and the next successful Microsoft synchronization retries it.
 - Atlas uses a stable Microsoft Graph transaction ID to reduce duplicate event creation during safe retries.
 - Attendee addresses may be retained in the Atlas proposal for review, but Atlas does not send invitations or include attendees in the automatic Microsoft write.

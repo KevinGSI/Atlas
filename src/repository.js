@@ -114,6 +114,8 @@ export class InMemoryRepository {
     }
   }
 
+  async lockCalendarSchedule(){return true;}
+
   createWorkspace(workspace) {
     this.#workspaces.set(workspace.id, clone(workspace));
     return clone(workspace);

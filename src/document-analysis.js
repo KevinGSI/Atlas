@@ -2,7 +2,7 @@ import { AtlasError } from './errors.js';
 
 export const LEGAL_DOCUMENT_TYPES = Object.freeze([
   'discovery', 'discovery_request', 'discovery_response', 'motion', 'notice',
-  'court_order', 'complaint', 'answer', 'brief', 'pleading', 'subpoena',
+  'court_order', 'complaint', 'petition_for_dissolution', 'answer', 'brief', 'pleading', 'subpoena',
   'correspondence', 'contract', 'engagement_agreement', 'invoice', 'evidence',
   'transcript', 'affidavit', 'declaration', 'deposition', 'medical_record',
   'police_report', 'expert_report', 'settlement_document', 'other'
@@ -45,4 +45,3 @@ export function normalizeDocumentAnalysis(value,{filename='document'}={}){
   if(JSON.stringify(normalized).length>20_000)throw new AtlasError('INTELLIGENCE_RESULT_INVALID','Document catalog exceeds the safe size limit',502);
   return normalized;
 }
-

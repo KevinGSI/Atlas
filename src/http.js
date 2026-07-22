@@ -102,6 +102,23 @@ function route(method, pathname) {
     ['POST', /^\/v1\/auth\/password-reset\/request$/, 'requestPasswordReset'],
     ['POST', /^\/v1\/auth\/password-reset\/complete$/, 'resetPassword'],
     ['POST', /^\/v1\/auth\/invitations\/accept$/, 'acceptInvitation'],
+    ['POST', /^\/v1\/public\/websites\/([^/]+)\/intake$/, 'publicWebsiteIntake'],
+    ['GET', /^\/v1\/public\/websites\/([^/]+)\/consultation-availability$/, 'publicWebsiteAvailability'],
+    ['POST', /^\/v1\/public\/websites\/([^/]+)\/divorce\/demo-leads$/, 'divorceDemoLead'],
+    ['PUT', /^\/v1\/public\/websites\/([^/]+)\/divorce\/workspace\/sections\/([^/]+)$/, 'divorceSaveSection'],
+    ['POST', /^\/v1\/public\/websites\/([^/]+)\/divorce\/assistant$/, 'divorceAssistant'],
+    ['GET', /^\/v1\/public\/websites\/([^/]+)\/divorce\/documents$/, 'divorceListDocuments'],
+    ['POST', /^\/v1\/public\/websites\/([^/]+)\/divorce\/documents$/, 'divorceUploadDocument'],
+    ['GET', /^\/v1\/public\/websites\/([^/]+)\/divorce\/service-recommendations$/, 'divorceServiceRecommendations'],
+    ['GET', /^\/v1\/public\/websites\/([^/]+)\/divorce\/smart-workspace$/, 'divorceSmartWorkspace'],
+    ['GET', /^\/v1\/public\/websites\/([^/]+)\/divorce\/attorney-review$/, 'divorceAttorneyReview'],
+    ['POST', /^\/v1\/public\/websites\/([^/]+)\/divorce\/court-services-consultations$/, 'divorceCourtServicesConsultation'],
+    ['GET', /^\/v1\/public\/websites\/([^/]+)\/divorce\/client-service-orders$/, 'divorceListServiceOrders'],
+    ['POST', /^\/v1\/public\/websites\/([^/]+)\/divorce\/client-service-orders$/, 'divorceCreateServiceOrder'],
+    ['POST', /^\/v1\/public\/websites\/([^/]+)\/divorce\/client-service-orders\/([^/]+)\/signature$/, 'divorceSignAgreement'],
+    ['POST', /^\/v1\/public\/websites\/([^/]+)\/divorce\/client-service-orders\/([^/]+)\/payment-session$/, 'divorceCreatePaymentSession'],
+    ['POST', /^\/v1\/public\/websites\/([^/]+)\/divorce\/client-service-orders\/([^/]+)\/answers$/, 'divorceSubmitServiceAnswers'],
+    ['POST', /^\/v1\/public\/websites\/([^/]+)\/divorce\/client-service-orders\/([^/]+)\/payment-confirmed$/, 'divorceConfirmPayment'],
     ['GET', /^\/v1\/me$/, 'getUserProfile'],
     ['GET', /^\/v1\/me\/workspaces$/, 'listUserWorkspaces'],
     ['GET', /^\/v1\/cms\/oauth\/callback$/, 'cmsOAuthCallback'],
@@ -209,6 +226,8 @@ function route(method, pathname) {
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/sites\/([^/]+)\/intake-qualification$/, 'qualifyWebsiteIntake']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/website-builder\/optimizations\/([^/]+)\/decision$/, 'decideWebsiteOptimization']
     ,['PATCH', /^\/v1\/workspaces\/([^/]+)\/home\/while-you-were-gone\/([^/]+)$/, 'updateAwarenessStatus']
+    ,['GET', /^\/v1\/workspaces\/([^/]+)\/consultation-requests$/, 'listConsultationRequests']
+    ,['POST', /^\/v1\/workspaces\/([^/]+)\/consultation-requests\/([^/]+)\/approve$/, 'approveConsultationRequest']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/legal-research\/providers$/, 'legalResearchProviders']
     ,['GET', /^\/v1\/workspaces\/([^/]+)\/legal-research\/capabilities$/, 'legalResearchCapabilities']
     ,['POST', /^\/v1\/workspaces\/([^/]+)\/legal-research\/chat$/, 'legalResearchChat']
@@ -278,6 +297,8 @@ export function createAtlasHandler(service, options = {}) {
   const marketing=options.marketing;
   const websiteBuilder=options.websiteBuilder;
   const websiteOptimization=options.websiteOptimization;
+  const websiteIntake=options.websiteIntake;
+  const divorceDigital=options.divorceDigital;
   const legalResearch=options.legalResearch;
   const telephony=options.telephony;
   const firmExport=options.firmExport;
@@ -293,10 +314,10 @@ export function createAtlasHandler(service, options = {}) {
       if (!match) throw new AtlasError('ROUTE_NOT_FOUND', 'Route not found', 404);
       const context=requestContext(request,config);
       const [workspaceId, objectId] = match.params;
-      const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp','websiteBuilderEditor','websiteBuilderApp','websiteBuilderStyles','websiteTemplateApp','websiteTemplateStyles','websitePreview','websitePreviewRobots','websitePreviewSitemap', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout','docusignExecutionWebhook'].includes(match.name);
+      const publicRoute = ['frontendIndex', 'frontendApp', 'templateEditor', 'templateEditorApp','paymentPage','paymentApp','websiteBuilderEditor','websiteBuilderApp','websiteBuilderStyles','websiteTemplateApp','websiteTemplateStyles','websitePreview','websitePreviewRobots','websitePreviewSitemap', 'health', 'live', 'ready', 'register', 'registerFirm', 'login', 'refresh', 'logout', 'requestPasswordReset', 'resetPassword', 'acceptInvitation', 'publicWebsiteIntake','publicWebsiteAvailability','divorceDemoLead','divorceSaveSection','divorceAssistant','divorceListDocuments','divorceUploadDocument','divorceServiceRecommendations','divorceSmartWorkspace','divorceAttorneyReview','divorceCourtServicesConsultation','divorceListServiceOrders','divorceCreateServiceOrder','divorceSignAgreement','divorceCreatePaymentSession','divorceSubmitServiceAnswers','divorceConfirmPayment', 'cmsOAuthCallback', 'ingestWebhook','twilioVoiceIncoming','twilioVoiceTurn','twilioVoiceStatus','twilioSmsIncoming','stripePaymentWebhook','stripePaymentCheckout','docusignExecutionWebhook'].includes(match.name);
       const user = identity && !publicRoute ? await identity.authenticate(request.headers?.authorization) : null;
       if (identity && workspaceId && url.pathname.startsWith('/v1/workspaces/') && match.name!=='ingestWebhook') {
-        const permission = ['getWorkspace', 'getAccountProfiles', 'getSubscription', 'listObjects', 'getObject','getCanonicalContext', 'downloadFile', 'listFormBankForms', 'getFormBankForm', 'downloadFormBankForm', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'matterClientCommunications', 'firmCommunications', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus','socialStatus','marketingStatus','websiteBuilderStatus','websiteBuilderPreview','websitePerformanceSummary','legalResearchProviders','legalResearchCapabilities','documentExecutionStatus','documentExecutionDocuments'].includes(match.name)
+        const permission = ['getWorkspace', 'getAccountProfiles', 'getSubscription', 'listObjects', 'getObject','getCanonicalContext', 'downloadFile', 'listFormBankForms', 'getFormBankForm', 'downloadFormBankForm', 'graph', 'listEvents', 'conflictAlerts', 'matterHealth', 'matterClientCommunications', 'firmCommunications', 'listAudits', 'assistantQuery', 'listAssistantRuns', 'listAssistantConversations', 'listAssistantMessages', 'listAssistantActions', 'intelligenceReviewInbox', 'searchTwin', 'listCmsProviders', 'listCmsConnections','listMigrations', 'whileYouWereGone', 'updateAwarenessStatus','listConsultationRequests', 'accountingSummary', 'accountingProviders','voiceStatus','smsStatus','socialStatus','marketingStatus','websiteBuilderStatus','websiteBuilderPreview','websitePerformanceSummary','legalResearchProviders','legalResearchCapabilities','documentExecutionStatus','documentExecutionDocuments'].includes(match.name)
           ? 'workspace:read' : ['createMembership','listMemberships','updateMembershipRole','inviteMember','listWorkspaceInvitations','cancelWorkspaceInvitation','listWorkspaceSecurityEvents','listWorkspaceSessions','revokeWorkspaceSessions','deactivateMembership','reactivateMembership','getWorkspaceSecurityPolicy','updateWorkspaceSecurityPolicy','createFirmExport'].includes(match.name) ? 'members:admin' : 'workspace:write';
         await identity.authorize(workspaceId, user.id, permission);
       }
@@ -322,6 +343,23 @@ export function createAtlasHandler(service, options = {}) {
         case 'requestPasswordReset': result = await identity.requestPasswordReset(await readJson(request, config.maxBodyBytes)); break;
         case 'resetPassword': result = await identity.resetPassword(await readJson(request, config.maxBodyBytes)); break;
         case 'acceptInvitation': result = await identity.acceptInvitation(await readJson(request,config.maxBodyBytes)); break;
+        case 'publicWebsiteIntake': {if(!websiteIntake)throw new AtlasError('WEBSITE_INTAKE_NOT_CONFIGURED','Website intake is unavailable',503);result=await websiteIntake.ingest(workspaceId,request.headers?.authorization,await readJson(request,config.maxBodyBytes));break;}
+        case 'publicWebsiteAvailability': {if(!websiteIntake)throw new AtlasError('WEBSITE_INTAKE_NOT_CONFIGURED','Website intake is unavailable',503);result=await websiteIntake.availability(workspaceId,request.headers?.authorization);break;}
+        case 'divorceDemoLead': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.createLead(workspaceId,request.headers?.authorization,{...(await readJson(request,config.maxBodyBytes)),idempotencyKey:request.headers?.['idempotency-key']??null});break;}
+        case 'divorceSaveSection': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);const input=await readJson(request,config.maxBodyBytes);result=await divorceDigital.saveSection(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session'],{...input,section:objectId});break;}
+        case 'divorceAssistant': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.assist(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session'],await readJson(request,config.maxBodyBytes));break;}
+        case 'divorceListDocuments': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.listDocuments(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session']);break;}
+        case 'divorceUploadDocument': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);const documentMaxBytes=config.documentMaxBytes??25_000_000;result=await divorceDigital.uploadDocument(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session'],{...(await readJson(request,Math.ceil(documentMaxBytes*1.4)+100_000)),idempotencyKey:request.headers?.['idempotency-key']??null});break;}
+        case 'divorceServiceRecommendations': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.recommendServices(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session']);break;}
+        case 'divorceSmartWorkspace': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.smartWorkspace(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session']);break;}
+        case 'divorceAttorneyReview': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.attorneyReview(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session']);break;}
+        case 'divorceCourtServicesConsultation': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.requestCourtServicesConsultation(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session'],{...(await readJson(request,config.maxBodyBytes)),idempotencyKey:request.headers?.['idempotency-key']??null});break;}
+        case 'divorceListServiceOrders': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.listOrders(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session']);break;}
+        case 'divorceCreateServiceOrder': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.createAgreement(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session'],{...(await readJson(request,config.maxBodyBytes)),idempotencyKey:request.headers?.['idempotency-key']??null});break;}
+        case 'divorceSignAgreement': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.signAgreement(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session'],objectId,{...(await readJson(request,config.maxBodyBytes)),idempotencyKey:request.headers?.['idempotency-key']??null});break;}
+        case 'divorceCreatePaymentSession': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.createPaymentSession(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session'],objectId,{...(await readJson(request,config.maxBodyBytes)),idempotencyKey:request.headers?.['idempotency-key']??null});break;}
+        case 'divorceSubmitServiceAnswers': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.submitAnswers(workspaceId,request.headers?.authorization,request.headers?.['x-atlas-session'],objectId,{...(await readJson(request,config.maxBodyBytes)),idempotencyKey:request.headers?.['idempotency-key']??null});break;}
+        case 'divorceConfirmPayment': {if(!divorceDigital)throw new AtlasError('DIVORCE_PORTAL_NOT_CONFIGURED','The divorce digital portal is unavailable',503);result=await divorceDigital.confirmPayment(workspaceId,request.headers?.authorization,objectId,await readJson(request,config.maxBodyBytes));break;}
         case 'getUserProfile': result = await identity.getUserProfile(user.id); break;
         case 'listUserWorkspaces': result = await identity.listUserWorkspaces(user.id); break;
         case 'cmsOAuthCallback': try{result = await cms.completeAuthorization({state:url.searchParams.get('state'),code:url.searchParams.get('code'),realmId:url.searchParams.get('realmId'),error:url.searchParams.get('error')});return sendOAuthCompletion(response,result,headers);}catch(error){return sendOAuthFailure(response,error,headers);}
@@ -429,6 +467,8 @@ export function createAtlasHandler(service, options = {}) {
         case 'qualifyWebsiteIntake': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.qualifyForSite(workspaceId,objectId,await readJson(request,config.maxBodyBytes));break;}
         case 'decideWebsiteOptimization': {if(!websiteOptimization)throw new AtlasError('WEBSITE_OPTIMIZATION_NOT_CONFIGURED','Website optimization is unavailable',503);result=await websiteOptimization.decide(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'updateAwarenessStatus': {const input=await readJson(request,config.maxBodyBytes);result=await service.updateAwarenessStatus(workspaceId,objectId,user.id,input.status);break;}
+        case 'listConsultationRequests': {if(!websiteIntake)throw new AtlasError('WEBSITE_INTAKE_NOT_CONFIGURED','Website intake is unavailable',503);result=await websiteIntake.list(workspaceId);break;}
+        case 'approveConsultationRequest': {if(!websiteIntake)throw new AtlasError('WEBSITE_INTAKE_NOT_CONFIGURED','Website intake is unavailable',503);result=await websiteIntake.approve(workspaceId,objectId,await readJson(request,config.maxBodyBytes),user.id);break;}
         case 'legalResearchProviders': {if(!legalResearch)throw new AtlasError('LEGAL_RESEARCH_NOT_CONFIGURED','Legal research is unavailable',503);result=legalResearch.listProviders();break;}
         case 'legalResearchCapabilities': {result=assistant.legalResearchCapabilities();break;}
         case 'legalResearchChat': {const input=await readJson(request,config.maxBodyBytes);result=await assistant.research({workspaceId,userId:user.id,prompt:input.prompt,conversationId:input.conversationId,matterId:input.matterId,sourceMode:input.sourceMode,jurisdiction:input.jurisdiction,practiceArea:input.practiceArea});break;}

@@ -238,6 +238,8 @@ test('PostgreSQL AI action decisions are workspace-scoped, versioned, and pendin
   assert.match(calls[0].sql, /status='pending'/);
 });
 
+test('PostgreSQL calendar scheduling takes an attorney-scoped transaction lock before conflict checks',async()=>{const calls=[];const repository=new PostgresRepository({async query(sql,values){calls.push({sql,values});return{rows:[{}]};}});await repository.lockCalendarSchedule('wsp_1','usr_attorney');assert.match(calls[0].sql,/pg_advisory_xact_lock/);assert.match(calls[0].sql,/hashtext\(\$1\).*hashtext\(\$2\)/);assert.deepEqual(calls[0].values,['wsp_1','usr_attorney']);});
+
 test('PostgreSQL intelligence queue claims concurrent work with skip-locked semantics',async()=>{
   const calls=[];const row={id:'inj_1',workspace_id:'wsp_1',trigger_type:'email.received',object_id:'obj_1',event_id:'evt_1',status:'processing',attempts:1,payload:{},result:null,provider:null,error_code:null,available_at:timestamp,locked_at:timestamp,created_at:timestamp,completed_at:null};
   const repository=new PostgresRepository({async query(sql,values){calls.push({sql,values});return {rows:[row]};}});
